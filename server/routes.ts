@@ -88,6 +88,65 @@ export async function registerRoutes(
     }
   });
 
+  // Get unique brands from base values
+  app.get("/api/brands", async (req: Request, res: Response) => {
+    try {
+      const shopId = req.query.shopId as string | undefined;
+      const values = await storage.getDeviceBaseValues(shopId);
+      const brands = Array.from(new Set(values.map(v => v.brand))).sort();
+      res.json(brands.map((name, index) => ({ id: index + 1, name })));
+    } catch (error) {
+      console.error("Error fetching brands:", error);
+      res.status(500).json({ error: "Failed to fetch brands" });
+    }
+  });
+
+  // Get models for a specific brand
+  app.get("/api/models", async (req: Request, res: Response) => {
+    try {
+      const brand = req.query.brand as string;
+      const shopId = req.query.shopId as string | undefined;
+      
+      if (!brand) {
+        return res.status(400).json({ error: "Brand is required" });
+      }
+      
+      const values = await storage.getDeviceBaseValues(shopId);
+      const models = Array.from(new Set(values.filter(v => v.brand === brand).map(v => v.model))).sort();
+      res.json(models.map((name, index) => ({ id: index + 1, name })));
+    } catch (error) {
+      console.error("Error fetching models:", error);
+      res.status(500).json({ error: "Failed to fetch models" });
+    }
+  });
+
+  // Get storage options for a specific brand and model
+  app.get("/api/storages", async (req: Request, res: Response) => {
+    try {
+      const brand = req.query.brand as string;
+      const model = req.query.model as string;
+      const modelId = req.query.model_id as string;
+      const shopId = req.query.shopId as string | undefined;
+      
+      const values = await storage.getDeviceBaseValues(shopId);
+      
+      let filtered = values;
+      if (brand) {
+        filtered = filtered.filter(v => v.brand === brand);
+      }
+      if (model || modelId) {
+        const modelName = model || modelId;
+        filtered = filtered.filter(v => v.model === modelName);
+      }
+      
+      const storages = Array.from(new Set(filtered.map(v => v.storage))).sort();
+      res.json(storages.map((size, index) => ({ id: index + 1, size })));
+    } catch (error) {
+      console.error("Error fetching storages:", error);
+      res.status(500).json({ error: "Failed to fetch storages" });
+    }
+  });
+
   // Create or update base value (Owner only)
   app.post("/api/trade-in/base-values", async (req: Request, res: Response) => {
     try {
