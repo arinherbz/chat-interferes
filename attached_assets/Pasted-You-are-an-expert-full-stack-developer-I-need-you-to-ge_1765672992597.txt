@@ -1,0 +1,117 @@
+You are an expert full-stack developer. I need you to generate a **complete Phone Shop Management System** that is ready to run on Replit. The system should manage **products, sales, repairs, devices, daily closures, staff, customers, alerts, and reports**. It should be mobile-friendly for iPhones and desktop-friendly for owners. It should also have placeholders for client messaging.
+
+Requirements:
+
+---
+
+1️⃣ Users & Roles:
+- Owner: full access to dashboard, reports, alerts, customer messages
+- Supervisor: manage daily closures and repairs
+- Staff: submit sales, repairs, daily closures
+- Authentication required (login/logout) with role-based access
+
+---
+
+2️⃣ Database Models:
+- User: id, name, role, email, password_hash
+- Product: id, name, category (iPhone/Samsung/Accessories/etc.), price, is_active
+- Device: id, brand, model, imei_or_serial, added_by, added_at
+- DailyClosure: id, date, cash_expected, cash_counted, mtn_amount, airtel_amount, variance, submitted_by, submitted_at
+- Sale: id, closure_id, product_id (nullable), other_product_name, quantity, total_price
+- Repair: id, closure_id, device_id, repair_type, price, notes, created_by, created_at
+- Customer: id, name, phone, email, device_id
+- ProofUpload: id, closure_id, type (cash_drawer/mtn/airtel), image_url
+- Alert: id, date, alert_type (missing_report/cash_shortage), status
+
+---
+
+3️⃣ Backend (Python + Flask):
+- CRUD operations for all models
+- Daily closure submission:
+  - Capture cash, MTN, Airtel totals
+  - Sales: select products or add other products
+  - Repairs: select device or add new device, input repair type & price
+  - Capture proof photos
+- Variance calculation and automatic alerts if cash shortage
+- Dashboard API for owner with closures, sales, repairs, alerts
+- Placeholder for client messaging (SMS/email)
+- Secure authentication & session management
+
+---
+
+4️⃣ Frontend (Templates + Mobile/Desktop):
+- Login page
+- Daily Close Form:
+  - Select products from catalog + add “other”
+  - Input quantity sold, calculate total
+  - Select or add device for repairs
+  - Input repair type, price, notes
+  - Upload proof photos
+- Owner Dashboard:
+  - Alerts panel (red/green indicators)
+  - Recent closures (last 7 days)
+  - Sales summary (by product/category)
+  - Repairs summary (by type/device)
+  - Staff performance
+  - Trend charts for sales & repairs
+  - Customer list with device history
+- Customer Management:
+  - Add/edit customers
+  - Link devices to customers
+  - Placeholder buttons to send messages
+
+- Fully responsive (iPhone & desktop)
+- Use Bootstrap 5 for styling
+- Chart.js for charts
+
+---
+
+5️⃣ CSS & JS:
+- Clean mobile-first design
+- Red/green alerts
+- Form validation: all required fields and photos cannot be skipped
+- Show/hide sections (e.g., “Other product”, “New device”) dynamically
+
+---
+
+6️⃣ Replit Deployment:
+- Folder structure:
+  /templates, /static/css, /static/js, /static/uploads
+- Run command: python main.py
+- Port: 3000
+- Secret key: environment variable
+- SQLite database for now
+- Always-on enabled
+
+---
+
+7️⃣ Reports & Analytics:
+- Generate product sales report (quantity & revenue)
+- Generate repair report (type, device, revenue)
+- Daily/weekly/monthly closure reports (cash, MTN, Airtel, variance)
+- Device tracking with IMEI/serial numbers
+- Staff performance reports
+- Customer history reports
+
+---
+
+8️⃣ Extra Features:
+- Option to send client notifications (SMS/email placeholders)
+- PWA ready: “Add to Home Screen” on iPhone
+- Modular code for future SaaS monetization
+- Multi-shop support placeholder
+
+---
+
+9️⃣ Deliverables (all code):
+- main.py (Flask backend)
+- HTML templates (login, submit_closure, dashboard, customer_management, base)
+- CSS (mobile/desktop, alerts)
+- JS (form validation, charts, show/hide sections)
+- Folder structure instructions for Replit
+- File upload handling for proof photos
+- Fully functional system ready to run
+
+---
+
+Instructions to AI: Generate **everything fully**, ready to run on Replit. Mobile-friendly for iPhones and desktop-friendly for owners. Include all required HTML, CSS, JS, backend logic, database models, and sample data where appropriate. Ensure all required fields and photo uploads are enforced. Include placeholders for SMS/email messaging to customers.

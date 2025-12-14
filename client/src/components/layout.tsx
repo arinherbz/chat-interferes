@@ -7,7 +7,10 @@ import {
   Menu, 
   PlusCircle, 
   Store, 
-  X 
+  X,
+  Package,
+  Users,
+  MessageSquare
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -63,7 +66,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Menu</div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Main</div>
           
           {user.role === "owner" && (
             <NavLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
@@ -71,32 +74,48 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           
           <NavLink href="/daily-close" icon={PlusCircle} label="Daily Close" />
           
-          <div className="mt-8 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Account</div>
-          <div className="px-3 py-2 text-sm text-slate-600 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
-              {user.name.charAt(0)}
-            </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-slate-900">{user.name}</span>
-              <span className="text-xs text-slate-500 capitalize">{user.role}</span>
-            </div>
-          </div>
+          <div className="mt-8 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Management</div>
           
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 mt-2"
-            onClick={logout}
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+          <NavLink href="/products" icon={Package} label="Inventory" />
+          <NavLink href="/customers" icon={Users} label="Customers" />
+          
+          {user.role === "owner" && (
+            <div className="mt-8">
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Admin</div>
+               <Button variant="ghost" className="w-full justify-start text-slate-600 hover:text-slate-900" disabled>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Messages (Soon)
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-auto pt-8 border-t border-slate-100">
+             <div className="px-3 py-2 text-sm text-slate-600 flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
+                {user.name.charAt(0)}
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium text-slate-900">{user.name}</span>
+                <span className="text-xs text-slate-500 capitalize">{user.role}</span>
+              </div>
+            </div>
+            
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+              onClick={logout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-5xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             {children}
           </div>
         </div>

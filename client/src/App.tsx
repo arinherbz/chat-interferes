@@ -10,6 +10,8 @@ import Layout from "@/components/layout";
 import Login from "@/pages/login";
 import DailyClose from "@/pages/daily-close";
 import Dashboard from "@/pages/dashboard";
+import ProductsPage from "@/pages/products";
+import CustomersPage from "@/pages/customers";
 
 function Router() {
   return (
@@ -18,6 +20,8 @@ function Router() {
         <Route path="/" component={Login} />
         <Route path="/daily-close" component={DailyClose} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/products" component={ProductsPage} />
+        <Route path="/customers" component={CustomersPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -14,18 +14,23 @@ import {
   LineChart,
   Line
 } from "recharts";
-import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench } from "lucide-react";
+import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench, ShoppingCart, Users } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Dashboard() {
-  const { closures, alerts, updateClosureStatus } = useData();
+  const { closures, alerts, customers, products } = useData();
 
   // Calculate summary stats
   const totalVariance = closures.reduce((acc, curr) => acc + curr.variance, 0);
   const flaggedCount = closures.filter(c => c.status === "flagged").length;
   const pendingCount = closures.filter(c => c.status === "pending").length;
+  
   const totalRepairRevenue = closures.reduce((acc, curr) => {
     return acc + (curr.repairs?.reduce((rAcc, r) => rAcc + r.price, 0) || 0);
+  }, 0);
+
+  const totalSalesRevenue = closures.reduce((acc, curr) => {
+    return acc + (curr.sales?.reduce((sAcc, s) => sAcc + s.totalPrice, 0) || 0);
   }, 0);
 
   // Chart data preparation
@@ -33,8 +38,12 @@ export default function Dashboard() {
     date: format(new Date(c.date), 'MMM dd'),
     expected: c.cashExpected,
     actual: c.cashCounted + c.mtnAmount + c.airtelAmount,
+    sales: c.sales?.reduce((acc, s) => acc + s.totalPrice, 0) || 0,
     variance: c.variance
   }));
+
+  // Top products (mock aggregation)
+  const topProducts = [...products].sort((a, b) => b.price - a.price).slice(0, 3); // Simplified sort
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -88,34 +97,34 @@ export default function Dashboard() {
 
         <Card>
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Sales Revenue</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-900">{totalSalesRevenue.toLocaleString()} UGX</div>
+            <p className="text-xs text-muted-foreground mt-1">Total from products</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Repair Revenue</CardTitle>
             <Wrench className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">{totalRepairRevenue.toLocaleString()} UGX</div>
-            <p className="text-xs text-muted-foreground mt-1">Total from repairs</p>
+            <p className="text-xs text-muted-foreground mt-1">Total from services</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Flagged Closures</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Active Customers</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{flaggedCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Requires review</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{pendingCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">Submissions today</p>
+            <div className="text-2xl font-bold text-slate-900">{customers.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">+2 this week</p>
           </CardContent>
         </Card>
       </div>
@@ -146,46 +155,52 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Recent Closures List */}
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Recent Closures</CardTitle>
-            <CardDescription>Latest submissions from staff.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {closures.slice(0, 5).map(closure => (
-                <div key={closure.id} className="flex flex-col gap-2 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${closure.status === 'flagged' ? 'bg-red-500' : closure.status === 'confirmed' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+        {/* Top Selling Products & Recent Closures */}
+        <div className="col-span-3 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Inventory</CardTitle>
+              <CardDescription>Highest value items in stock.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {topProducts.map(p => (
+                   <div key={p.id} className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-900">{p.name}</span>
+                        <span className="text-xs text-slate-500">{p.category}</span>
+                      </div>
+                      <div className="text-right">
+                         <span className="text-sm font-medium">{p.price.toLocaleString()}</span>
+                         <span className="text-xs text-slate-500 block">Qty: {p.stock}</span>
+                      </div>
+                   </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+               <div className="space-y-4">
+                {closures.slice(0, 3).map(closure => (
+                  <div key={closure.id} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${closure.status === 'flagged' ? 'bg-red-500' : 'bg-green-500'}`} />
                       <div>
-                        <p className="text-sm font-medium text-slate-900">{format(new Date(closure.date), 'MMM dd, yyyy')}</p>
-                        <p className="text-xs text-slate-500">{closure.submittedBy}</p>
+                        <p className="text-sm font-medium text-slate-900">{format(new Date(closure.date), 'MMM dd')}</p>
+                        <p className="text-xs text-slate-500">{(closure.sales?.length || 0)} sales, {(closure.repairs?.length || 0)} repairs</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-slate-900">
-                        {(closure.cashCounted + closure.mtnAmount + closure.airtelAmount).toLocaleString()}
-                      </p>
-                      {closure.variance !== 0 && (
-                        <p className={`text-xs ${closure.variance < 0 ? 'text-red-500' : 'text-green-500'}`}>
-                          {closure.variance > 0 ? '+' : ''}{closure.variance.toLocaleString()}
-                        </p>
-                      )}
-                    </div>
                   </div>
-                  {closure.repairs && closure.repairs.length > 0 && (
-                    <div className="ml-5 bg-slate-50 p-2 rounded text-xs text-slate-600 flex gap-2">
-                       <Wrench className="w-3 h-3 mt-0.5" />
-                       <span>{closure.repairs.length} repair(s) included</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+               </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

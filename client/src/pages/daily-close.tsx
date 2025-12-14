@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
-import { Camera, Upload, CheckCircle2, Plus, Trash2, Wrench } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Camera, Upload, CheckCircle2, Plus, Trash2, Wrench, ShoppingCart } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Textarea } from "@/components/ui/textarea";
 
 const repairSchema = z.object({
   deviceBrand: z.string().min(1, "Brand required"),
@@ -21,6 +21,13 @@ const repairSchema = z.object({
   repairType: z.string().min(1, "Repair type required"),
   price: z.coerce.number().min(0, "Price required"),
   notes: z.string().optional(),
+});
+
+const saleSchema = z.object({
+  productId: z.string().optional(), // If selecting from catalog
+  productName: z.string().min(1, "Product name required"),
+  quantity: z.coerce.number().min(1, "Min quantity 1"),
+  totalPrice: z.coerce.number().min(0, "Total price required"),
 });
 
 const formSchema = z.object({
@@ -32,11 +39,12 @@ const formSchema = z.object({
   proofMtn: z.string().min(1, "MTN screenshot is required"),
   proofAirtel: z.string().min(1, "Airtel screenshot is required"),
   repairs: z.array(repairSchema).optional(),
+  sales: z.array(saleSchema).optional(),
 });
 
 export default function DailyClose() {
   const { user } = useAuth();
-  const { addClosure } = useData();
+  const { addClosure, products } = useData();
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);
 
@@ -51,12 +59,18 @@ export default function DailyClose() {
       proofMtn: "",
       proofAirtel: "",
       repairs: [],
+      sales: [],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields: repairFields, append: appendRepair, remove: removeRepair } = useFieldArray({
     control: form.control,
     name: "repairs",
+  });
+
+  const { fields: saleFields, append: appendSale, remove: removeSale } = useFieldArray({
+    control: form.control,
+    name: "sales",
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
@@ -72,12 +86,13 @@ export default function DailyClose() {
           mtn: values.proofMtn,
           airtel: values.proofAirtel,
         },
-        repairs: values.repairs?.map((r, i) => ({ ...r, id: `temp-${i}`, notes: r.notes || "" })) || []
+        repairs: values.repairs?.map((r, i) => ({ ...r, id: `temp-r-${i}`, notes: r.notes || "" })) || [],
+        sales: values.sales?.map((s, i) => ({ ...s, id: `temp-s-${i}`, productId: s.productId || null })) || []
       });
       setSubmitted(true);
       toast({
         title: "Closure Submitted",
-        description: "Your daily report and repairs have been recorded.",
+        description: "Your daily report has been successfully recorded.",
         className: "bg-green-600 text-white border-none",
       });
     }, 1000);
@@ -86,6 +101,16 @@ export default function DailyClose() {
   const handleMockUpload = (field: any) => {
     const mockUrl = "https://placehold.co/600x400?text=Uploaded+Proof";
     field.onChange(mockUrl);
+  };
+
+  const handleProductSelect = (index: number, productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (product) {
+      form.setValue(`sales.${index}.productName`, product.name);
+      // Assuming qty 1 initially
+      const qty = form.getValues(`sales.${index}.quantity`) || 1;
+      form.setValue(`sales.${index}.totalPrice`, product.price * qty);
+    }
   };
 
   if (submitted) {
@@ -104,15 +129,140 @@ export default function DailyClose() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto pb-12">
+    <div className="space-y-6 max-w-3xl mx-auto pb-12">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Daily Close</h1>
-        <p className="text-slate-500">Submit end-of-day counts and repairs.</p>
+        <p className="text-slate-500">Submit end-of-day sales, repairs, and counts.</p>
       </div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           
+          {/* SALES SECTION */}
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShoppingCart className="w-5 h-5 text-primary" />
+                    Daily Sales
+                  </CardTitle>
+                  <CardDescription>Log products sold today.</CardDescription>
+                </div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => appendSale({ productName: "", quantity: 1, totalPrice: 0, productId: "other" })}
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Sale
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+               {saleFields.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm">
+                  No sales logged for today yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {saleFields.map((field, index) => (
+                    <div key={field.id} className="p-4 space-y-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm text-slate-500">Sale #{index + 1}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => removeSale(index)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name={`sales.${index}.productId`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Select Product</FormLabel>
+                              <Select 
+                                onValueChange={(val) => {
+                                  field.onChange(val);
+                                  handleProductSelect(index, val);
+                                }} 
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select from catalog..." />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="other">Other / Custom</SelectItem>
+                                  {products.map(p => (
+                                    <SelectItem key={p.id} value={p.id}>{p.name} - {p.price.toLocaleString()}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         <FormField
+                          control={form.control}
+                          name={`sales.${index}.productName`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Product Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Item Name" {...field} className="h-9" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                         <FormField
+                          control={form.control}
+                          name={`sales.${index}.quantity`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Qty</FormLabel>
+                              <FormControl>
+                                <Input type="number" {...field} className="h-9" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         <FormField
+                          control={form.control}
+                          name={`sales.${index}.totalPrice`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Total Price (UGX)</FormLabel>
+                              <FormControl>
+                                <Input type="number" {...field} className="h-9 font-mono" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+               )}
+            </CardContent>
+          </Card>
+
           {/* REPAIRS SECTION */}
           <Card className="border-slate-200 shadow-sm overflow-hidden">
             <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
@@ -128,7 +278,7 @@ export default function DailyClose() {
                   type="button" 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => append({ deviceBrand: "", deviceModel: "", imei: "", repairType: "", price: 0, notes: "" })}
+                  onClick={() => appendRepair({ deviceBrand: "", deviceModel: "", imei: "", repairType: "", price: 0, notes: "" })}
                   className="gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -137,13 +287,13 @@ export default function DailyClose() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {fields.length === 0 ? (
+              {repairFields.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-sm">
                   No repairs logged for today yet.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {fields.map((field, index) => (
+                  {repairFields.map((field, index) => (
                     <div key={field.id} className="p-4 space-y-4 animate-in fade-in slide-in-from-top-2">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-sm text-slate-500">Repair #{index + 1}</span>
@@ -152,7 +302,7 @@ export default function DailyClose() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => remove(index)}
+                          onClick={() => removeRepair(index)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
