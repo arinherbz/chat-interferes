@@ -30,47 +30,27 @@ const saleSchema = z.object({
   totalPrice: z.coerce.number().min(0, "Total price required"),
 });
 
+const cashEntrySchema = z.object({
+  type: z.enum(["Cash", "MTN", "Airtel", "Card"]),
+  amount: z.coerce.number().min(0, "Amount required"),
+  proof: z.string().optional(),
+});
+
 const formSchema = z.object({
   cashExpected: z.coerce.number().min(0, "Cash expected is required"),
-  cashCounted: z.coerce.number().min(0, "Cash counted is required"),
-  mtnAmount: z.coerce.number().min(0, "MTN amount is required"),
-  airtelAmount: z.coerce.number().min(0, "Airtel amount is required"),
-  cardAmount: z.coerce.number().min(0, "Card amount is required"),
-  proofCashDrawer: z.string().optional(),
-  proofMtn: z.string().optional(),
-  proofAirtel: z.string().optional(),
-  proofCard: z.string().optional(),
+  cashEntries: z.array(cashEntrySchema),
   repairs: z.array(repairSchema).optional(),
   sales: z.array(saleSchema).optional(),
 }).superRefine((data, ctx) => {
-  if (data.cashCounted > 0 && !data.proofCashDrawer) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Cash drawer proof required when cash is counted",
-      path: ["proofCashDrawer"],
-    });
-  }
-  if (data.mtnAmount > 0 && !data.proofMtn) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "MTN proof required when amount > 0",
-      path: ["proofMtn"],
-    });
-  }
-  if (data.airtelAmount > 0 && !data.proofAirtel) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Airtel proof required when amount > 0",
-      path: ["proofAirtel"],
-    });
-  }
-  if (data.cardAmount > 0 && !data.proofCard) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Card proof required when amount > 0",
-      path: ["proofCard"],
-    });
-  }
+  data.cashEntries.forEach((entry, index) => {
+    if (entry.amount > 0 && !entry.proof) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${entry.type} proof required`,
+        path: ["cashEntries", index, "proof"],
+      });
+    }
+  });
 });
 
 export default function DailyClose() {
@@ -83,17 +63,15 @@ export default function DailyClose() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       cashExpected: 0,
-      cashCounted: 0,
-      mtnAmount: 0,
-      airtelAmount: 0,
-      cardAmount: 0,
-      proofCashDrawer: "",
-      proofMtn: "",
-      proofAirtel: "",
-      proofCard: "",
+      cashEntries: [],
       repairs: [],
       sales: [],
     },
+  });
+
+  const { fields: cashFields, append: appendCash, remove: removeCash } = useFieldArray({
+    control: form.control,
+    name: "cashEntries",
   });
 
   const { fields: repairFields, append: appendRepair, remove: removeRepair } = useFieldArray({
@@ -108,21 +86,41 @@ export default function DailyClose() {
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     setTimeout(() => {
+      // Sum up amounts by type in case user adds multiple entries of same type
+      const cashCounted = values.cashEntries
+        .filter(e => e.type === "Cash")
+        .reduce((acc, e) => acc + e.amount, 0);
+        
+      const mtnAmount = values.cashEntries
+        .filter(e => e.type === "MTN")
+        .reduce((acc, e) => acc + e.amount, 0);
+        
+      const airtelAmount = values.cashEntries
+        .filter(e => e.type === "Airtel")
+        .reduce((acc, e) => acc + e.amount, 0);
+        
+      const cardAmount = values.cashEntries
+        .filter(e => e.type === "Card")
+        .reduce((acc, e) => acc + e.amount, 0);
+      
+      // Take the first available proof for each type
+      const proofs = {
+        cashDrawer: values.cashEntries.find(e => e.type === "Cash" && e.proof)?.proof || "",
+        mtn: values.cashEntries.find(e => e.type === "MTN" && e.proof)?.proof || "",
+        airtel: values.cashEntries.find(e => e.type === "Airtel" && e.proof)?.proof || "",
+        card: values.cashEntries.find(e => e.type === "Card" && e.proof)?.proof || "",
+      };
+
       addClosure({
         submittedBy: user?.name || "Unknown",
         cashExpected: values.cashExpected,
-        cashCounted: values.cashCounted,
-        mtnAmount: values.mtnAmount,
-        airtelAmount: values.airtelAmount,
-        cardAmount: values.cardAmount,
+        cashCounted,
+        mtnAmount,
+        airtelAmount,
+        cardAmount,
         expensesTotal: 0,
-        proofs: {
-          cashDrawer: values.proofCashDrawer || "",
-          mtn: values.proofMtn || "",
-          airtel: values.proofAirtel || "",
-          card: values.proofCard || "",
-        },
-        repairs: values.repairs?.map((r, i) => ({ 
+        proofs,
+        repairs: values.repairs?.map((r, i) => ({  
           ...r, 
           id: `temp-r-${i}`, 
           notes: r.notes || "",
@@ -447,233 +445,149 @@ export default function DailyClose() {
 
           {/* FINANCIALS SECTION */}
           <Card className="border-slate-200 shadow-sm">
-            <CardHeader>
-              <CardTitle>Cash & Mobile Money</CardTitle>
-              <CardDescription>Enter the final amounts from your drawer and phones.</CardDescription>
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Camera className="w-5 h-5 text-primary" />
+                    Cash & Payments
+                  </CardTitle>
+                  <CardDescription>Record amounts counted and upload proofs.</CardDescription>
+                </div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => appendCash({ type: "Cash", amount: 0, proof: "" })}
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Entry
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 md:grid-cols-2">
+            <CardContent className="p-0">
+              <div className="p-6">
                 <FormField
                   control={form.control}
                   name="cashExpected"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Cash Expected (System)</FormLabel>
+                      <FormLabel>Expected Cash (System)</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg" />
+                        <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg bg-slate-50" readOnly />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="cashCounted"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cash Counted (Physical)</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg" />
-                      </FormControl>
-                      <FormDescription>Actual cash in drawer</FormDescription>
+                      <FormDescription>Calculated from today's sales.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
 
-              <Separator className="my-6" />
+              <Separator />
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="mtnAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>MTN Mobile Money</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="airtelAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Airtel Money</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-2 mt-6">
-                 <FormField
-                  control={form.control}
-                  name="cardAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Card Terminal (POS)</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <Separator className="my-6" />
-
-              <div className="space-y-4">
-                <h3 className="font-medium text-slate-900 flex items-center gap-2">
-                  <Camera className="w-4 h-4" />
-                  Proof of Balances
-                </h3>
-                <p className="text-sm text-slate-500">Only upload proofs for methods you have cash in.</p>
-                
-                <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-                  {/* Cash Drawer Upload */}
-                  <FormField
-                    control={form.control}
-                    name="proofCashDrawer"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="sr-only">Cash Drawer</FormLabel>
-                        <FormControl>
-                          <div 
-                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-green-500 bg-green-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
-                            onClick={() => handleMockUpload(field)}
-                          >
-                            {field.value ? (
-                              <div className="flex flex-col items-center text-green-700">
-                                <CheckCircle2 className="w-8 h-8 mb-2" />
-                                <span className="text-xs font-medium">Cash</span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center text-slate-500">
-                                <Upload className="w-8 h-8 mb-2" />
-                                <span className="text-sm font-medium">Cash</span>
-                                <span className="text-[10px] text-slate-400 mt-1">Photo</span>
-                              </div>
-                            )}
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* MTN Upload */}
-                  <FormField
-                    control={form.control}
-                    name="proofMtn"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="sr-only">MTN Proof</FormLabel>
-                        <FormControl>
-                          <div 
-                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-yellow-500 bg-yellow-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
-                            onClick={() => handleMockUpload(field)}
-                          >
-                            {field.value ? (
-                              <div className="flex flex-col items-center text-yellow-700">
-                                <CheckCircle2 className="w-8 h-8 mb-2" />
-                                <span className="text-xs font-medium">MTN</span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center text-slate-500">
-                                <Upload className="w-8 h-8 mb-2" />
-                                <span className="text-sm font-medium">MTN</span>
-                                <span className="text-[10px] text-slate-400 mt-1">Photo</span>
-                              </div>
-                            )}
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Airtel Upload */}
-                  <FormField
-                    control={form.control}
-                    name="proofAirtel"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="sr-only">Airtel Proof</FormLabel>
-                        <FormControl>
-                          <div 
-                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
-                            onClick={() => handleMockUpload(field)}
-                          >
-                            {field.value ? (
-                              <div className="flex flex-col items-center text-red-700">
-                                <CheckCircle2 className="w-8 h-8 mb-2" />
-                                <span className="text-xs font-medium">Airtel</span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center text-slate-500">
-                                <Upload className="w-8 h-8 mb-2" />
-                                <span className="text-sm font-medium">Airtel</span>
-                                <span className="text-[10px] text-slate-400 mt-1">Photo</span>
-                              </div>
-                            )}
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Card Upload */}
-                  <FormField
-                    control={form.control}
-                    name="proofCard"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="sr-only">Card Proof</FormLabel>
-                        <FormControl>
-                          <div 
-                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
-                            onClick={() => handleMockUpload(field)}
-                          >
-                            {field.value ? (
-                              <div className="flex flex-col items-center text-blue-700">
-                                <CheckCircle2 className="w-8 h-8 mb-2" />
-                                <span className="text-xs font-medium">Card</span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center text-slate-500">
-                                <Upload className="w-8 h-8 mb-2" />
-                                <span className="text-sm font-medium">Card</span>
-                                <span className="text-[10px] text-slate-400 mt-1">Batch</span>
-                              </div>
-                            )}
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              {cashFields.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm">
+                  No payment entries added yet. Click "Add Entry" to start.
                 </div>
-              </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {cashFields.map((field, index) => (
+                    <div key={field.id} className="p-6 space-y-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm text-slate-500">Entry #{index + 1}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => removeCash(index)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name={`cashEntries.${index}.type`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Payment Type</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Cash">Cash Drawer</SelectItem>
+                                  <SelectItem value="MTN">MTN Mobile Money</SelectItem>
+                                  <SelectItem value="Airtel">Airtel Money</SelectItem>
+                                  <SelectItem value="Card">Card / POS</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name={`cashEntries.${index}.amount`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Amount Counted</FormLabel>
+                              <FormControl>
+                                <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <FormField
+                        control={form.control}
+                        name={`cashEntries.${index}.proof`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="sr-only">Proof Upload</FormLabel>
+                            <FormControl>
+                              <div 
+                                className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-green-500 bg-green-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
+                                onClick={() => handleMockUpload(field)}
+                              >
+                                {field.value ? (
+                                  <div className="flex flex-col items-center text-green-700">
+                                    <CheckCircle2 className="w-8 h-8 mb-2" />
+                                    <span className="text-xs font-medium">Proof Uploaded</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center text-slate-500">
+                                    <Upload className="w-8 h-8 mb-2" />
+                                    <span className="text-sm font-medium">Upload Proof</span>
+                                    <span className="text-xs text-slate-400 mt-1">Photo / Screenshot</span>
+                                  </div>
+                                )}
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
               <div className="pt-4">
                 <Button type="submit" className="w-full h-12 text-lg" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? "Submitting..." : "Submit Daily Close"}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
         </form>
       </Form>
     </div>
