@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Manage Models - Phone Shop{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Manage Phone Models</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">Add New Model</div>
+            <div class="card-body">
+                <form id="add-model-form">
+                    <div class="mb-3">
+                        <label class="form-label">Brand</label>
+                        <select name="brand_id" class="form-select" required>
+                            {% for brand in brands %}
+                            <option value="{{ brand.id }}">{{ brand.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Model Name</label>
+                        <input type="text" name="name" class="form-control" required placeholder="e.g., iPhone 17 Pro Max">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Order Index</label>
+                        <input type="number" name="order_index" class="form-control" value="0">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Model</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">All Models</div>
+            <div class="card-body">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Brand</th>
+                            <th>Model</th>
+                            <th>Order</th>
+                            <th>Storage Options</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for model in models %}
+                        <tr>
+                            <td>{{ model.brand.name }}</td>
+                            <td>{{ model.name }}</td>
+                            <td>{{ model.order_index }}</td>
+                            <td>{{ model.storages|length }} options</td>
+                            <td>
+                                {% if model.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

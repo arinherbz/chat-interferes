@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}New Sale - Phone Shop{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">New Sale</h1>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">Sale Details</div>
+            <div class="card-body">
+                <form id="sale-form">
+                    <div class="mb-3">
+                        <label class="form-label">Product Type</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="product_type" id="type-product" value="product" checked>
+                            <label class="btn btn-outline-primary" for="type-product">From Inventory</label>
+                            <input type="radio" class="btn-check" name="product_type" id="type-other" value="other">
+                            <label class="btn btn-outline-primary" for="type-other">Other Item</label>
+                        </div>
+                    </div>
+                    
+                    <div id="product-section">
+                        <div class="mb-3">
+                            <label class="form-label">Select Product</label>
+                            <select name="product_id" class="form-select select2" data-testid="select-product">
+                                <option value="">Select a product</option>
+                                {% for product in products %}
+                                <option value="{{ product.id }}" data-price="{{ product.price }}">{{ product.name }} - ${{ product.price }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="other-section" style="display:none;">
+                        <div class="mb-3">
+                            <label class="form-label">Item Description</label>
+                            <input type="text" name="other_product_name" class="form-control" placeholder="Describe the item" data-testid="input-other-product">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Quantity</label>
+                            <input type="number" name="quantity" class="form-control" value="1" min="1" data-testid="input-quantity">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Unit Price ($)</label>
+                            <input type="number" name="unit_price" class="form-control" step="0.01" data-testid="input-unit-price">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Total</label>
+                            <input type="text" id="total-price" class="form-control" readonly data-testid="text-total-price">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Payment Method</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="payment_method" id="pay-cash" value="Cash" checked>
+                            <label class="btn btn-outline-success" for="pay-cash">Cash</label>
+                            <input type="radio" class="btn-check" name="payment_method" id="pay-mtn" value="MTN">
+                            <label class="btn btn-outline-warning" for="pay-mtn">MTN Mobile</label>
+                            <input type="radio" class="btn-check" name="payment_method" id="pay-airtel" value="Airtel">
+                            <label class="btn btn-outline-danger" for="pay-airtel">Airtel Money</label>
+                            <input type="radio" class="btn-check" name="payment_method" id="pay-card" value="Card">
+                            <label class="btn btn-outline-primary" for="pay-card">Card</label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-lg" data-testid="button-submit-sale">Complete Sale</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Sale Summary</div>
+            <div class="card-body">
+                <p><strong>Item:</strong> <span id="summary-item">-</span></p>
+                <p><strong>Quantity:</strong> <span id="summary-qty">1</span></p>
+                <p><strong>Unit Price:</strong> $<span id="summary-price">0.00</span></p>
+                <hr>
+                <h4>Total: $<span id="summary-total">0.00</span></h4>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('.select2').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Select an option'
+    });
+    
+    $('input[name="product_type"]').on('change', function() {
+        if ($(this).val() === 'product') {
+            $('#product-section').show();
+            $('#other-section').hide();
+        } else {
+            $('#product-section').hide();
+            $('#other-section').show();
+        }
+    });
+    
+    $('select[name="product_id"]').on('change', function() {
+        const price = $(this).find(':selected').data('price') || 0;
+        $('input[name="unit_price"]').val(price);
+        updateTotal();
+    });
+    
+    $('input[name="quantity"], input[name="unit_price"]').on('input', updateTotal);
+    
+    function updateTotal() {
+        const qty = parseInt($('input[name="quantity"]').val()) || 1;
+        const price = parseFloat($('input[name="unit_price"]').val()) || 0;
+        const total = qty * price;
+        
+        $('#total-price').val('$' + total.toFixed(2));
+        $('#summary-qty').text(qty);
+        $('#summary-price').text(price.toFixed(2));
+        $('#summary-total').text(total.toFixed(2));
+        
+        const productName = $('select[name="product_id"] option:selected').text() || $('input[name="other_product_name"]').val() || '-';
+        $('#summary-item').text(productName.split(' - ')[0]);
+    }
+    
+    $('#sale-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            product_id: $('select[name="product_id"]').val() || null,
+            other_product_name: $('input[name="other_product_name"]').val(),
+            quantity: $('input[name="quantity"]').val(),
+            unit_price: $('input[name="unit_price"]').val(),
+            payment_method: $('input[name="payment_method"]:checked').val()
+        };
+        
+        fetch('/api/sale', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Sale completed successfully!');
+                window.location.href = '/receipt/' + data.sale_id;
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Trade-In - Phone Shop{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Device Trade-In</h1>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">Trade-In Wizard</div>
+            <div class="card-body">
+                <form id="tradein-form">
+                    <h5>Step 1: Device Information</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Brand</label>
+                            <select id="brand-dropdown" name="brand" class="form-select select2" data-testid="select-brand">
+                                <option value="">Select Brand</option>
+                                {% for brand in brands %}
+                                <option value="{{ brand.id }}" data-name="{{ brand.name }}">{{ brand.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Model</label>
+                            <select id="model-dropdown" name="model" class="form-select select2" data-testid="select-model">
+                                <option value="">Select Model</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Storage</label>
+                            <select id="storage-dropdown" name="storage" class="form-select select2" data-testid="select-storage">
+                                <option value="">Select Storage</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Color</label>
+                            <input type="text" name="color" class="form-control" placeholder="e.g., Space Black" data-testid="input-color">
+                        </div>
+                    </div>
+                    
+                    <h5 class="mt-4">Step 2: Serial/IMEI</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">IMEI Number</label>
+                            <div class="input-group">
+                                <input type="text" id="device-imei" name="imei" class="form-control" placeholder="15-digit IMEI" maxlength="15" data-testid="input-imei">
+                                <button type="button" class="btn btn-outline-secondary" id="scan-btn" data-testid="button-scan">
+                                    Scan
+                                </button>
+                            </div>
+                            <div id="imei-status" class="form-text"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Serial Number (optional)</label>
+                            <input type="text" name="serial_number" class="form-control" data-testid="input-serial">
+                        </div>
+                    </div>
+                    
+                    <div id="scanner-container" class="mb-3" style="display:none; max-width: 400px;">
+                        <video id="scanner-video" style="width: 100%;"></video>
+                    </div>
+                    
+                    <h5 class="mt-4">Step 3: Customer Information</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Customer Name</label>
+                            <input type="text" name="customer_name" class="form-control" required data-testid="input-customer-name">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone Number</label>
+                            <input type="tel" name="customer_phone" class="form-control" required data-testid="input-customer-phone">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email (optional)</label>
+                            <input type="email" name="customer_email" class="form-control" data-testid="input-customer-email">
+                        </div>
+                    </div>
+                    
+                    <h5 class="mt-4">Step 4: Condition Assessment</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Base Value ($)</label>
+                            <input type="number" name="base_value" class="form-control" value="500" data-testid="input-base-value">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Condition Score (0-100)</label>
+                            <input type="range" name="condition_score" class="form-range" min="0" max="100" value="85" id="condition-slider" data-testid="input-condition-score">
+                            <span id="condition-value">85%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Calculated Offer</label>
+                            <input type="text" id="calculated-offer" name="calculated_offer" class="form-control" readonly data-testid="text-calculated-offer">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-lg" data-testid="button-submit-tradein">Submit Trade-In</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Trade-In Summary</div>
+            <div class="card-body" id="summary-panel">
+                <p class="text-muted">Fill in the form to see the trade-in summary</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/@AliShahryar1996html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('.select2').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Select an option',
+        allowClear: true
+    });
+    
+    $('#brand-dropdown').on('change', function() {
+        const brandId = $(this).val();
+        if (!brandId) {
+            $('#model-dropdown').empty().append('<option value="">Select Model</option>');
+            $('#storage-dropdown').empty().append('<option value="">Select Storage</option>');
+            return;
+        }
+        
+        fetch(`/api/models?brand_id=${brandId}`)
+            .then(res => res.json())
+            .then(models => {
+                const modelDropdown = $('#model-dropdown');
+                modelDropdown.empty().append('<option value="">Select Model</option>');
+                models.forEach(m => modelDropdown.append(new Option(m.name, m.id)));
+                modelDropdown.trigger('change.select2');
+            });
+    });
+    
+    $('#model-dropdown').on('change', function() {
+        const modelId = $(this).val();
+        if (!modelId) {
+            $('#storage-dropdown').empty().append('<option value="">Select Storage</option>');
+            return;
+        }
+        
+        fetch(`/api/storages?model_id=${modelId}`)
+            .then(res => res.json())
+            .then(storages => {
+                const storageDropdown = $('#storage-dropdown');
+                storageDropdown.empty().append('<option value="">Select Storage</option>');
+                storages.forEach(s => storageDropdown.append(new Option(s.size, s.id)));
+                storageDropdown.trigger('change.select2');
+            });
+    });
+    
+    $('#condition-slider').on('input', function() {
+        $('#condition-value').text($(this).val() + '%');
+        calculateOffer();
+    });
+    
+    $('input[name="base_value"]').on('change', calculateOffer);
+    
+    function calculateOffer() {
+        const baseValue = parseFloat($('input[name="base_value"]').val()) || 0;
+        const conditionScore = parseInt($('#condition-slider').val()) || 100;
+        const offer = baseValue * (conditionScore / 100);
+        $('#calculated-offer').val('$' + offer.toFixed(2));
+    }
+    calculateOffer();
+    
+    $('#device-imei').on('blur', function() {
+        const imei = $(this).val();
+        if (imei.length >= 15) {
+            fetch(`/api/validate-serial?serial=${imei}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.is_duplicate) {
+                        $('#imei-status').html('<span class="text-warning">Warning: ' + data.warning + '</span>');
+                        speechSynthesis.speak(new SpeechSynthesisUtterance("Warning: Device already in system"));
+                    } else {
+                        $('#imei-status').html('<span class="text-success">IMEI validated</span>');
+                    }
+                });
+        }
+    });
+    
+    $('#scan-btn').on('click', function() {
+        const container = $('#scanner-container');
+        if (container.is(':visible')) {
+            container.hide();
+            return;
+        }
+        container.show();
+    });
+    
+    $('#tradein-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            brand: $('#brand-dropdown option:selected').data('name') || $('#brand-dropdown option:selected').text(),
+            model: $('#model-dropdown option:selected').text(),
+            storage: $('#storage-dropdown option:selected').text(),
+            color: $('input[name="color"]').val(),
+            imei: $('input[name="imei"]').val(),
+            serial_number: $('input[name="serial_number"]').val(),
+            customer_name: $('input[name="customer_name"]').val(),
+            customer_phone: $('input[name="customer_phone"]').val(),
+            customer_email: $('input[name="customer_email"]').val(),
+            base_value: $('input[name="base_value"]').val(),
+            condition_score: $('#condition-slider').val(),
+            calculated_offer: parseFloat($('#calculated-offer').val().replace('$', ''))
+        };
+        
+        fetch('/api/tradein', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Trade-in submitted successfully! Number: ' + data.trade_in_number);
+                speechSynthesis.speak(new SpeechSynthesisUtterance("Trade-in submitted. Number: " + data.trade_in_number));
+                window.location.href = '/dashboard';
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

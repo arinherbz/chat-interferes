@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Phone Shop{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5>Today's Sales</h5>
+                <h2 id="sales-today">$0</h2>
+                <small id="sales-count">0 transactions</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <h5>Pending Trade-Ins</h5>
+                <h2 id="pending-tradeins">0</h2>
+                <small>Awaiting review</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5>Active Repairs</h5>
+                <h2 id="active-repairs">0</h2>
+                <small>In progress</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5>Quick Actions</h5>
+                <a href="{{ url_for('sales_form') }}" class="btn btn-light btn-sm mt-2">New Sale</a>
+                <a href="{{ url_for('tradein') }}" class="btn btn-light btn-sm mt-2">Trade-In</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">Sales Overview</div>
+            <div class="card-body">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">Pending Trade-Ins</div>
+            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                <table class="table table-sm">
+                    <thead>
+                        <tr><th>Number</th><th>Device</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for ti in tradeins %}
+                        <tr>
+                            <td>{{ ti.trade_in_number }}</td>
+                            <td>{{ ti.brand }} {{ ti.model }}</td>
+                            <td><span class="badge bg-warning">{{ ti.status }}</span></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-muted">No pending trade-ins</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">Active Repairs</div>
+            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                <table class="table table-sm">
+                    <thead>
+                        <tr><th>Number</th><th>Device</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for r in repairs %}
+                        <tr>
+                            <td>{{ r.repair_number }}</td>
+                            <td>{{ r.device_brand }} {{ r.device_model }}</td>
+                            <td><span class="badge bg-info">{{ r.status }}</span></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-muted">No active repairs</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    fetch('/api/dashboard-stats')
+        .then(res => res.json())
+        .then(data => {
+            $('#sales-today').text('$' + data.sales_today.toFixed(2));
+            $('#sales-count').text(data.sales_count + ' transactions');
+            $('#pending-tradeins').text(data.pending_tradeins);
+            $('#active-repairs').text(data.active_repairs);
+        });
+    
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+                label: 'Sales ($)',
+                data: [1200, 1500, 1100, 1800, 2000, 1700, 2200],
+                backgroundColor: '#0d6efd'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

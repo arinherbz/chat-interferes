@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Receipt - Phone Shop{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card" id="receipt">
+            <div class="card-body text-center">
+                <h2>Phone Shop</h2>
+                <p class="text-muted">Receipt</p>
+                <hr>
+                
+                <div class="text-start">
+                    <p><strong>Date:</strong> {{ sale.created_at.strftime('%Y-%m-%d %H:%M') if sale.created_at else 'N/A' }}</p>
+                    <p><strong>Served by:</strong> {{ sale.created_by or 'Staff' }}</p>
+                    <hr>
+                    
+                    <table class="table table-borderless">
+                        <tr>
+                            <td>{{ sale.other_product_name or 'Product' }}</td>
+                            <td class="text-end">x{{ sale.quantity }}</td>
+                        </tr>
+                        <tr>
+                            <td>Unit Price:</td>
+                            <td class="text-end">${{ "%.2f"|format(sale.unit_price) }}</td>
+                        </tr>
+                    </table>
+                    
+                    <hr>
+                    <h4 class="text-end">Total: ${{ "%.2f"|format(sale.total_price) }}</h4>
+                    <p class="text-end"><strong>Payment:</strong> {{ sale.payment_method }}</p>
+                </div>
+                
+                <hr>
+                <p class="text-muted small">Thank you for your business!</p>
+            </div>
+        </div>
+        
+        <div class="text-center mt-3">
+            <button onclick="window.print()" class="btn btn-primary" data-testid="button-print">Print Receipt</button>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+@media print {
+    .navbar, .btn, .no-print { display: none !important; }
+    .card { border: none !important; box-shadow: none !important; }
+}
+</style>
+{% endblock %}

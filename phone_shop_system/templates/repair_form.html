@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}New Repair - Phone Shop{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">New Repair Request</h1>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">Repair Details</div>
+            <div class="card-body">
+                <form id="repair-form">
+                    <h5>Device Information</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Brand</label>
+                            <select id="brand-dropdown" name="brand" class="form-select select2" data-testid="select-brand">
+                                <option value="">Select Brand</option>
+                                {% for brand in brands %}
+                                <option value="{{ brand.name }}">{{ brand.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Model</label>
+                            <select id="model-dropdown" name="model" class="form-select select2" data-testid="select-model">
+                                <option value="">Select Model</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Serial/IMEI</label>
+                            <input type="text" name="serial" class="form-control" data-testid="input-serial">
+                        </div>
+                    </div>
+                    
+                    <h5 class="mt-4">Customer Information</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Customer Name</label>
+                            <input type="text" name="customer_name" class="form-control" required data-testid="input-customer-name">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone Number</label>
+                            <input type="tel" name="customer_phone" class="form-control" required data-testid="input-customer-phone">
+                        </div>
+                    </div>
+                    
+                    <h5 class="mt-4">Issue Description</h5>
+                    <div class="mb-3">
+                        <label class="form-label">What's wrong with the device?</label>
+                        <textarea name="issue_description" class="form-control" rows="4" placeholder="Describe the issue in detail..." data-testid="input-issue"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Common Issues</label>
+                        <div class="btn-group flex-wrap" role="group">
+                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Screen cracked/broken">Cracked Screen</button>
+                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Battery drains quickly">Battery Issue</button>
+                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Charging port not working">Charging Issue</button>
+                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Camera not working">Camera Issue</button>
+                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Speaker/microphone issue">Audio Issue</button>
+                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Water damage">Water Damage</button>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-lg" data-testid="button-submit-repair">Submit Repair Request</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Repair Process</div>
+            <div class="card-body">
+                <ol>
+                    <li><strong>Receive</strong> - Device checked in</li>
+                    <li><strong>Diagnose</strong> - Technician evaluates issue</li>
+                    <li><strong>Quote</strong> - Customer approves repair cost</li>
+                    <li><strong>Repair</strong> - Technician fixes device</li>
+                    <li><strong>Test</strong> - Quality check performed</li>
+                    <li><strong>Complete</strong> - Customer picks up device</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('.select2').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Select an option',
+        allowClear: true
+    });
+    
+    $('#brand-dropdown').on('change', function() {
+        const brand = $(this).val();
+        if (!brand) return;
+        
+        const brandId = $('option:selected', this).val();
+        fetch(`/api/models?brand_id=${$('option[value="' + brand + '"]').closest('select').find(':selected').index()}`)
+            .then(res => res.json())
+            .then(models => {
+                const modelDropdown = $('#model-dropdown');
+                modelDropdown.empty().append('<option value="">Select Model</option>');
+                models.forEach(m => modelDropdown.append(new Option(m.name, m.name)));
+                modelDropdown.trigger('change.select2');
+            });
+    });
+    
+    $('.issue-btn').on('click', function() {
+        const issue = $(this).data('issue');
+        const textarea = $('textarea[name="issue_description"]');
+        const current = textarea.val();
+        textarea.val(current ? current + '\n' + issue : issue);
+    });
+    
+    $('#repair-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            brand: $('#brand-dropdown').val(),
+            model: $('#model-dropdown').val(),
+            serial: $('input[name="serial"]').val(),
+            customer_name: $('input[name="customer_name"]').val(),
+            customer_phone: $('input[name="customer_phone"]').val(),
+            issue_description: $('textarea[name="issue_description"]').val()
+        };
+        
+        fetch('/api/repair', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Repair request submitted! Number: ' + data.repair_number);
+                window.location.href = '/dashboard';
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

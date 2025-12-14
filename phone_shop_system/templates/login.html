@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Login - Phone Shop{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white text-center">
+                <h4>Phone Shop Login</h4>
+            </div>
+            <div class="card-body">
+                {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" name="username" class="form-control" required data-testid="input-username">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" name="password" class="form-control" required data-testid="input-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100" data-testid="button-login">Login</button>
+                </form>
+                <div class="mt-3 text-muted small">
+                    <p>Demo accounts:</p>
+                    <ul>
+                        <li>Admin: admin / admin123</li>
+                        <li>Staff: staff / staff123</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
