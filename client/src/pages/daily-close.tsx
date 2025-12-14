@@ -35,11 +35,33 @@ const formSchema = z.object({
   cashCounted: z.coerce.number().min(0, "Cash counted is required"),
   mtnAmount: z.coerce.number().min(0, "MTN amount is required"),
   airtelAmount: z.coerce.number().min(0, "Airtel amount is required"),
-  proofCashDrawer: z.string().min(1, "Cash drawer photo is required"),
-  proofMtn: z.string().min(1, "MTN screenshot is required"),
-  proofAirtel: z.string().min(1, "Airtel screenshot is required"),
+  proofCashDrawer: z.string().optional(),
+  proofMtn: z.string().optional(),
+  proofAirtel: z.string().optional(),
   repairs: z.array(repairSchema).optional(),
   sales: z.array(saleSchema).optional(),
+}).superRefine((data, ctx) => {
+  if (data.cashCounted > 0 && !data.proofCashDrawer) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Cash drawer proof required when cash is counted",
+      path: ["proofCashDrawer"],
+    });
+  }
+  if (data.mtnAmount > 0 && !data.proofMtn) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "MTN proof required when amount > 0",
+      path: ["proofMtn"],
+    });
+  }
+  if (data.airtelAmount > 0 && !data.proofAirtel) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Airtel proof required when amount > 0",
+      path: ["proofAirtel"],
+    });
+  }
 });
 
 export default function DailyClose() {
@@ -82,11 +104,17 @@ export default function DailyClose() {
         mtnAmount: values.mtnAmount,
         airtelAmount: values.airtelAmount,
         proofs: {
-          cashDrawer: values.proofCashDrawer,
-          mtn: values.proofMtn,
-          airtel: values.proofAirtel,
+          cashDrawer: values.proofCashDrawer || "",
+          mtn: values.proofMtn || "",
+          airtel: values.proofAirtel || "",
         },
-        repairs: values.repairs?.map((r, i) => ({ ...r, id: `temp-r-${i}`, notes: r.notes || "" })) || [],
+        repairs: values.repairs?.map((r, i) => ({ 
+          ...r, 
+          id: `temp-r-${i}`, 
+          notes: r.notes || "",
+          status: "Pending",
+          createdAt: new Date().toISOString()
+        })) || [],
         sales: values.sales?.map((s, i) => ({ ...s, id: `temp-s-${i}`, productId: s.productId || null })) || []
       });
       setSubmitted(true);
@@ -104,6 +132,13 @@ export default function DailyClose() {
   };
 
   const handleProductSelect = (index: number, productId: string) => {
+    if (productId === "other") {
+      form.setValue(`sales.${index}.productId`, undefined);
+      form.setValue(`sales.${index}.productName`, "");
+      form.setValue(`sales.${index}.totalPrice`, 0);
+      return;
+    }
+    
     const product = products.find(p => p.id === productId);
     if (product) {
       form.setValue(`sales.${index}.productName`, product.name);
@@ -153,7 +188,7 @@ export default function DailyClose() {
                   type="button" 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => appendSale({ productName: "", quantity: 1, totalPrice: 0, productId: "other" })}
+                  onClick={() => appendSale({ productName: "", quantity: 1, totalPrice: 0 })}
                   className="gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -189,7 +224,7 @@ export default function DailyClose() {
                           name={`sales.${index}.productId`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-xs">Select Product</FormLabel>
+                              <FormLabel className="text-xs">Select Product (Optional)</FormLabel>
                               <Select 
                                 onValueChange={(val) => {
                                   field.onChange(val);
@@ -199,11 +234,11 @@ export default function DailyClose() {
                               >
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Select from catalog..." />
+                                    <SelectValue placeholder="Custom / Select..." />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="other">Other / Custom</SelectItem>
+                                  <SelectItem value="other">Custom Input</SelectItem>
                                   {products.map(p => (
                                     <SelectItem key={p.id} value={p.id}>{p.name} - {p.price.toLocaleString()}</SelectItem>
                                   ))}
@@ -218,9 +253,9 @@ export default function DailyClose() {
                           name={`sales.${index}.productName`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-xs">Product Name</FormLabel>
+                              <FormLabel className="text-xs">Item Name (Manual)</FormLabel>
                               <FormControl>
-                                <Input placeholder="Item Name" {...field} className="h-9" />
+                                <Input placeholder="Type item name..." {...field} className="h-9" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -463,8 +498,9 @@ export default function DailyClose() {
               <div className="space-y-4">
                 <h3 className="font-medium text-slate-900 flex items-center gap-2">
                   <Camera className="w-4 h-4" />
-                  Required Proofs
+                  Proof of Balances
                 </h3>
+                <p className="text-sm text-slate-500">Only upload proofs for methods you have cash in.</p>
                 
                 <div className="grid gap-4 md:grid-cols-3">
                   {/* Cash Drawer Upload */}
