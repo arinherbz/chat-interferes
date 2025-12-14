@@ -18,8 +18,29 @@ export default function POSPage() {
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("Cash");
+
+  // Auto-scan logic
+  const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && search.trim()) {
+      // Try to find exact match by IMEI or Product Name (case insensitive) or SKU if we had it
+      const exactDevice = devices.find(d => d.status === "In Stock" && d.imei === search.trim());
+      const exactProduct = products.find(p => p.name.toLowerCase() === search.toLowerCase());
+
+      if (exactDevice) {
+        addToCart("device", exactDevice);
+        setSearch("");
+        toast({ title: "Scanned", description: `Added ${exactDevice.model}` });
+      } else if (exactProduct) {
+        addToCart("product", exactProduct);
+        setSearch("");
+        toast({ title: "Scanned", description: `Added ${exactProduct.name}` });
+      } else {
+        // If no exact match, maybe just keep the filter (standard behavior), 
+        // or notify user nothing found to scan.
+        // For now, we just let the filter handle it, but you could play a "beep" error sound here.
+      }
+    }
+  };
 
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
   const filteredDevices = devices.filter(d => d.status === "In Stock" && (d.model.toLowerCase().includes(search.toLowerCase()) || d.imei.includes(search)));
@@ -85,6 +106,7 @@ export default function POSPage() {
                 className="pl-10 h-10"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleScan}
               />
             </div>
             <Button variant="outline" className="gap-2 shrink-0">
