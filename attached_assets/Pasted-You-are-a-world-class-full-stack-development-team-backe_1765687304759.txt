@@ -1,0 +1,145 @@
+You are a world-class full-stack development team (backend, frontend, UX, DevOps). Build a PRODUCTION-READY, international-standard, Apple-style PHONE SHOP MANAGEMENT SYSTEM with SaaS capabilities. The system must be fully functional, fully responsive, and end-to-end, suitable for iPhones and desktop dashboards.
+
+──────────────────────────────
+CORE PRINCIPLES
+──────────────────────────────
+• Owner-first control (remote management from anywhere)
+• Staff inputs are submissions; owner can approve/override
+• Full CRUD on all entities
+• Every button functional, permission-aware, responsive
+• Status-based workflows with audit logs
+• Mobile-first (iPhone) + Desktop dashboards
+• SaaS-ready (multi-shop, subscription-ready)
+• UX/UI clean, professional, Apple-style
+• No fake buttons, placeholders, or half-wired features
+
+──────────────────────────────
+ROLES & PERMISSIONS
+──────────────────────────────
+OWNER: full CRUD, add/remove/suspend users, assign roles, approve/override submissions, edit trade-in rules, multi-shop SaaS-ready  
+SUPERVISOR: review/approve repairs, daily closures  
+STAFF: submit sales, repairs, closures, trade-ins; limited access; cannot override totals
+
+──────────────────────────────
+DATABASE MODELS
+──────────────────────────────
+Shop, User, Product, Device, Customer, Sale, Repair, TradeInDevice, DailyClosure, ProofUpload, AuditLog
+(Include all relevant fields for tracking, photos, serials/IMEI, payments, trade-in scores, and status)
+
+──────────────────────────────
+PRELOADED DATA
+──────────────────────────────
+Accessories: Screen Protectors, Camera Guards, Chargers, Earphones, AirPods, Speakers, Phone Covers  
+Phone models: Apple (iPhone 17 Pro Max → iPhone 6), Samsung (Galaxy S23 → Galaxy S1), scrollable and searchable, owner can add new models dynamically  
+Product images included (thumbnail + full view)
+
+──────────────────────────────
+TRADE-IN ENGINE (APPLE-STYLE)
+──────────────────────────────
+• Guided wizard: screen, power, buttons, water damage, iCloud/Google lock
+• Rule-based scoring algorithm (editable by owner)
+• Instant trade-in value / reject / manual review
+• Links to sale/repair
+• Audit log for all trade-ins
+• Dropdown scrollable newest→oldest
+• Photos of traded-in devices allowed
+• Owner can adjust base prices, scoring, and rules
+
+──────────────────────────────
+BARCODE / QR SCANNER + TEXT-TO-SPEECH
+──────────────────────────────
+• Scan product or device (IMEI/serial) using iPhone camera
+• Auto-fill fields on scan
+• Validate: format, checksum, duplicate, model mismatch
+• Flag suspected fakes
+• Text-to-speech reads serial immediately
+• Allow owner override
+• Manual entry fallback
+
+──────────────────────────────
+FINANCE SIMPLIFICATION
+──────────────────────────────
+• Remove “expected cash” field entirely
+• System auto-calculates totals
+• Variance displayed to Owner only
+• Staff selects product + quantity + payment type
+• Proof upload via dropdown:
+  - Cash → upload cash drawer photo
+  - MTN → screenshot + reference
+  - Airtel → screenshot + reference
+  - Card → POS receipt photo
+• Cannot submit without required proof
+
+──────────────────────────────
+OWNER DASHBOARD & PERMISSIONS
+──────────────────────────────
+• Add/remove/suspend staff, assign roles
+• Approve/override submissions
+• Filterable, exportable audit logs
+• Multi-shop SaaS-ready
+• Fully responsive for mobile + desktop
+
+──────────────────────────────
+PRODUCT DISPLAY (E-COMMERCE STYLE)
+──────────────────────────────
+• Thumbnails + full images
+• Scrollable grids
+• Click to enlarge + zoom
+• Searchable by name, brand, category
+
+──────────────────────────────
+RECEIPTS (APPLE-STYLE)
+──────────────────────────────
+• Automatic generation after sale / trade-in / repair
+• Includes shop info, customer info, products, serials, trade-in value, payment type, totals
+• QR/barcode for transaction ID
+• PDF download / print / email
+
+──────────────────────────────
+REPORTS DASHBOARD
+──────────────────────────────
+• Daily / weekly / monthly summaries
+• Sales, repairs, trade-ins
+• Payment type breakdown
+• Staff performance
+• Inventory movement with photos
+• Export CSV / Excel / PDF
+• Responsive charts
+
+──────────────────────────────
+TECH STACK
+──────────────────────────────
+• Backend: Python + Flask + SQLAlchemy
+• Frontend: HTML5 + Bootstrap 5 + JS + Chart.js
+• PWA for iPhone offline support
+• SQLite for Replit MVP (Postgres-ready)
+• File storage: /static/uploads
+• Auth: session + hashed passwords + role-based permissions
+
+──────────────────────────────
+DELIVERABLES
+──────────────────────────────
+• main.py (full CRUD, trade-in logic, QR scanning, audit logs)
+• Templates: base.html, login.html, dashboard.html, sales_form.html, repair_form.html, tradein_wizard.html, receipt.html, product_manager.html, staff_manager.html
+• static/css/styles.css
+• static/js/scripts.js (QR scanning, TTS, form validation)
+• PWA manifest + service worker
+• Seed data loader
+• README with setup instructions
+• All buttons functional, responsive, and fully auditable
+
+──────────────────────────────
+FINAL REQUIREMENTS
+──────────────────────────────
+• Apple-style workflow & trade-in engine
+• Scrollable searchable model dropdowns
+• Product photos e-commerce style
+• QR/barcode scanning + TTS + fake detection
+• Owner audit & full permissions
+• Receipts Apple-style
+• Reports dashboard
+• Remove expected cash
+• Exportable data & audit logs
+• Fully responsive iPhone + Desktop
+• SaaS-ready, professional, sellable
+• Generate everything end-to-end ready for Replit
