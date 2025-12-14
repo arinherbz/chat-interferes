@@ -1,6 +1,16 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 import { format, subDays } from "date-fns";
 
+export interface Repair {
+  id: string;
+  deviceBrand: string;
+  deviceModel: string;
+  imei: string;
+  repairType: string;
+  price: number;
+  notes: string;
+}
+
 export interface DailyClosure {
   id: string;
   date: string; // ISO date string
@@ -17,6 +27,7 @@ export interface DailyClosure {
     mtn: string;
     airtel: string;
   };
+  repairs: Repair[];
 }
 
 export interface Alert {
@@ -60,7 +71,18 @@ const MOCK_CLOSURES: DailyClosure[] = Array.from({ length: 7 }).map((_, i) => {
       cashDrawer: "https://placehold.co/400x300?text=Cash+Drawer",
       mtn: "https://placehold.co/400x300?text=MTN+Proof",
       airtel: "https://placehold.co/400x300?text=Airtel+Proof",
-    }
+    },
+    repairs: i % 2 === 0 ? [
+      {
+        id: `r-${i}`,
+        deviceBrand: "Samsung",
+        deviceModel: "A12",
+        imei: "354678091234567",
+        repairType: "Screen Replacement",
+        price: 50000,
+        notes: "Customer provided screen"
+      }
+    ] : []
   };
 });
 

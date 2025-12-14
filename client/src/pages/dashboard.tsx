@@ -14,7 +14,7 @@ import {
   LineChart,
   Line
 } from "recharts";
-import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Dashboard() {
@@ -24,6 +24,9 @@ export default function Dashboard() {
   const totalVariance = closures.reduce((acc, curr) => acc + curr.variance, 0);
   const flaggedCount = closures.filter(c => c.status === "flagged").length;
   const pendingCount = closures.filter(c => c.status === "pending").length;
+  const totalRepairRevenue = closures.reduce((acc, curr) => {
+    return acc + (curr.repairs?.reduce((rAcc, r) => rAcc + r.price, 0) || 0);
+  }, 0);
 
   // Chart data preparation
   const chartData = [...closures].reverse().map(c => ({
@@ -84,6 +87,17 @@ export default function Dashboard() {
         </Card>
 
         <Card>
+           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Repair Revenue</CardTitle>
+            <Wrench className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-900">{totalRepairRevenue.toLocaleString()} UGX</div>
+            <p className="text-xs text-muted-foreground mt-1">Total from repairs</p>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Flagged Closures</CardTitle>
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
@@ -102,17 +116,6 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">{pendingCount}</div>
             <p className="text-xs text-muted-foreground mt-1">Submissions today</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Staff Performance</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">98%</div>
-            <p className="text-xs text-muted-foreground mt-1">On-time submissions</p>
           </CardContent>
         </Card>
       </div>
@@ -152,24 +155,32 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-4">
               {closures.slice(0, 5).map(closure => (
-                <div key={closure.id} className="flex items-center justify-between border-b border-slate-100 pb-4 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${closure.status === 'flagged' ? 'bg-red-500' : closure.status === 'confirmed' ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">{format(new Date(closure.date), 'MMM dd, yyyy')}</p>
-                      <p className="text-xs text-slate-500">{closure.submittedBy}</p>
+                <div key={closure.id} className="flex flex-col gap-2 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${closure.status === 'flagged' ? 'bg-red-500' : closure.status === 'confirmed' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{format(new Date(closure.date), 'MMM dd, yyyy')}</p>
+                        <p className="text-xs text-slate-500">{closure.submittedBy}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-slate-900">
+                        {(closure.cashCounted + closure.mtnAmount + closure.airtelAmount).toLocaleString()}
+                      </p>
+                      {closure.variance !== 0 && (
+                        <p className={`text-xs ${closure.variance < 0 ? 'text-red-500' : 'text-green-500'}`}>
+                          {closure.variance > 0 ? '+' : ''}{closure.variance.toLocaleString()}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-slate-900">
-                      {(closure.cashCounted + closure.mtnAmount + closure.airtelAmount).toLocaleString()}
-                    </p>
-                    {closure.variance !== 0 && (
-                      <p className={`text-xs ${closure.variance < 0 ? 'text-red-500' : 'text-green-500'}`}>
-                        {closure.variance > 0 ? '+' : ''}{closure.variance.toLocaleString()}
-                      </p>
-                    )}
-                  </div>
+                  {closure.repairs && closure.repairs.length > 0 && (
+                    <div className="ml-5 bg-slate-50 p-2 rounded text-xs text-slate-600 flex gap-2">
+                       <Wrench className="w-3 h-3 mt-0.5" />
+                       <span>{closure.repairs.length} repair(s) included</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

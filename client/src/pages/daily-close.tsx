@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth-context";
@@ -9,19 +9,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
-import { Camera, Upload, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Camera, Upload, CheckCircle2, Plus, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
+
+const repairSchema = z.object({
+  deviceBrand: z.string().min(1, "Brand required"),
+  deviceModel: z.string().min(1, "Model required"),
+  imei: z.string().min(1, "IMEI/Serial required"),
+  repairType: z.string().min(1, "Repair type required"),
+  price: z.coerce.number().min(0, "Price required"),
+  notes: z.string().optional(),
+});
 
 const formSchema = z.object({
   cashExpected: z.coerce.number().min(0, "Cash expected is required"),
   cashCounted: z.coerce.number().min(0, "Cash counted is required"),
   mtnAmount: z.coerce.number().min(0, "MTN amount is required"),
   airtelAmount: z.coerce.number().min(0, "Airtel amount is required"),
-  // In a real app, these would be file objects. For mockup, we'll confirm they are "uploaded"
   proofCashDrawer: z.string().min(1, "Cash drawer photo is required"),
   proofMtn: z.string().min(1, "MTN screenshot is required"),
   proofAirtel: z.string().min(1, "Airtel screenshot is required"),
+  repairs: z.array(repairSchema).optional(),
 });
 
 export default function DailyClose() {
@@ -40,11 +50,16 @@ export default function DailyClose() {
       proofCashDrawer: "",
       proofMtn: "",
       proofAirtel: "",
+      repairs: [],
     },
   });
 
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "repairs",
+  });
+
   function onSubmit(values: z.infer<typeof formSchema>) {
-    // Simulate API delay
     setTimeout(() => {
       addClosure({
         submittedBy: user?.name || "Unknown",
@@ -56,20 +71,19 @@ export default function DailyClose() {
           cashDrawer: values.proofCashDrawer,
           mtn: values.proofMtn,
           airtel: values.proofAirtel,
-        }
+        },
+        repairs: values.repairs?.map((r, i) => ({ ...r, id: `temp-${i}`, notes: r.notes || "" })) || []
       });
       setSubmitted(true);
       toast({
         title: "Closure Submitted",
-        description: "Your daily report has been successfully recorded.",
+        description: "Your daily report and repairs have been recorded.",
         className: "bg-green-600 text-white border-none",
       });
     }, 1000);
   }
 
-  // Helper for mock file upload
   const handleMockUpload = (field: any) => {
-    // Simulate picking a file
     const mockUrl = "https://placehold.co/600x400?text=Uploaded+Proof";
     field.onChange(mockUrl);
   };
@@ -93,18 +107,144 @@ export default function DailyClose() {
     <div className="space-y-6 max-w-2xl mx-auto pb-12">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Daily Close</h1>
-        <p className="text-slate-500">Submit end-of-day counts and proofs.</p>
+        <p className="text-slate-500">Submit end-of-day counts and repairs.</p>
       </div>
 
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader>
-          <CardTitle>Cash & Mobile Money</CardTitle>
-          <CardDescription>Enter the final amounts from your drawer and phones.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          
+          {/* REPAIRS SECTION */}
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Wrench className="w-5 h-5 text-primary" />
+                    Daily Repairs
+                  </CardTitle>
+                  <CardDescription>Log any devices repaired today.</CardDescription>
+                </div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => append({ deviceBrand: "", deviceModel: "", imei: "", repairType: "", price: 0, notes: "" })}
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Repair
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {fields.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm">
+                  No repairs logged for today yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {fields.map((field, index) => (
+                    <div key={field.id} className="p-4 space-y-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm text-slate-500">Repair #{index + 1}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => remove(index)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name={`repairs.${index}.deviceBrand`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Brand</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Samsung" {...field} className="h-9" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         <FormField
+                          control={form.control}
+                          name={`repairs.${index}.deviceModel`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Model</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Galaxy S21" {...field} className="h-9" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                         <FormField
+                          control={form.control}
+                          name={`repairs.${index}.imei`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">IMEI/Serial</FormLabel>
+                              <FormControl>
+                                <Input placeholder="356..." {...field} className="h-9" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         <FormField
+                          control={form.control}
+                          name={`repairs.${index}.repairType`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Type</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Screen Replacement" {...field} className="h-9" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4">
+                         <FormField
+                          control={form.control}
+                          name={`repairs.${index}.price`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Price (UGX)</FormLabel>
+                              <FormControl>
+                                <Input type="number" placeholder="0" {...field} className="h-9 font-mono" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* FINANCIALS SECTION */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle>Cash & Mobile Money</CardTitle>
+              <CardDescription>Enter the final amounts from your drawer and phones.</CardDescription>
+            </CardHeader>
+            <CardContent>
               <div className="grid gap-6 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -136,7 +276,7 @@ export default function DailyClose() {
                 />
               </div>
 
-              <Separator />
+              <Separator className="my-6" />
 
               <div className="grid gap-6 md:grid-cols-2">
                 <FormField
@@ -168,7 +308,7 @@ export default function DailyClose() {
                 />
               </div>
 
-              <Separator />
+              <Separator className="my-6" />
 
               <div className="space-y-4">
                 <h3 className="font-medium text-slate-900 flex items-center gap-2">
@@ -277,10 +417,10 @@ export default function DailyClose() {
                   {form.formState.isSubmitting ? "Submitting..." : "Submit Daily Close"}
                 </Button>
               </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </form>
+      </Form>
     </div>
   );
 }
