@@ -185,7 +185,7 @@ interface DataContextType {
 
   // Actions
   setActiveShopId: (id: string) => void;
-  activeShopId: string; // Add this line
+  activeShopId: string;
   addProduct: (data: Omit<Product, "id">) => void;
   addDevice: (data: Omit<Device, "id" | "status" | "addedAt">) => void;
   addCustomer: (data: Omit<Customer, "id" | "joinedAt" | "totalPurchases">) => void;
@@ -195,6 +195,11 @@ interface DataContextType {
   recordTradeIn: (data: Omit<TradeIn, "id" | "createdAt" | "status">) => void;
   updateRepairStatus: (id: string, status: RepairStatus) => void;
   addClosure: (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId">) => void;
+  
+  // User Management
+  addUser: (data: Omit<User, "id">) => void;
+  updateUser: (id: string, data: Partial<User>) => void;
+  deleteUser: (id: string) => void;
   
   // Helpers
   getPermissions: (role: Role) => string[];
@@ -261,6 +266,7 @@ const MOCK_NOTIFICATIONS: Notification[] = [
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [activeShopId, setActiveShopId] = useState("shop1");
+  const [users, setUsers] = useState(MOCK_USERS);
   const [products, setProducts] = useState(MOCK_PRODUCTS);
   const [devices, setDevices] = useState(MOCK_DEVICES);
   const [customers, setCustomers] = useState(MOCK_CUSTOMERS);
@@ -382,6 +388,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     logAction("CREATE", "Closure", `Submitted daily closure`);
   };
 
+  const addUser = (data: Omit<User, "id">) => {
+    const newUser = { ...data, id: `u-${Date.now()}` };
+    setUsers([...users, newUser]);
+    logAction("CREATE", "User", `Added staff member ${data.name}`);
+  };
+
+  const updateUser = (id: string, data: Partial<User>) => {
+    setUsers(users.map(u => u.id === id ? { ...u, ...data } : u));
+    logAction("UPDATE", "User", `Updated staff member ${id}`);
+  };
+
+  const deleteUser = (id: string) => {
+    setUsers(users.filter(u => u.id !== id));
+    logAction("DELETE", "User", `Removed staff member ${id}`);
+  };
+
   const getPermissions = (role: Role) => {
     if (role === "Owner") return ["all"];
     if (role === "Supervisor") return ["sales", "repairs", "inventory", "reports"];
@@ -415,6 +437,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       recordTradeIn,
       updateRepairStatus,
       addClosure,
+      addUser,
+      updateUser,
+      deleteUser,
       getPermissions
     }}>
       {children}

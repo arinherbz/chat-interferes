@@ -35,9 +35,11 @@ const formSchema = z.object({
   cashCounted: z.coerce.number().min(0, "Cash counted is required"),
   mtnAmount: z.coerce.number().min(0, "MTN amount is required"),
   airtelAmount: z.coerce.number().min(0, "Airtel amount is required"),
+  cardAmount: z.coerce.number().min(0, "Card amount is required"),
   proofCashDrawer: z.string().optional(),
   proofMtn: z.string().optional(),
   proofAirtel: z.string().optional(),
+  proofCard: z.string().optional(),
   repairs: z.array(repairSchema).optional(),
   sales: z.array(saleSchema).optional(),
 }).superRefine((data, ctx) => {
@@ -62,6 +64,13 @@ const formSchema = z.object({
       path: ["proofAirtel"],
     });
   }
+  if (data.cardAmount > 0 && !data.proofCard) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Card proof required when amount > 0",
+      path: ["proofCard"],
+    });
+  }
 });
 
 export default function DailyClose() {
@@ -77,9 +86,11 @@ export default function DailyClose() {
       cashCounted: 0,
       mtnAmount: 0,
       airtelAmount: 0,
+      cardAmount: 0,
       proofCashDrawer: "",
       proofMtn: "",
       proofAirtel: "",
+      proofCard: "",
       repairs: [],
       sales: [],
     },
@@ -103,19 +114,30 @@ export default function DailyClose() {
         cashCounted: values.cashCounted,
         mtnAmount: values.mtnAmount,
         airtelAmount: values.airtelAmount,
+        cardAmount: values.cardAmount,
+        expensesTotal: 0,
         proofs: {
           cashDrawer: values.proofCashDrawer || "",
           mtn: values.proofMtn || "",
           airtel: values.proofAirtel || "",
+          card: values.proofCard || "",
         },
         repairs: values.repairs?.map((r, i) => ({ 
           ...r, 
           id: `temp-r-${i}`, 
           notes: r.notes || "",
           status: "Pending",
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          repairNumber: "REP-TEMP",
+          issueDescription: "Recorded during Daily Close"
         })) || [],
-        sales: values.sales?.map((s, i) => ({ ...s, id: `temp-s-${i}`, productId: s.productId || null })) || []
+        sales: values.sales?.map((s, i) => ({ 
+          ...s, 
+          id: `temp-s-${i}`, 
+          productId: s.productId || undefined,
+          name: s.productName,
+          unitPrice: s.quantity > 0 ? s.totalPrice / s.quantity : 0 
+        })) || []
       });
       setSubmitted(true);
       toast({
@@ -493,6 +515,22 @@ export default function DailyClose() {
                 />
               </div>
 
+              <div className="grid gap-6 md:grid-cols-2 mt-6">
+                 <FormField
+                  control={form.control}
+                  name="cardAmount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Card Terminal (POS)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <Separator className="my-6" />
 
               <div className="space-y-4">
@@ -502,7 +540,7 @@ export default function DailyClose() {
                 </h3>
                 <p className="text-sm text-slate-500">Only upload proofs for methods you have cash in.</p>
                 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
                   {/* Cash Drawer Upload */}
                   <FormField
                     control={form.control}
@@ -518,13 +556,13 @@ export default function DailyClose() {
                             {field.value ? (
                               <div className="flex flex-col items-center text-green-700">
                                 <CheckCircle2 className="w-8 h-8 mb-2" />
-                                <span className="text-xs font-medium">Cash Drawer Uploaded</span>
+                                <span className="text-xs font-medium">Cash</span>
                               </div>
                             ) : (
                               <div className="flex flex-col items-center text-slate-500">
                                 <Upload className="w-8 h-8 mb-2" />
-                                <span className="text-sm font-medium">Upload Cash Drawer</span>
-                                <span className="text-xs text-slate-400 mt-1">Tap to capture</span>
+                                <span className="text-sm font-medium">Cash</span>
+                                <span className="text-[10px] text-slate-400 mt-1">Photo</span>
                               </div>
                             )}
                           </div>
@@ -543,19 +581,19 @@ export default function DailyClose() {
                         <FormLabel className="sr-only">MTN Proof</FormLabel>
                         <FormControl>
                           <div 
-                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-green-500 bg-green-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
+                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-yellow-500 bg-yellow-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
                             onClick={() => handleMockUpload(field)}
                           >
                             {field.value ? (
-                              <div className="flex flex-col items-center text-green-700">
+                              <div className="flex flex-col items-center text-yellow-700">
                                 <CheckCircle2 className="w-8 h-8 mb-2" />
-                                <span className="text-xs font-medium">MTN Proof Uploaded</span>
+                                <span className="text-xs font-medium">MTN</span>
                               </div>
                             ) : (
                               <div className="flex flex-col items-center text-slate-500">
                                 <Upload className="w-8 h-8 mb-2" />
-                                <span className="text-sm font-medium">Upload MTN Balance</span>
-                                <span className="text-xs text-slate-400 mt-1">Tap to capture</span>
+                                <span className="text-sm font-medium">MTN</span>
+                                <span className="text-[10px] text-slate-400 mt-1">Photo</span>
                               </div>
                             )}
                           </div>
@@ -574,19 +612,50 @@ export default function DailyClose() {
                         <FormLabel className="sr-only">Airtel Proof</FormLabel>
                         <FormControl>
                           <div 
-                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-green-500 bg-green-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
+                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-red-500 bg-red-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
                             onClick={() => handleMockUpload(field)}
                           >
                             {field.value ? (
-                              <div className="flex flex-col items-center text-green-700">
+                              <div className="flex flex-col items-center text-red-700">
                                 <CheckCircle2 className="w-8 h-8 mb-2" />
-                                <span className="text-xs font-medium">Airtel Proof Uploaded</span>
+                                <span className="text-xs font-medium">Airtel</span>
                               </div>
                             ) : (
                               <div className="flex flex-col items-center text-slate-500">
                                 <Upload className="w-8 h-8 mb-2" />
-                                <span className="text-sm font-medium">Upload Airtel Balance</span>
-                                <span className="text-xs text-slate-400 mt-1">Tap to capture</span>
+                                <span className="text-sm font-medium">Airtel</span>
+                                <span className="text-[10px] text-slate-400 mt-1">Photo</span>
+                              </div>
+                            )}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Card Upload */}
+                  <FormField
+                    control={form.control}
+                    name="proofCard"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="sr-only">Card Proof</FormLabel>
+                        <FormControl>
+                          <div 
+                            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
+                            onClick={() => handleMockUpload(field)}
+                          >
+                            {field.value ? (
+                              <div className="flex flex-col items-center text-blue-700">
+                                <CheckCircle2 className="w-8 h-8 mb-2" />
+                                <span className="text-xs font-medium">Card</span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center text-slate-500">
+                                <Upload className="w-8 h-8 mb-2" />
+                                <span className="text-sm font-medium">Card</span>
+                                <span className="text-[10px] text-slate-400 mt-1">Batch</span>
                               </div>
                             )}
                           </div>

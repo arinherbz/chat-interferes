@@ -1,0 +1,259 @@
+You are a world-class senior full-stack engineering team (CTO + backend + frontend + UX + DevOps).
+You are building a PRODUCTION-READY, INTERNATIONALLY DESIGNED
+PHONE SHOP MANAGEMENT SYSTEM that can be sold globally as a SaaS.
+
+This is NOT a prototype.
+This is NOT a demo.
+EVERY FEATURE MUST WORK END-TO-END.
+
+────────────────────────────────
+CORE PHILOSOPHY (MANDATORY)
+────────────────────────────────
+• Owner-first control (remote management from anywhere in the world)
+• Staff inputs are submissions, not final authority
+• Full CRUD on EVERYTHING (Create, Read, Update, Delete)
+• Every button is functional and permission-aware
+• Status-based workflows with audit logs
+• Mobile-first (iPhone staff) + Desktop dashboards (owner)
+• SaaS-ready (multi-shop, subscriptions later)
+• International UX/UI standards (clean, modern, professional)
+
+NO fake buttons.
+NO placeholders for CRUD.
+NO static pages.
+NO half-wired features.
+
+────────────────────────────────
+ROLES & PERMISSIONS
+────────────────────────────────
+1. OWNER (Super Admin / God Mode)
+   - Edit, delete, override ANY record
+   - Approve, reject, lock staff submissions
+   - Modify prices, stock, repairs, closures
+   - Add/remove/suspend staff
+   - View audit logs
+   - View all reports
+   - Multi-shop capable
+
+2. SUPERVISOR
+   - Review repairs and daily closures
+   - Update repair statuses
+   - Cannot delete locked records
+
+3. STAFF
+   - Submit sales, repairs, closures
+   - Cannot edit after submission
+   - No access to financial summaries
+
+Backend MUST enforce permissions (not frontend only).
+
+────────────────────────────────
+DATABASE MODELS (ALL WITH CRUD)
+────────────────────────────────
+Shop(id, name, country, currency)
+
+User(
+ id, shop_id, name, email,
+ role, password_hash, is_active
+)
+
+Product(
+ id, shop_id, name,
+ category (Phone / Accessory / Service),
+ price, stock_quantity,
+ is_preloaded, is_active
+)
+
+Device(
+ id, shop_id, brand, model,
+ imei_or_serial, status,
+ customer_id
+)
+
+Customer(
+ id, shop_id, name, phone, email
+)
+
+Sale(
+ id, shop_id,
+ product_id nullable,
+ other_product_name nullable,
+ quantity, unit_price, total_price,
+ payment_method (Cash / MTN / Airtel / Card),
+ status (Submitted / Approved / Locked),
+ created_by, created_at
+)
+
+Repair(
+ id, shop_id, device_id,
+ repair_type, price, notes,
+ status (Pending / InProgress / Completed / Delivered),
+ editable BOOLEAN,
+ created_by, created_at
+)
+
+DailyClosure(
+ id, shop_id, date,
+ cash, mtn, airtel, card,
+ expected_total, variance,
+ status (Submitted / Reviewed / Approved),
+ submitted_by
+)
+
+ProofUpload(
+ id, closure_id,
+ proof_type (Cash / MTN / Airtel / Card),
+ image_path
+)
+
+AuditLog(
+ id, shop_id,
+ entity_type, entity_id,
+ action (Create/Edit/Delete/Approve),
+ old_value, new_value,
+ performed_by, timestamp
+)
+
+────────────────────────────────
+PRELOADED DATA (AUTO-SEED)
+────────────────────────────────
+Accessories MUST be preloaded:
+• Screen Protectors
+• Camera Guards
+• Chargers
+• Earphones
+• AirPods
+• Speakers
+• Phone Covers
+
+Staff taps item → enters quantity → system calculates totals.
+
+Also allow:
+• "Add Other Item" dynamically
+
+────────────────────────────────
+CORE SYSTEM MODULES
+────────────────────────────────
+
+SALES MODULE
+• Add/edit/delete sales (Owner)
+• Staff submits sales
+• Owner approves & locks
+• Reverse sales with audit trail
+• Inventory auto-deduction
+
+REPAIR MODULE
+• Create repair linked to device
+• Track repair lifecycle
+• Owner can edit price, notes, device
+• Full repair history per device
+• Status changes live
+
+DEVICE & IMEI TRACKING
+• Add/edit/remove devices
+• IMEI/Serial validation
+• Device history view
+
+DAILY CLOSURE & FINANCE
+• Cash + MTN + Airtel + Card
+• Mandatory proof uploads
+• Auto variance calculation
+• Owner edits & approves
+• Alerts on shortages
+
+INVENTORY
+• Real-time stock tracking
+• Manual adjustments (Owner)
+• Low-stock alerts
+
+CUSTOMER MANAGEMENT
+• Customers linked to devices & repairs
+• Editable profiles
+• Message placeholders (SMS / Email)
+
+STAFF MANAGEMENT
+• Add/remove/suspend staff
+• Role assignment
+• Activity tracking
+
+────────────────────────────────
+FRONTEND & UX (INTERNATIONAL)
+────────────────────────────────
+• Mobile-first responsive design (iPhone)
+• Desktop dashboards for owners
+• Clean SaaS UI (Bootstrap 5)
+• Edit / Delete buttons everywhere
+• Status dropdowns
+• Confirmation modals
+• Toast success/error messages
+• Live UI updates (JS)
+• Chart.js analytics
+
+────────────────────────────────
+REPORTING & ANALYTICS
+────────────────────────────────
+• Daily / Weekly / Monthly reports
+• Sales by product/category
+• Repairs by type/device
+• Payment method breakdown
+• Staff performance
+• Inventory movement
+• CSV / Excel / PDF exports
+
+────────────────────────────────
+OFFLINE & MOBILE SUPPORT
+────────────────────────────────
+• Progressive Web App (PWA)
+• Offline form capture
+• Sync when online
+• iPhone “Add to Home Screen”
+
+────────────────────────────────
+SECURITY & STANDARDS
+────────────────────────────────
+• Secure authentication
+• Password hashing
+• Server-side permission enforcement
+• Environment variables for secrets
+• Audit logs for all changes
+
+────────────────────────────────
+TECH STACK
+────────────────────────────────
+• Backend: Python + Flask + SQLAlchemy
+• Frontend: HTML, Bootstrap 5, JS
+• Charts: Chart.js
+• DB: SQLite (Postgres-ready)
+• Deployment: Replit compatible
+
+────────────────────────────────
+DELIVERABLES (GENERATE ALL)
+────────────────────────────────
+• main.py (complete backend)
+• Templates:
+  - base.html
+  - login.html
+  - submit_closure.html
+  - dashboard.html
+  - product_manager.html
+  - repair_manager.html
+  - device_manager.html
+  - customer_manager.html
+  - staff_manager.html
+• static/css/styles.css
+• static/js/scripts.js
+• PWA manifest & service worker
+• Seed data loader
+• README with setup instructions
+
+────────────────────────────────
+FINAL REQUIREMENT
+────────────────────────────────
+This system must be:
+• Fully functional
+• Fully editable by Owner
+• Fully auditable
+• International SaaS-grade
+• Ready to sell as a product
+
+GENERATE EVERYTHING.

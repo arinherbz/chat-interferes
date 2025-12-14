@@ -17,6 +17,8 @@ import DevicesPage from "@/pages/devices";
 import ExpensesPage from "@/pages/expenses";
 import POSPage from "@/pages/pos";
 import SettingsPage from "@/pages/settings";
+import StaffPage from "@/pages/staff"; // Import StaffPage
+import ClosuresPage from "@/pages/closures"; // Import ClosuresPage
 import AuditLogsPage from "@/pages/audit-logs";
 import TradeInPage from "@/pages/trade-in";
 
@@ -28,6 +30,7 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/pos" component={POSPage} />
         <Route path="/daily-close" component={DailyClose} />
+        <Route path="/closures" component={ClosuresPage} /> {/* Add Route */}
         <Route path="/trade-in" component={TradeInPage} />
         
         <Route path="/products" component={ProductsPage} />
@@ -37,6 +40,7 @@ function Router() {
         
         <Route path="/expenses" component={ExpensesPage} />
         <Route path="/audit-logs" component={AuditLogsPage} />
+        <Route path="/staff" component={StaffPage} /> {/* Add Route */}
         <Route path="/settings" component={SettingsPage} />
         
         <Route component={NotFound} />

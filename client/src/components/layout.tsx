@@ -17,7 +17,9 @@ import {
   Settings,
   ShieldAlert,
   ShoppingCart,
-  RefreshCw
+  RefreshCw,
+  UserCog,
+  FileText
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -87,6 +89,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           
           <NavLink href="/pos" icon={ShoppingCart} label="Point of Sale" />
           <NavLink href="/daily-close" icon={PlusCircle} label="Daily Close" />
+          {user.role === "owner" && (
+             <NavLink href="/closures" icon={FileText} label="Closures" />
+          )}
           
           <div className="mt-8 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Management</div>
           
@@ -100,6 +105,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           
           <NavLink href="/expenses" icon={CreditCard} label="Expenses" />
           <NavLink href="/audit-logs" icon={ShieldAlert} label="Audit Logs" />
+          <NavLink href="/staff" icon={UserCog} label="Staff" />
           <NavLink href="/settings" icon={Settings} label="Settings" />
 
           <div className="mt-auto pt-8 border-t border-slate-100">
