@@ -124,7 +124,7 @@ export interface Repair {
 export interface DailyClosure {
   id: string;
   date: string;
-  cashExpected: number; // System calculated from sales
+  cashExpected: number; // Auto-calculated by system from sales - staff cannot input
   cashCounted: number;
   mtnAmount: number;
   airtelAmount: number;
@@ -194,7 +194,7 @@ interface DataContextType {
   addRepair: (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => void;
   recordTradeIn: (data: Omit<TradeIn, "id" | "createdAt" | "status">) => void;
   updateRepairStatus: (id: string, status: RepairStatus) => void;
-  addClosure: (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId">) => void;
+  addClosure: (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId" | "cashExpected">) => void;
   
   // User Management
   addUser: (data: Omit<User, "id">) => void;
@@ -382,10 +382,59 @@ export function DataProvider({ children }: { children: ReactNode }) {
     logAction("UPDATE", "Repair", `Updated repair ${id} status to ${status}`);
   };
 
-  const addClosure = (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId">) => {
-    const variance = (data.cashCounted + data.mtnAmount + data.airtelAmount + data.cardAmount) - data.cashExpected;
-    setClosures([{ ...data, id: `cl-${Date.now()}`, date: new Date().toISOString(), submittedAt: new Date().toISOString(), status: variance !== 0 ? "flagged" : "confirmed", variance, shopId: activeShopId }, ...closures]);
-    logAction("CREATE", "Closure", `Submitted daily closure`);
+  const addClosure = (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId" | "cashExpected">) => {
+    // Auto-calculate expected from today's sales by payment method
+    const today = new Date().toDateString();
+    const todaySales = sales.filter(s => new Date(s.createdAt).toDateString() === today);
+    
+    const expectedCash = todaySales
+      .filter(s => s.paymentMethod === "Cash")
+      .reduce((sum, s) => sum + s.totalAmount, 0);
+    const expectedMtn = todaySales
+      .filter(s => s.paymentMethod === "MTN")
+      .reduce((sum, s) => sum + s.totalAmount, 0);
+    const expectedAirtel = todaySales
+      .filter(s => s.paymentMethod === "Airtel")
+      .reduce((sum, s) => sum + s.totalAmount, 0);
+    const expectedCard = todaySales
+      .filter(s => s.paymentMethod === "Card")
+      .reduce((sum, s) => sum + s.totalAmount, 0);
+    
+    const cashExpected = expectedCash + expectedMtn + expectedAirtel + expectedCard;
+    const totalSubmitted = data.cashCounted + data.mtnAmount + data.airtelAmount + data.cardAmount;
+    const variance = totalSubmitted - cashExpected;
+    
+    // Flag for owner review if variance exists
+    const status = variance !== 0 ? "flagged" : "confirmed";
+    
+    // Add notification for owner if there's a variance
+    if (variance !== 0) {
+      const varianceType = variance > 0 ? "overage" : "shortage";
+      const varianceAmount = Math.abs(variance);
+      setNotifications([
+        {
+          id: `notif-${Date.now()}`,
+          title: "Cash Variance Alert",
+          type: "warning",
+          message: `Daily closure has ${varianceType} of UGX ${varianceAmount.toLocaleString()}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        },
+        ...notifications
+      ]);
+    }
+    
+    setClosures([{ 
+      ...data, 
+      id: `cl-${Date.now()}`, 
+      date: new Date().toISOString(), 
+      submittedAt: new Date().toISOString(), 
+      status, 
+      variance, 
+      cashExpected,
+      shopId: activeShopId 
+    }, ...closures]);
+    logAction("CREATE", "Closure", `Submitted daily closure${variance !== 0 ? ` with variance: ${variance}` : ""}`);
   };
 
   const addUser = (data: Omit<User, "id">) => {

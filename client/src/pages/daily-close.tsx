@@ -39,7 +39,6 @@ const cashEntrySchema = z.object({
 });
 
 const formSchema = z.object({
-  cashExpected: z.coerce.number().min(0, "Cash expected is required"),
   cashEntries: z.array(cashEntrySchema),
   repairs: z.array(repairSchema).optional(),
   sales: z.array(saleSchema).optional(),
@@ -64,7 +63,6 @@ export default function DailyClose() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      cashExpected: 0,
       cashEntries: [],
       repairs: [],
       sales: [],
@@ -115,7 +113,6 @@ export default function DailyClose() {
 
       addClosure({
         submittedBy: user?.name || "Unknown",
-        cashExpected: values.cashExpected,
         cashCounted,
         mtnAmount,
         airtelAmount,
@@ -518,24 +515,6 @@ export default function DailyClose() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="p-6">
-                <FormField
-                  control={form.control}
-                  name="cashExpected"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Expected Cash (System)</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0.00" {...field} className="font-mono text-lg bg-slate-50" readOnly />
-                      </FormControl>
-                      <FormDescription>Calculated from today's sales.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <Separator />
 
               {cashFields.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-sm">
