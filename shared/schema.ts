@@ -26,6 +26,44 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// ===================== PHONE BRANDS =====================
+export const brands = pgTable("brands", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").default(true),
+  sortOrder: integer("sort_order").default(0),
+});
+
+export const insertBrandSchema = createInsertSchema(brands).omit({ id: true });
+export type InsertBrand = z.infer<typeof insertBrandSchema>;
+export type Brand = typeof brands.$inferSelect;
+
+// ===================== PHONE MODELS =====================
+export const models = pgTable("models", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  brandId: varchar("brand_id").notNull().references(() => brands.id),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+});
+
+export const insertModelSchema = createInsertSchema(models).omit({ id: true });
+export type InsertModel = z.infer<typeof insertModelSchema>;
+export type Model = typeof models.$inferSelect;
+
+// ===================== STORAGE OPTIONS =====================
+export const storageOptions = pgTable("storage_options", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  modelId: varchar("model_id").notNull().references(() => models.id),
+  size: text("size").notNull(),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+});
+
+export const insertStorageOptionSchema = createInsertSchema(storageOptions).omit({ id: true });
+export type InsertStorageOption = z.infer<typeof insertStorageOptionSchema>;
+export type StorageOption = typeof storageOptions.$inferSelect;
+
 // ===================== DEVICE BASE VALUES =====================
 // Owner-editable base values per model for trade-in pricing
 export const deviceBaseValues = pgTable("device_base_values", {

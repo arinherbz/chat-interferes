@@ -1,5 +1,8 @@
 import { 
   type User, type InsertUser, users,
+  type Brand, type InsertBrand, brands,
+  type Model, type InsertModel, models,
+  type StorageOption, type InsertStorageOption, storageOptions,
   type DeviceBaseValue, type InsertDeviceBaseValue, deviceBaseValues,
   type ConditionQuestion, type InsertConditionQuestion, conditionQuestions,
   type TradeInAssessment, type InsertTradeInAssessment, tradeInAssessments,
@@ -15,6 +18,21 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  
+  // Brands
+  getBrands(): Promise<Brand[]>;
+  getBrand(id: string): Promise<Brand | undefined>;
+  createBrand(brand: InsertBrand): Promise<Brand>;
+  
+  // Models
+  getModels(brandId?: string): Promise<Model[]>;
+  getModel(id: string): Promise<Model | undefined>;
+  createModel(model: InsertModel): Promise<Model>;
+  
+  // Storage Options
+  getStorageOptions(modelId?: string): Promise<StorageOption[]>;
+  getStorageOption(id: string): Promise<StorageOption | undefined>;
+  createStorageOption(option: InsertStorageOption): Promise<StorageOption>;
   
   // Device Base Values
   getDeviceBaseValues(shopId?: string): Promise<DeviceBaseValue[]>;
@@ -65,6 +83,57 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  // ==================== BRANDS ====================
+  async getBrands(): Promise<Brand[]> {
+    return db.select().from(brands).where(eq(brands.isActive, true)).orderBy(brands.sortOrder, brands.name);
+  }
+
+  async getBrand(id: string): Promise<Brand | undefined> {
+    const [brand] = await db.select().from(brands).where(eq(brands.id, id));
+    return brand;
+  }
+
+  async createBrand(brand: InsertBrand): Promise<Brand> {
+    const [created] = await db.insert(brands).values(brand).returning();
+    return created;
+  }
+
+  // ==================== MODELS ====================
+  async getModels(brandId?: string): Promise<Model[]> {
+    if (brandId) {
+      return db.select().from(models).where(and(eq(models.brandId, brandId), eq(models.isActive, true))).orderBy(models.sortOrder, models.name);
+    }
+    return db.select().from(models).where(eq(models.isActive, true)).orderBy(models.sortOrder, models.name);
+  }
+
+  async getModel(id: string): Promise<Model | undefined> {
+    const [model] = await db.select().from(models).where(eq(models.id, id));
+    return model;
+  }
+
+  async createModel(model: InsertModel): Promise<Model> {
+    const [created] = await db.insert(models).values(model).returning();
+    return created;
+  }
+
+  // ==================== STORAGE OPTIONS ====================
+  async getStorageOptions(modelId?: string): Promise<StorageOption[]> {
+    if (modelId) {
+      return db.select().from(storageOptions).where(and(eq(storageOptions.modelId, modelId), eq(storageOptions.isActive, true))).orderBy(storageOptions.sortOrder, storageOptions.size);
+    }
+    return db.select().from(storageOptions).where(eq(storageOptions.isActive, true)).orderBy(storageOptions.sortOrder, storageOptions.size);
+  }
+
+  async getStorageOption(id: string): Promise<StorageOption | undefined> {
+    const [option] = await db.select().from(storageOptions).where(eq(storageOptions.id, id));
+    return option;
+  }
+
+  async createStorageOption(option: InsertStorageOption): Promise<StorageOption> {
+    const [created] = await db.insert(storageOptions).values(option).returning();
+    return created;
   }
 
   // ==================== DEVICE BASE VALUES ====================
