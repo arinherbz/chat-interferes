@@ -1,0 +1,56 @@
+<select id="brand-dropdown">
+  {% for brand in brands %}
+  <option value="{{ brand.id }}">{{ brand.name }}</option>
+  {% endfor %}
+</select>
+
+<select id="model-dropdown"></select>
+<select id="storage-dropdown"></select>
+
+<div id="scanner-container"></div>
+<input type="text" id="device-serial" readonly>
+
+<script src="https://unpkg.com/quagga/dist/quagga.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
+
+<script>
+function loadModels(brandId){
+  fetch(`/api/models?brand=${brandId}`)
+    .then(res=>res.json())
+    .then(models=>{
+      const modelDropdown = $('#model-dropdown');
+      modelDropdown.empty();
+      models.forEach(m=>modelDropdown.append(new Option(m.name,m.id)));
+      modelDropdown.trigger('change');
+    });
+}
+
+function loadStorages(modelId){
+  fetch(`/api/storages?model_id=${modelId}`)
+    .then(res=>res.json())
+    .then(storages=>{
+      const storageDropdown = $('#storage-dropdown');
+      storageDropdown.empty();
+      storages.forEach(s=>storageDropdown.append(new Option(s.size,s.id)));
+    });
+}
+
+$('#brand-dropdown').on('change',function(){ loadModels(this.value); });
+$('#model-dropdown').on('change',function(){ loadStorages(this.value); });
+
+$('#brand-dropdown,#model-dropdown,#storage-dropdown').select2({ placeholder: "Select", allowClear: true });
+
+// QR Scanner
+Quagga.init({
+    inputStream: { name:"Live", type:"LiveStream", target: document.querySelector('#scanner-container'), constraints:{facingMode:"environment"} },
+    decoder: { readers:["code_128_reader","ean_reader","code_39_reader"] }
+}, function(err){ if(err){console.log(err);} Quagga.start(); });
+
+Quagga.onDetected(function(result){
+    let serial = result.codeResult.code;
+    $('#device-serial').val(serial);
+    speechSynthesis.speak(new SpeechSynthesisUtterance("Serial detected: "+serial));
+    fetch(`/api/validate-serial?serial=${serial}`).then(r=>r.json()).then(d=>{if(d.is_fake) alert("Warning: Device may be fake");});
+});
+</script>

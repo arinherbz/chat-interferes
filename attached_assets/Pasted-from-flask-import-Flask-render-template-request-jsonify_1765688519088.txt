@@ -1,0 +1,81 @@
+from flask import Flask, render_template, request, jsonify, redirect, url_for
+from models import db, Brand, Model, StorageOption, Product, Device, Customer, Sale, User
+from datetime import datetime
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///phone_shop.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+@app.before_first_request
+def create_tables():
+    db.create_all()
+    # Seed data if empty
+    if Brand.query.count() == 0:
+        apple = Brand(name="Apple")
+        db.session.add(apple)
+        db.session.commit()
+        for i, name in enumerate(["X","XS","11","12","12 Pro","13","13 Pro","14","14 Pro","15","16","16 Pro","17","17 Pro","17 Pro Max"]):
+            db.session.add(Model(name=f"iPhone {name}", brand_id=apple.id, order_index=i))
+        db.session.commit()
+        for model in Model.query.all():
+            for size in ["128GB","256GB","512GB"]:
+                db.session.add(StorageOption(model_id=model.id, size=size))
+        db.session.commit()
+
+@app.route('/')
+def dashboard():
+    return render_template('dashboard.html')
+
+@app.route('/tradein')
+def tradein():
+    brands = Brand.query.all()
+    return render_template('tradein_wizard.html', brands=brands)
+
+@app.route('/admin/models')
+def admin_models():
+    models = Model.query.order_by(Model.order_index.desc()).all()
+    return render_template('admin_models.html', models=models)
+
+@app.route('/api/models')
+def get_models():
+    brand_id = request.args.get('brand')
+    models = Model.query.filter_by(brand_id=brand_id).order_by(Model.order_index.desc()).all()
+    return jsonify([{"id": m.id, "name": m.name} for m in models])
+
+@app.route('/api/storages')
+def get_storages():
+    model_id = request.args.get('model_id')
+    storages = StorageOption.query.filter_by(model_id=model_id).all()
+    return jsonify([{"id": s.id, "size": s.size} for s in storages])
+
+@app.route('/api/validate-serial')
+def validate_serial():
+    serial = request.args.get('serial')
+    exists = Device.query.filter_by(imei_or_serial=serial).first()
+    return jsonify({"is_fake": exists is not None})
+
+@app.route('/sale', methods=['POST'])
+def submit_sale():
+    data = request.form
+    sale = Sale(
+        product_id=data.get('product_id'),
+        other_product_name=data.get('other_product_name'),
+        quantity=int(data.get('quantity')),
+        unit_price=float(data.get('unit_price')),
+        total_price=int(data.get('quantity'))*float(data.get('unit_price')),
+        payment_method=data.get('payment_method'),
+        created_by=data.get('created_by'),
+        created_at=datetime.now()
+    )
+    db.session.add(sale)
+    db.session.commit()
+    return redirect(url_for('receipt', sale_id=sale.id))
+
+@app.route('/receipt/<int:sale_id>')
+def receipt(sale_id):
+    sale = Sale.query.get(sale_id)
+    return render_template('receipt.html', sale=sale)
+
+if __name__ == '__main__':
+    app.run(debug=True)

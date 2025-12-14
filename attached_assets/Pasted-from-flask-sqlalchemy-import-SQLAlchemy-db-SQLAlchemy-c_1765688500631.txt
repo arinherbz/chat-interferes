@@ -1,0 +1,61 @@
+from flask_sqlalchemy import SQLAlchemy
+db = SQLAlchemy()
+
+class Brand(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+
+class Model(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey('brand.id'))
+    name = db.Column(db.String(50), nullable=False)
+    order_index = db.Column(db.Integer, default=0)
+    storages = db.relationship('StorageOption', backref='model')
+
+class StorageOption(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    model_id = db.Column(db.Integer, db.ForeignKey('model.id'))
+    size = db.Column(db.String(20))
+
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100))
+    category = db.Column(db.String(50))
+    price = db.Column(db.Float)
+    stock_quantity = db.Column(db.Integer)
+    images = db.Column(db.String(500))
+    is_preloaded = db.Column(db.Boolean, default=True)
+    is_active = db.Column(db.Boolean, default=True)
+
+class Device(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    brand = db.Column(db.String(50))
+    model = db.Column(db.String(50))
+    storage = db.Column(db.String(50))
+    imei_or_serial = db.Column(db.String(100), unique=True)
+    status = db.Column(db.String(50))
+    photos = db.Column(db.String(500))
+
+class Customer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100))
+    phone = db.Column(db.String(20))
+    email = db.Column(db.String(100))
+
+class Sale(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=True)
+    other_product_name = db.Column(db.String(100))
+    quantity = db.Column(db.Integer)
+    unit_price = db.Column(db.Float)
+    total_price = db.Column(db.Float)
+    payment_method = db.Column(db.String(20))
+    created_by = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime)
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True)
+    password_hash = db.Column(db.String(128))
+    role = db.Column(db.String(20))  # admin, staff
+    is_active = db.Column(db.Boolean, default=True)

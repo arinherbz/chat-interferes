@@ -2,8 +2,7 @@ import { useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { Printer, Download, X } from "lucide-react";
+import { Printer, X } from "lucide-react";
 import { format } from "date-fns";
 
 interface ReceiptItem {
@@ -67,38 +66,63 @@ export function Receipt({ isOpen, onClose, data }: ReceiptProps) {
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
               font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-              padding: 20px;
-              max-width: 320px;
+              padding: 12px;
+              max-width: 300px;
               margin: 0 auto;
               color: #1d1d1f;
+              font-size: 11px;
+              line-height: 1.4;
             }
-            .receipt { padding: 20px 0; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .shop-name { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-            .shop-location { font-size: 12px; color: #86868b; }
-            .divider { border-top: 1px dashed #d2d2d7; margin: 16px 0; }
-            .section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #86868b; margin-bottom: 8px; }
-            .customer-info { font-size: 13px; margin-bottom: 4px; }
-            .items-table { width: 100%; font-size: 13px; }
-            .items-table th { text-align: left; font-weight: 500; padding: 4px 0; border-bottom: 1px solid #d2d2d7; }
-            .items-table td { padding: 8px 0; vertical-align: top; }
-            .items-table .qty { width: 30px; text-align: center; }
-            .items-table .price { width: 80px; text-align: right; }
-            .item-name { font-weight: 500; }
-            .item-serial { font-size: 10px; color: #86868b; font-family: monospace; }
-            .totals { margin-top: 16px; }
-            .total-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
-            .total-row.grand { font-size: 16px; font-weight: 600; margin-top: 8px; padding-top: 8px; border-top: 2px solid #1d1d1f; }
-            .payment-info { text-align: center; margin: 16px 0; font-size: 12px; color: #86868b; }
-            .qr-section { text-align: center; margin: 20px 0; }
-            .qr-code { margin: 0 auto; }
-            .transaction-id { font-size: 10px; color: #86868b; margin-top: 8px; font-family: monospace; }
-            .footer { text-align: center; font-size: 11px; color: #86868b; margin-top: 20px; }
-            .served-by { margin-bottom: 8px; }
-            .thank-you { font-size: 14px; font-weight: 500; color: #1d1d1f; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .font-mono { font-family: 'SF Mono', Monaco, monospace; }
+            .font-medium { font-weight: 500; }
+            .font-semibold { font-weight: 600; }
+            .text-base { font-size: 16px; }
+            .text-\\[15px\\] { font-size: 15px; }
+            .text-\\[12px\\] { font-size: 12px; }
+            .text-\\[11px\\] { font-size: 11px; }
+            .text-\\[10px\\] { font-size: 10px; }
+            .text-\\[9px\\] { font-size: 9px; }
+            .text-\\[\\#1d1d1f\\] { color: #1d1d1f; }
+            .text-\\[\\#86868b\\] { color: #86868b; }
+            .text-\\[\\#34c759\\] { color: #34c759; }
+            .text-\\[\\#007aff\\] { color: #007aff; }
+            .bg-\\[\\#f5f5f7\\] { background-color: #f5f5f7; }
+            .border-t { border-top-width: 1px; border-top-style: solid; }
+            .border-t-2 { border-top-width: 2px; border-top-style: solid; }
+            .border-dashed { border-style: dashed; }
+            .border-\\[\\#d2d2d7\\] { border-color: #d2d2d7; }
+            .border-\\[\\#1d1d1f\\] { border-color: #1d1d1f; }
+            .my-3 { margin-top: 12px; margin-bottom: 12px; }
+            .my-4 { margin-top: 16px; margin-bottom: 16px; }
+            .mt-0\\.5 { margin-top: 2px; }
+            .mt-2 { margin-top: 8px; }
+            .mt-3 { margin-top: 12px; }
+            .mb-2 { margin-bottom: 8px; }
+            .mb-3 { margin-bottom: 12px; }
+            .pt-2 { padding-top: 8px; }
+            .py-1 { padding-top: 4px; padding-bottom: 4px; }
+            .p-2 { padding: 8px; }
+            .px-3 { padding-left: 12px; padding-right: 12px; }
+            .py-4 { padding-top: 16px; padding-bottom: 16px; }
+            .pr-2 { padding-right: 8px; }
+            .space-y-0\\.5 > * + * { margin-top: 2px; }
+            .space-y-1 > * + * { margin-top: 4px; }
+            .space-y-2 > * + * { margin-top: 8px; }
+            .flex { display: flex; }
+            .flex-1 { flex: 1 1 0%; }
+            .justify-between { justify-content: space-between; }
+            .justify-center { justify-content: center; }
+            .leading-tight { line-height: 1.25; }
+            .tracking-tight { letter-spacing: -0.025em; }
+            .tracking-wide { letter-spacing: 0.025em; }
+            .uppercase { text-transform: uppercase; }
+            .whitespace-nowrap { white-space: nowrap; }
+            .rounded { border-radius: 4px; }
+            svg { display: inline-block; vertical-align: middle; }
             @media print {
               body { padding: 0; }
-              .no-print { display: none; }
             }
           </style>
         </head>
@@ -144,7 +168,7 @@ export function Receipt({ isOpen, onClose, data }: ReceiptProps) {
             {data.shop.phone && <p className="text-[11px] text-[#86868b]">{data.shop.phone}</p>}
           </div>
 
-          <Separator className="my-3 border-dashed" />
+          <div className="border-t border-dashed border-[#d2d2d7] my-3" />
 
           <div className="text-[11px] text-[#86868b] space-y-0.5 mb-2">
             <div className="flex justify-between">
@@ -221,9 +245,12 @@ export function Receipt({ isOpen, onClose, data }: ReceiptProps) {
 
           <div className="mt-3 text-center text-[11px] text-[#86868b]">
             <p>Payment: <span className="text-[#1d1d1f]">{data.paymentMethod}</span></p>
-            {data.paidAmount && data.change !== undefined && data.change > 0 && (
+            {data.paidAmount !== undefined && (
               <p className="mt-0.5">
-                Paid: {formatCurrency(data.paidAmount)} | Change: {formatCurrency(data.change)}
+                Paid: <span className="text-[#1d1d1f]">{formatCurrency(data.paidAmount)}</span>
+                {data.change !== undefined && data.change > 0 && (
+                  <span> | Change: <span className="text-[#1d1d1f]">{formatCurrency(data.change)}</span></span>
+                )}
               </p>
             )}
           </div>
@@ -286,10 +313,10 @@ export function generateSaleReceipt(
   shop: { name: string; location: string; phone?: string }
 ): ReceiptData {
   const subtotal = sale.items.reduce((sum, item) => sum + item.totalPrice, 0);
-  const discount = sale.discount || 0;
-  const tax = sale.tax || 0;
+  const discount = sale.discount ?? 0;
+  const tax = sale.tax ?? 0;
   const total = subtotal - discount + tax;
-  const paidAmount = sale.paidAmount || total;
+  const paidAmount = sale.paidAmount ?? total;
   const change = paidAmount > total ? paidAmount - total : 0;
 
   return {
@@ -310,7 +337,7 @@ export function generateSaleReceipt(
     tax: tax > 0 ? tax : undefined,
     total,
     paymentMethod: sale.paymentMethod,
-    paidAmount: paidAmount !== total ? paidAmount : undefined,
+    paidAmount,
     change: change > 0 ? change : undefined,
     servedBy: sale.soldBy,
   };
