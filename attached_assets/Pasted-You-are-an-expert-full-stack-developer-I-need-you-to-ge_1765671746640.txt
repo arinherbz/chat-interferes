@@ -1,0 +1,113 @@
+You are an expert full-stack developer. I need you to **generate a complete POS oversight system** for a phone & accessories shop that meets the following requirements:
+
+---
+
+### 1. Users & Roles
+- Owner: full access to dashboard, reports, alerts
+- Supervisor: manages daily closure submissions
+- Staff: uses POS for sales (outside the AI system), submits daily closure through web form
+- Authentication required for all users (login/logout)
+
+---
+
+### 2. Backend
+- Use **Python + Flask**
+- Database: SQLite (upgradeable to Postgres)
+- Models:
+  - User (id, name, email, role, password_hash)
+  - DailyClosure (id, date, cash_expected, cash_counted, mtn_amount, airtel_amount, variance, submitted_by, submitted_at)
+  - ProofUpload (id, closure_id, type [cash_drawer/mtn/airtel], image_url)
+  - Alert (id, date, alert_type [missing_report/cash_shortage], status)
+- Features:
+  - Daily closure submission with file uploads
+  - Variance calculation (cash_counted + MTN + Airtel - cash_expected)
+  - Automatic alert creation for missing/late submissions or cash shortages
+  - Dashboard API endpoints for owner view
+  - File upload handling for images (cash drawer, MTN, Airtel screenshots)
+
+---
+
+### 3. Frontend
+#### A. Daily Close Form (for iPhones, mobile-friendly)
+- Fields:
+  - Cash Expected (number, required)
+  - Cash Counted (number, required)
+  - MTN Mobile Money total (number, required)
+  - Airtel Mobile Money total (number, required)
+  - Photo uploads: Cash drawer, MTN screenshot, Airtel screenshot (all required)
+- Form validation: prevent submission if any field or photo is missing
+- Submit button posts to Flask backend
+- Responsive layout for iPhone Safari/Chrome
+- Optional PWA features: Add to Home Screen, offline caching
+
+#### B. Owner Dashboard (desktop + mobile)
+- Shows:
+  - Daily closures (last 7 days)
+  - Red/green alerts
+  - Cash variance alerts
+  - Missing submission alerts
+  - Staff performance summary
+  - 7-day trend chart placeholder
+- Action buttons: Confirm / Flag / Review
+- Responsive for desktop and mobile Safari/Chrome
+- Use Bootstrap 5 + Chart.js (or similar)
+
+---
+
+### 4. CSS & Styling
+- Clean, professional, responsive
+- Use Bootstrap 5
+- Red/green indicators for alerts
+- Form & dashboard mobile-friendly
+
+---
+
+### 5. Replit Deployment
+- Folder structure:
+  - /templates → HTML templates
+  - /static/css → CSS
+  - /static/uploads → Staff photo proofs
+- Run command: `python main.py`
+- Hosting port: 3000 (Replit default)
+- Always-on enabled
+- Environment variable: `SECRET_KEY`
+- Database auto-created if not exists
+
+---
+
+### 6. Optional Enhancements
+- Weekly/monthly PDF reports export
+- Email alerts for cash discrepancies
+- Multi-shop support
+- PWA service worker for offline caching
+
+---
+
+### 7. Deliverables
+- All Flask backend code (ready to run)
+- All HTML templates (daily close form + owner dashboard)
+- CSS styling
+- JS logic for validation + charts
+- Deployment instructions for Replit
+- Full folder/file structure
+
+---
+
+### 8. Special Notes
+- Staff cannot skip photo uploads
+- Owner sees all data remotely
+- System must be secure: authentication + role-based access
+- Code must be **ready-to-run on Replit**
+- Make iPhone usage seamless (mobile-friendly)
+- All logic enforced in backend (cannot bypass by disabling JS)
+
+---
+
+Generate **all code** and templates fully, including:
+- `main.py` (Flask backend)
+- HTML templates
+- CSS
+- JS
+- Folder structure instructions
+
+Ensure the final system is fully functional, ready for deployment on Replit, and **staff on iPhones can submit daily closures while owner can access dashboard from computers or iPhones**.
