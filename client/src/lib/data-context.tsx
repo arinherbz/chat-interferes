@@ -1,10 +1,25 @@
 import { createContext, useContext, useState, ReactNode } from "react";
-import { format, subDays } from "date-fns";
+import { format, subDays, subHours } from "date-fns";
+
+// --- TYPES ---
+
+export type Role = "Owner" | "Supervisor" | "Staff";
 
 export interface Shop {
   id: string;
   name: string;
   location: string;
+  subscriptionPlan: "trial" | "basic" | "pro" | "enterprise";
+  currency: string;
+  logoUrl?: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  shopId: string;
 }
 
 export interface Product {
@@ -12,8 +27,24 @@ export interface Product {
   name: string;
   category: "iPhone" | "Samsung" | "Accessories" | "Other";
   price: number;
+  costPrice: number;
   stock: number;
   minStock: number;
+  sku?: string;
+}
+
+export interface Device {
+  id: string;
+  brand: string;
+  model: string;
+  imei: string;
+  color: string;
+  storage: string;
+  condition: "New" | "Used" | "Refurbished";
+  status: "In Stock" | "Sold" | "Repaired";
+  price: number;
+  cost: number;
+  addedAt: string;
 }
 
 export interface Customer {
@@ -22,298 +53,310 @@ export interface Customer {
   phone: string;
   email: string;
   joinedAt: string;
-  devices: {
-    brand: string;
-    model: string;
-    imei: string;
-  }[];
+  totalPurchases: number;
+}
+
+export interface SaleItem {
+  id: string;
+  productId?: string;
+  deviceId?: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
 }
 
 export interface Sale {
   id: string;
-  productId: string | null;
-  productName: string;
-  quantity: number;
-  totalPrice: number;
+  saleNumber: string;
+  customerId?: string;
+  customerName?: string; // Denormalized for ease
+  items: SaleItem[];
+  totalAmount: number;
+  paymentMethod: "Cash" | "MTN" | "Airtel" | "Card";
+  status: "Completed" | "Refunded";
+  soldBy: string;
+  createdAt: string;
+}
+
+export interface Expense {
+  id: string;
+  category: string; // Rent, Utilities, Salary, Supplies
+  description: string;
+  amount: number;
+  date: string;
+  recordedBy: string;
 }
 
 export type RepairStatus = "Pending" | "In Progress" | "Completed" | "Delivered";
 
 export interface Repair {
   id: string;
+  repairNumber: string;
   deviceBrand: string;
   deviceModel: string;
   imei: string;
+  issueDescription: string;
   repairType: string;
   price: number;
   notes: string;
   status: RepairStatus;
   createdAt: string;
   customerName?: string;
+  technician?: string;
 }
 
 export interface DailyClosure {
   id: string;
-  date: string; // ISO date string
-  cashExpected: number;
+  date: string;
+  cashExpected: number; // System calculated from sales
   cashCounted: number;
   mtnAmount: number;
   airtelAmount: number;
+  cardAmount: number;
+  expensesTotal: number;
   variance: number;
   submittedBy: string;
   submittedAt: string;
   status: "pending" | "confirmed" | "flagged";
   proofs: {
-    cashDrawer: string;
-    mtn: string;
-    airtel: string;
+    cashDrawer?: string;
+    mtn?: string;
+    airtel?: string;
+    card?: string;
   };
-  repairs: Repair[];
-  sales: Sale[];
   shopId: string;
 }
 
-export interface Alert {
+export interface AuditLog {
   id: string;
-  date: string;
-  type: "missing_report" | "cash_shortage" | "low_stock";
-  status: "active" | "resolved";
+  action: string;
+  entity: string;
+  details: string;
+  user: string;
+  timestamp: string;
+}
+
+export interface Notification {
+  id: string;
+  title: string;
   message: string;
+  type: "info" | "warning" | "success" | "error";
+  read: boolean;
+  timestamp: string;
 }
 
 interface DataContextType {
-  userRole: "owner" | "staff" | "supervisor"; 
-  activeShopId: string;
+  // Session
+  currentUser: User | null;
+  activeShop: Shop;
   shops: Shop[];
-  closures: DailyClosure[];
-  alerts: Alert[];
+  
+  // Data
+  users: User[]; // Staff list
   products: Product[];
+  devices: Device[];
   customers: Customer[];
-  repairs: Repair[]; // Global repair list for easier management
+  sales: Sale[];
+  expenses: Expense[];
+  repairs: Repair[];
+  closures: DailyClosure[];
+  auditLogs: AuditLog[];
+  notifications: Notification[];
+
+  // Actions
   setActiveShopId: (id: string) => void;
-  addClosure: (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId">) => void;
-  updateClosureStatus: (id: string, status: DailyClosure["status"]) => void;
-  addProduct: (product: Omit<Product, "id">) => void;
-  addCustomer: (customer: Omit<Customer, "id" | "joinedAt" | "devices">) => void;
+  addProduct: (data: Omit<Product, "id">) => void;
+  addDevice: (data: Omit<Device, "id" | "status" | "addedAt">) => void;
+  addCustomer: (data: Omit<Customer, "id" | "joinedAt" | "totalPurchases">) => void;
+  recordSale: (data: Omit<Sale, "id" | "saleNumber" | "createdAt">) => void;
+  recordExpense: (data: Omit<Expense, "id">) => void;
+  addRepair: (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => void;
   updateRepairStatus: (id: string, status: RepairStatus) => void;
+  addClosure: (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId">) => void;
+  
+  // Helpers
+  getPermissions: (role: Role) => string[];
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// --- MOCK DATA GENERATION ---
+// --- MOCK DATA ---
 
 const MOCK_SHOPS: Shop[] = [
-  { id: "shop1", name: "Kampala Main", location: "Kampala Road" },
-  { id: "shop2", name: "Entebbe Branch", location: "Victoria Mall" },
+  { id: "shop1", name: "Kampala Main", location: "Kampala Road", subscriptionPlan: "pro", currency: "UGX" },
+  { id: "shop2", name: "Entebbe Branch", location: "Victoria Mall", subscriptionPlan: "basic", currency: "UGX" },
+];
+
+const MOCK_USERS: User[] = [
+  { id: "u1", name: "Alex Owner", email: "owner@techpos.com", role: "Owner", shopId: "shop1" },
+  { id: "u2", name: "Sarah Staff", email: "sarah@techpos.com", role: "Staff", shopId: "shop1" },
+  { id: "u3", name: "Mike Supervisor", email: "mike@techpos.com", role: "Supervisor", shopId: "shop1" },
 ];
 
 const MOCK_PRODUCTS: Product[] = [
-  { id: "p1", name: "iPhone 13 Pro Max", category: "iPhone", price: 3500000, stock: 5, minStock: 2 },
-  { id: "p2", name: "Samsung Galaxy S22", category: "Samsung", price: 2800000, stock: 3, minStock: 2 },
-  { id: "p3", name: "Tempered Glass Screen", category: "Accessories", price: 15000, stock: 100, minStock: 20 },
-  { id: "p4", name: "iPhone 14 Case", category: "Accessories", price: 25000, stock: 50, minStock: 10 },
-  { id: "p5", name: "USB-C Charger", category: "Accessories", price: 35000, stock: 30, minStock: 5 },
-  { id: "p6", name: "AirPods Pro", category: "Accessories", price: 850000, stock: 8, minStock: 3 },
-  { id: "p7", name: "Camera Lens Guard", category: "Accessories", price: 10000, stock: 40, minStock: 15 },
-  { id: "p8", name: "Earphones (Wired)", category: "Accessories", price: 20000, stock: 60, minStock: 10 },
+  { id: "p1", name: "iPhone 13 Pro Max", category: "iPhone", price: 3500000, costPrice: 3200000, stock: 5, minStock: 2 },
+  { id: "p2", name: "Samsung Galaxy S22", category: "Samsung", price: 2800000, costPrice: 2500000, stock: 3, minStock: 2 },
+  { id: "p3", name: "Tempered Glass Screen", category: "Accessories", price: 15000, costPrice: 5000, stock: 100, minStock: 20 },
+  { id: "p4", name: "iPhone 14 Case", category: "Accessories", price: 25000, costPrice: 10000, stock: 50, minStock: 10 },
+  { id: "p5", name: "USB-C Charger", category: "Accessories", price: 35000, costPrice: 15000, stock: 30, minStock: 5 },
+];
+
+const MOCK_DEVICES: Device[] = [
+  { id: "d1", brand: "Apple", model: "iPhone 11", imei: "356998000001", color: "Black", storage: "64GB", condition: "Used", status: "In Stock", price: 1200000, cost: 900000, addedAt: subDays(new Date(), 5).toISOString() },
+  { id: "d2", brand: "Samsung", model: "A12", imei: "356998000002", color: "Blue", storage: "32GB", condition: "New", status: "In Stock", price: 600000, cost: 450000, addedAt: subDays(new Date(), 2).toISOString() },
 ];
 
 const MOCK_CUSTOMERS: Customer[] = [
-  { 
-    id: "cust1", 
-    name: "John Doe", 
-    phone: "+256 771 234 567", 
-    email: "john@example.com", 
-    joinedAt: subDays(new Date(), 30).toISOString(),
-    devices: [{ brand: "Samsung", model: "S21", imei: "354..." }] 
-  },
-  { 
-    id: "cust2", 
-    name: "Jane Smith", 
-    phone: "+256 701 987 654", 
-    email: "jane@example.com", 
-    joinedAt: subDays(new Date(), 10).toISOString(),
-    devices: [{ brand: "Apple", model: "iPhone 12", imei: "990..." }] 
-  },
+  { id: "c1", name: "John Doe", phone: "+256 771 234 567", email: "john@example.com", joinedAt: subDays(new Date(), 30).toISOString(), totalPurchases: 2 },
 ];
 
-const MOCK_CLOSURES: DailyClosure[] = Array.from({ length: 7 }).map((_, i) => {
-  const date = subDays(new Date(), i + 1);
-  const isShortage = i === 2;
-  const cashExpected = 1500000;
-  const cashCounted = isShortage ? 1450000 : 1500000;
-  
-  return {
-    id: `c-${i}`,
-    date: date.toISOString(),
-    cashExpected,
-    cashCounted,
-    mtnAmount: 500000,
-    airtelAmount: 300000,
-    variance: (cashCounted + 500000 + 300000) - (cashExpected + 500000 + 300000),
-    submittedBy: "Sarah Staff",
-    submittedAt: date.toISOString(),
-    status: isShortage ? "flagged" : "confirmed",
-    shopId: "shop1",
-    proofs: {
-      cashDrawer: "https://placehold.co/400x300?text=Cash+Drawer",
-      mtn: "https://placehold.co/400x300?text=MTN+Proof",
-      airtel: "https://placehold.co/400x300?text=Airtel+Proof",
-    },
-    repairs: i % 2 === 0 ? [
-      {
-        id: `r-${i}`,
-        deviceBrand: "Samsung",
-        deviceModel: "A12",
-        imei: "354678091234567",
-        repairType: "Screen Replacement",
-        price: 50000,
-        notes: "Customer provided screen",
-        status: "Completed",
-        createdAt: date.toISOString()
-      }
-    ] : [],
-    sales: [
-      { id: `s-${i}-1`, productId: "p3", productName: "Tempered Glass Screen", quantity: 2, totalPrice: 30000 },
+const MOCK_SALES: Sale[] = [
+  { 
+    id: "s1", saleNumber: "INV-1001", customerName: "John Doe", totalAmount: 3030000, paymentMethod: "Cash", status: "Completed", soldBy: "Sarah Staff", createdAt: subHours(new Date(), 4).toISOString(),
+    items: [
+      { id: "si1", name: "Samsung Galaxy S22", quantity: 1, unitPrice: 2800000, totalPrice: 2800000 },
+      { id: "si2", name: "USB-C Charger", quantity: 1, unitPrice: 35000, totalPrice: 35000 },
     ]
-  };
-});
-
-// Extract all repairs from closures for the global list view
-const INITIAL_REPAIRS = MOCK_CLOSURES.flatMap(c => c.repairs);
-
-const MOCK_ALERTS: Alert[] = [
-  {
-    id: "a-1",
-    date: subDays(new Date(), 2).toISOString(),
-    type: "cash_shortage",
-    status: "active",
-    message: "Cash shortage of 50,000 UGX on " + format(subDays(new Date(), 2), "MMM dd"),
-  },
-  {
-    id: "a-2",
-    date: new Date().toISOString(),
-    type: "low_stock",
-    status: "active",
-    message: "Low Stock: Samsung Galaxy S22 (3 remaining)",
   }
+];
+
+const MOCK_EXPENSES: Expense[] = [
+  { id: "e1", category: "Supplies", description: "Cleaning materials", amount: 50000, date: subDays(new Date(), 1).toISOString(), recordedBy: "Mike Supervisor" }
+];
+
+const MOCK_REPAIRS: Repair[] = [
+  { id: "r1", repairNumber: "REP-5001", deviceBrand: "Apple", deviceModel: "iPhone X", imei: "990011...", issueDescription: "Cracked Screen", repairType: "Screen Replacement", price: 150000, notes: "Waiting for part", status: "Pending", createdAt: subDays(new Date(), 1).toISOString(), customerName: "Alice" }
+];
+
+const MOCK_LOGS: AuditLog[] = [
+  { id: "l1", action: "LOGIN", entity: "Auth", details: "User Sarah Staff logged in", user: "Sarah Staff", timestamp: subHours(new Date(), 5).toISOString() },
+  { id: "l2", action: "SALE_CREATE", entity: "Sale", details: "Created sale INV-1001", user: "Sarah Staff", timestamp: subHours(new Date(), 4).toISOString() },
+];
+
+const MOCK_NOTIFICATIONS: Notification[] = [
+  { id: "n1", title: "Low Stock Alert", message: "iPhone 13 Pro Max is running low (5 left)", type: "warning", read: false, timestamp: new Date().toISOString() }
 ];
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [activeShopId, setActiveShopId] = useState("shop1");
-  const [closures, setClosures] = useState<DailyClosure[]>(MOCK_CLOSURES);
-  const [alerts, setAlerts] = useState<Alert[]>(MOCK_ALERTS);
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
-  const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
-  const [repairs, setRepairs] = useState<Repair[]>(INITIAL_REPAIRS);
-  
-  const userRole = "owner"; 
+  const [products, setProducts] = useState(MOCK_PRODUCTS);
+  const [devices, setDevices] = useState(MOCK_DEVICES);
+  const [customers, setCustomers] = useState(MOCK_CUSTOMERS);
+  const [sales, setSales] = useState(MOCK_SALES);
+  const [expenses, setExpenses] = useState(MOCK_EXPENSES);
+  const [repairs, setRepairs] = useState(MOCK_REPAIRS);
+  const [closures, setClosures] = useState<DailyClosure[]>([]);
+  const [auditLogs, setAuditLogs] = useState(MOCK_LOGS);
+  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
 
-  const addClosure = (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId">) => {
-    const variance = (Number(data.cashCounted) + Number(data.mtnAmount) + Number(data.airtelAmount)) - (Number(data.cashExpected) + Number(data.mtnAmount) + Number(data.airtelAmount));
+  const currentUser = MOCK_USERS[0]; // Simulate logged in owner
+  const activeShop = MOCK_SHOPS.find(s => s.id === activeShopId) || MOCK_SHOPS[0];
+
+  const logAction = (action: string, entity: string, details: string) => {
+    setAuditLogs(prev => [{
+      id: `l-${Date.now()}`,
+      action,
+      entity,
+      details,
+      user: currentUser.name,
+      timestamp: new Date().toISOString()
+    }, ...prev]);
+  };
+
+  const addProduct = (data: Omit<Product, "id">) => {
+    const newProduct = { ...data, id: `p-${Date.now()}` };
+    setProducts([...products, newProduct]);
+    logAction("CREATE", "Product", `Added product ${data.name}`);
+  };
+
+  const addDevice = (data: Omit<Device, "id" | "status" | "addedAt">) => {
+    setDevices([...devices, { ...data, id: `d-${Date.now()}`, status: "In Stock", addedAt: new Date().toISOString() }]);
+    logAction("CREATE", "Device", `Added device ${data.brand} ${data.model}`);
+  };
+
+  const addCustomer = (data: Omit<Customer, "id" | "joinedAt" | "totalPurchases">) => {
+    setCustomers([...customers, { ...data, id: `c-${Date.now()}`, joinedAt: new Date().toISOString(), totalPurchases: 0 }]);
+    logAction("CREATE", "Customer", `Registered customer ${data.name}`);
+  };
+
+  const recordSale = (data: Omit<Sale, "id" | "saleNumber" | "createdAt">) => {
+    const saleNumber = `INV-${1000 + sales.length + 1}`;
+    setSales([{ ...data, id: `s-${Date.now()}`, saleNumber, createdAt: new Date().toISOString() }, ...sales]);
     
-    // Deduct stock for sales
-    if (data.sales) {
-      const updatedProducts = [...products];
-      data.sales.forEach(sale => {
-        if (sale.productId) {
-          const productIndex = updatedProducts.findIndex(p => p.id === sale.productId);
-          if (productIndex >= 0) {
-            updatedProducts[productIndex].stock -= sale.quantity;
-            // Check for low stock
-            if (updatedProducts[productIndex].stock <= updatedProducts[productIndex].minStock) {
-              setAlerts(prev => [{
-                id: `alert-${Date.now()}`,
-                date: new Date().toISOString(),
-                type: "low_stock",
-                status: "active",
-                message: `Low Stock: ${updatedProducts[productIndex].name} (${updatedProducts[productIndex].stock} remaining)`
-              }, ...prev]);
-            }
-          }
-        }
-      });
-      setProducts(updatedProducts);
-    }
-
-    // Add new repairs to global list
-    if (data.repairs) {
-      const newRepairsWithStatus = data.repairs.map(r => ({
-        ...r,
-        status: "Pending" as RepairStatus, // Default status
-        createdAt: new Date().toISOString()
-      }));
-      setRepairs([...newRepairsWithStatus, ...repairs]);
-      // Update data.repairs to match (though in real backend this is relational)
-      data.repairs = newRepairsWithStatus;
-    }
-
-    const newClosure: DailyClosure = {
-      id: `new-${Date.now()}`,
-      date: new Date().toISOString(),
-      submittedAt: new Date().toISOString(),
-      status: variance < 0 ? "flagged" : "pending",
-      variance,
-      shopId: activeShopId,
-      ...data,
-    };
-
-    setClosures([newClosure, ...closures]);
-
-    if (variance < 0) {
-      const newAlert: Alert = {
-        id: `alert-${Date.now()}`,
-        date: new Date().toISOString(),
-        type: "cash_shortage",
-        status: "active",
-        message: `Cash shortage of ${Math.abs(variance).toLocaleString()} UGX detected today.`
-      };
-      setAlerts([newAlert, ...alerts]);
-    }
+    // Deduct stock
+    const updatedProducts = [...products];
+    const updatedDevices = [...devices];
+    
+    data.items.forEach(item => {
+      if (item.productId) {
+        const pIdx = updatedProducts.findIndex(p => p.id === item.productId);
+        if (pIdx >= 0) updatedProducts[pIdx].stock -= item.quantity;
+      }
+      if (item.deviceId) {
+        const dIdx = updatedDevices.findIndex(d => d.id === item.deviceId);
+        if (dIdx >= 0) updatedDevices[dIdx].status = "Sold";
+      }
+    });
+    
+    setProducts(updatedProducts);
+    setDevices(updatedDevices);
+    logAction("CREATE", "Sale", `Recorded sale ${saleNumber}`);
   };
 
-  const updateClosureStatus = (id: string, status: DailyClosure["status"]) => {
-    setClosures(closures.map(c => c.id === id ? { ...c, status } : c));
+  const recordExpense = (data: Omit<Expense, "id">) => {
+    setExpenses([{ ...data, id: `e-${Date.now()}` }, ...expenses]);
+    logAction("CREATE", "Expense", `Recorded expense ${data.category} - ${data.amount}`);
   };
 
-  const addProduct = (product: Omit<Product, "id">) => {
-    setProducts([...products, { ...product, id: `p-${Date.now()}` }]);
-  };
-
-  const addCustomer = (customer: Omit<Customer, "id" | "joinedAt" | "devices">) => {
-    setCustomers([...customers, { 
-      ...customer, 
-      id: `c-${Date.now()}`, 
-      joinedAt: new Date().toISOString(),
-      devices: []
-    }]);
+  const addRepair = (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => {
+    const repairNumber = `REP-${5000 + repairs.length + 1}`;
+    setRepairs([{ ...data, id: `r-${Date.now()}`, repairNumber, status: "Pending", createdAt: new Date().toISOString() }, ...repairs]);
+    logAction("CREATE", "Repair", `Started repair ${repairNumber}`);
   };
 
   const updateRepairStatus = (id: string, status: RepairStatus) => {
     setRepairs(repairs.map(r => r.id === id ? { ...r, status } : r));
-    // Also update in closures (deep update simulation)
-    setClosures(closures.map(c => ({
-      ...c,
-      repairs: c.repairs?.map(r => r.id === id ? { ...r, status } : r)
-    })));
+    logAction("UPDATE", "Repair", `Updated repair ${id} status to ${status}`);
+  };
+
+  const addClosure = (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId">) => {
+    const variance = (data.cashCounted + data.mtnAmount + data.airtelAmount + data.cardAmount) - data.cashExpected;
+    setClosures([{ ...data, id: `cl-${Date.now()}`, date: new Date().toISOString(), submittedAt: new Date().toISOString(), status: variance !== 0 ? "flagged" : "confirmed", variance, shopId: activeShopId }, ...closures]);
+    logAction("CREATE", "Closure", `Submitted daily closure`);
+  };
+
+  const getPermissions = (role: Role) => {
+    if (role === "Owner") return ["all"];
+    if (role === "Supervisor") return ["sales", "repairs", "inventory", "reports"];
+    return ["sales", "repairs"];
   };
 
   return (
-    <DataContext.Provider value={{ 
-      userRole,
-      activeShopId,
+    <DataContext.Provider value={{
+      currentUser,
+      activeShop,
       shops: MOCK_SHOPS,
-      closures: closures.filter(c => c.shopId === activeShopId), // Filter by shop
-      alerts, 
-      products, 
+      users: MOCK_USERS,
+      products,
+      devices,
       customers,
-      repairs, // In real app, maybe filter by shop too
+      sales,
+      expenses,
+      repairs,
+      closures: closures.filter(c => c.shopId === activeShopId),
+      auditLogs,
+      notifications,
       setActiveShopId,
-      addClosure, 
-      updateClosureStatus,
       addProduct,
+      addDevice,
       addCustomer,
-      updateRepairStatus
+      recordSale,
+      recordExpense,
+      addRepair,
+      updateRepairStatus,
+      addClosure,
+      getPermissions
     }}>
       {children}
     </DataContext.Provider>

@@ -13,17 +13,30 @@ import Dashboard from "@/pages/dashboard";
 import ProductsPage from "@/pages/products";
 import CustomersPage from "@/pages/customers";
 import RepairsPage from "@/pages/repairs";
+import DevicesPage from "@/pages/devices";
+import ExpensesPage from "@/pages/expenses";
+import POSPage from "@/pages/pos";
+import SettingsPage from "@/pages/settings";
+import AuditLogsPage from "@/pages/audit-logs";
 
 function Router() {
   return (
     <Layout>
       <Switch>
         <Route path="/" component={Login} />
-        <Route path="/daily-close" component={DailyClose} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/pos" component={POSPage} />
+        <Route path="/daily-close" component={DailyClose} />
+        
         <Route path="/products" component={ProductsPage} />
+        <Route path="/devices" component={DevicesPage} />
         <Route path="/customers" component={CustomersPage} />
         <Route path="/repairs" component={RepairsPage} />
+        
+        <Route path="/expenses" component={ExpensesPage} />
+        <Route path="/audit-logs" component={AuditLogsPage} />
+        <Route path="/settings" component={SettingsPage} />
+        
         <Route component={NotFound} />
       </Switch>
     </Layout>

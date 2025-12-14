@@ -1,0 +1,1170 @@
+# PHONE SHOP MANAGEMENT SYSTEM - COMPLETE IMPLEMENTATION SPEC
+
+## PRODUCTION-READY, MULTI-TENANT, SAAS-READY SYSTEM
+
+-----
+
+## 🎯 SYSTEM OVERVIEW
+
+Build a **COMPLETE, PRODUCTION-READY** Phone Shop Management System that can be sold as SaaS. This is a **REAL BUSINESS APPLICATION** with:
+
+- ✅ Full remote control for owners
+- ✅ Multi-level permissions (Owner, Supervisor, Staff)
+- ✅ Complete CRUD on ALL entities
+- ✅ Real-time synchronization
+- ✅ Mobile-first responsive design
+- ✅ Multi-tenant architecture (SaaS-ready)
+- ✅ Comprehensive audit trails
+- ✅ Advanced reporting & analytics
+- ✅ Offline mode capability
+- ✅ Export functionality (PDF, Excel, CSV)
+- ✅ SMS/Email notifications ready
+- ✅ Payment integration ready
+- ✅ Cloud deployment ready (AWS/Azure/GCP)
+
+-----
+
+## 🏗️ ARCHITECTURE
+
+### Technology Stack
+
+```
+BACKEND:
+- Python 3.10+ with Flask/FastAPI
+- PostgreSQL (production) / SQLite (dev)
+- SQLAlchemy ORM
+- Flask-Login / JWT Authentication
+- Flask-SocketIO (real-time updates)
+- Celery (background tasks)
+- Redis (caching & sessions)
+- Alembic (database migrations)
+
+FRONTEND:
+- Modern HTML5/CSS3/JavaScript
+- Bootstrap 5 / Tailwind CSS
+- jQuery / Alpine.js / HTMX
+- Chart.js / ApexCharts
+- DataTables.js
+- Socket.IO client
+- Progressive Web App (PWA) support
+
+DEPLOYMENT:
+- Docker + Docker Compose
+- Nginx reverse proxy
+- Gunicorn/uWSGI
+- SSL/TLS certificates
+- Environment-based configuration
+- Automated backups
+- CI/CD pipeline ready
+```
+
+-----
+
+## 📊 DATABASE SCHEMA (COMPLETE)
+
+### Core Tables
+
+```sql
+-- Multi-tenant support
+CREATE TABLE shops (
+    id SERIAL PRIMARY KEY,
+    shop_name VARCHAR(200) NOT NULL,
+    slug VARCHAR(100) UNIQUE NOT NULL,
+    owner_name VARCHAR(200) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    email VARCHAR(120) UNIQUE NOT NULL,
+    address TEXT,
+    logo_url VARCHAR(500),
+    subscription_plan VARCHAR(50) DEFAULT 'trial',
+    subscription_expires_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT true,
+    timezone VARCHAR(50) DEFAULT 'UTC',
+    currency VARCHAR(10) DEFAULT 'UGX',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Users with permissions
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('Owner', 'Supervisor', 'Staff')),
+    email VARCHAR(120) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    is_active BOOLEAN DEFAULT true,
+    last_login TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(shop_id, email)
+);
+
+-- Products & Inventory
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    sku VARCHAR(100) UNIQUE,
+    barcode VARCHAR(100),
+    description TEXT,
+    cost_price INTEGER DEFAULT 0,
+    selling_price INTEGER NOT NULL,
+    stock_quantity INTEGER DEFAULT 0,
+    min_stock_level INTEGER DEFAULT 5,
+    is_preloaded BOOLEAN DEFAULT false,
+    is_active BOOLEAN DEFAULT true,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Customers
+CREATE TABLE customers (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    email VARCHAR(120),
+    address TEXT,
+    id_number VARCHAR(50),
+    date_of_birth DATE,
+    gender VARCHAR(10),
+    notes TEXT,
+    loyalty_points INTEGER DEFAULT 0,
+    total_purchases INTEGER DEFAULT 0,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Devices
+CREATE TABLE devices (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+    brand VARCHAR(100) NOT NULL,
+    model VARCHAR(200) NOT NULL,
+    imei_serial VARCHAR(100) NOT NULL,
+    color VARCHAR(50),
+    storage VARCHAR(50),
+    purchase_price INTEGER,
+    selling_price INTEGER,
+    condition VARCHAR(50) DEFAULT 'New',
+    status VARCHAR(50) DEFAULT 'In Stock',
+    warranty_expires_at DATE,
+    notes TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(shop_id, imei_serial)
+);
+
+-- Sales
+CREATE TABLE sales (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    sale_number VARCHAR(50) UNIQUE NOT NULL,
+    customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+    total_amount INTEGER NOT NULL,
+    discount_amount INTEGER DEFAULT 0,
+    tax_amount INTEGER DEFAULT 0,
+    final_amount INTEGER NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+    payment_status VARCHAR(50) DEFAULT 'Paid',
+    status VARCHAR(50) DEFAULT 'Submitted',
+    notes TEXT,
+    created_by INTEGER REFERENCES users(id),
+    approved_by INTEGER REFERENCES users(id),
+    approved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Sale Items
+CREATE TABLE sale_items (
+    id SERIAL PRIMARY KEY,
+    sale_id INTEGER REFERENCES sales(id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+    device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+    item_name VARCHAR(200) NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price INTEGER NOT NULL,
+    discount_amount INTEGER DEFAULT 0,
+    total_price INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Repairs
+CREATE TABLE repairs (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    repair_number VARCHAR(50) UNIQUE NOT NULL,
+    device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+    customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+    device_brand VARCHAR(100) NOT NULL,
+    device_model VARCHAR(200) NOT NULL,
+    imei_serial VARCHAR(100),
+    issue_description TEXT NOT NULL,
+    repair_type VARCHAR(100) NOT NULL,
+    estimated_cost INTEGER,
+    actual_cost INTEGER,
+    parts_cost INTEGER DEFAULT 0,
+    labor_cost INTEGER DEFAULT 0,
+    status VARCHAR(50) DEFAULT 'Pending',
+    priority VARCHAR(20) DEFAULT 'Normal',
+    technician_id INTEGER REFERENCES users(id),
+    estimated_completion DATE,
+    actual_completion TIMESTAMP,
+    warranty_period INTEGER DEFAULT 30,
+    notes TEXT,
+    is_editable BOOLEAN DEFAULT true,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Repair Status History
+CREATE TABLE repair_status_history (
+    id SERIAL PRIMARY KEY,
+    repair_id INTEGER REFERENCES repairs(id) ON DELETE CASCADE,
+    old_status VARCHAR(50),
+    new_status VARCHAR(50) NOT NULL,
+    notes TEXT,
+    changed_by INTEGER REFERENCES users(id),
+    changed_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Daily Closures
+CREATE TABLE daily_closures (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    closure_date DATE NOT NULL,
+    cash_amount INTEGER DEFAULT 0,
+    mtn_amount INTEGER DEFAULT 0,
+    airtel_amount INTEGER DEFAULT 0,
+    card_amount INTEGER DEFAULT 0,
+    bank_transfer INTEGER DEFAULT 0,
+    other_amount INTEGER DEFAULT 0,
+    total_collected INTEGER NOT NULL,
+    expected_amount INTEGER NOT NULL,
+    variance INTEGER NOT NULL,
+    status VARCHAR(50) DEFAULT 'Submitted',
+    notes TEXT,
+    submitted_by INTEGER REFERENCES users(id),
+    reviewed_by INTEGER REFERENCES users(id),
+    reviewed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(shop_id, closure_date)
+);
+
+-- Expenses
+CREATE TABLE expenses (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    category VARCHAR(100) NOT NULL,
+    description TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    payment_method VARCHAR(50) NOT NULL,
+    receipt_url VARCHAR(500),
+    expense_date DATE NOT NULL,
+    status VARCHAR(50) DEFAULT 'Pending',
+    created_by INTEGER REFERENCES users(id),
+    approved_by INTEGER REFERENCES users(id),
+    approved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Audit Logs
+CREATE TABLE audit_logs (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id INTEGER NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    old_value JSONB,
+    new_value JSONB,
+    ip_address VARCHAR(50),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Stock Movements
+CREATE TABLE stock_movements (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+    movement_type VARCHAR(50) NOT NULL,
+    quantity INTEGER NOT NULL,
+    reference_type VARCHAR(50),
+    reference_id INTEGER,
+    notes TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Notifications
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    is_read BOOLEAN DEFAULT false,
+    link VARCHAR(500),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Settings
+CREATE TABLE settings (
+    id SERIAL PRIMARY KEY,
+    shop_id INTEGER REFERENCES shops(id) ON DELETE CASCADE,
+    setting_key VARCHAR(100) NOT NULL,
+    setting_value TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(shop_id, setting_key)
+);
+```
+
+-----
+
+## 🔐 AUTHENTICATION & AUTHORIZATION
+
+### User Roles & Permissions Matrix
+
+```python
+PERMISSIONS = {
+    'Owner': {
+        'sales': ['create', 'read', 'update', 'delete', 'approve', 'lock'],
+        'repairs': ['create', 'read', 'update', 'delete', 'assign', 'complete'],
+        'devices': ['create', 'read', 'update', 'delete'],
+        'products': ['create', 'read', 'update', 'delete', 'adjust_stock'],
+        'customers': ['create', 'read', 'update', 'delete'],
+        'closures': ['create', 'read', 'update', 'delete', 'approve'],
+        'staff': ['create', 'read', 'update', 'delete', 'suspend'],
+        'expenses': ['create', 'read', 'update', 'delete', 'approve'],
+        'reports': ['view_all', 'export'],
+        'audit_logs': ['read'],
+        'settings': ['update']
+    },
+    'Supervisor': {
+        'sales': ['create', 'read', 'update'],
+        'repairs': ['create', 'read', 'update', 'assign', 'complete'],
+        'devices': ['create', 'read', 'update'],
+        'products': ['read', 'adjust_stock'],
+        'customers': ['create', 'read', 'update'],
+        'closures': ['create', 'read', 'update', 'review'],
+        'staff': ['read'],
+        'expenses': ['create', 'read'],
+        'reports': ['view_limited', 'export'],
+        'audit_logs': [],
+        'settings': []
+    },
+    'Staff': {
+        'sales': ['create', 'read'],
+        'repairs': ['create', 'read'],
+        'devices': ['create', 'read'],
+        'products': ['read'],
+        'customers': ['create', 'read'],
+        'closures': ['create', 'read'],
+        'staff': [],
+        'expenses': [],
+        'reports': [],
+        'audit_logs': [],
+        'settings': []
+    }
+}
+```
+
+### Authentication Flow
+
+1. Email/Password login with bcrypt hashing
+1. JWT tokens (15min access, 7 days refresh)
+1. Session management with Redis
+1. Remember me functionality
+1. Password reset via email
+1. 2FA optional (TOTP)
+1. API key for mobile apps
+
+-----
+
+## 🚀 CORE FEATURES (DETAILED)
+
+### 1. SALES MANAGEMENT
+
+**Staff Capabilities:**
+
+- Create new sale
+- Select preloaded products (quick add)
+- Add custom products
+- Add multiple items to cart
+- Apply discounts (if permitted)
+- Select payment method
+- Print receipt
+- View own sales
+
+**Supervisor Capabilities:**
+
+- All staff capabilities
+- Edit any sale (if not locked)
+- View all sales
+- Generate sales reports
+
+**Owner Capabilities:**
+
+- All supervisor capabilities
+- Delete any sale
+- Approve/Reject sales
+- Lock sales (final)
+- Reverse sales with audit trail
+- Override any field
+- View profit margins
+- Export sales data
+
+**Implementation Requirements:**
+
+```python
+# Sales Endpoints
+POST   /api/sales              # Create sale
+GET    /api/sales              # List sales (filtered by role)
+GET    /api/sales/:id          # Get single sale
+PUT    /api/sales/:id          # Update sale
+DELETE /api/sales/:id          # Delete sale (Owner only)
+POST   /api/sales/:id/approve  # Approve sale (Owner only)
+POST   /api/sales/:id/lock     # Lock sale (Owner only)
+POST   /api/sales/:id/reverse  # Reverse sale (Owner only)
+GET    /api/sales/receipt/:id  # Generate receipt PDF
+```
+
+### 2. REPAIRS MANAGEMENT
+
+**Staff Capabilities:**
+
+- Register new repair
+- Input device details
+- Describe issues
+- Set estimated cost
+- View assigned repairs
+
+**Supervisor Capabilities:**
+
+- All staff capabilities
+- Assign repairs to technicians
+- Update repair status
+- Set completion dates
+- View all repairs
+
+**Owner Capabilities:**
+
+- All supervisor capabilities
+- Edit any repair field
+- Change pricing
+- Mark as completed
+- Delete repairs
+- View repair analytics
+- Set warranty periods
+
+**Status Workflow:**
+
+```
+Pending → Diagnosed → Parts Ordered → In Progress → 
+Quality Check → Completed → Delivered
+```
+
+**Implementation Requirements:**
+
+```python
+# Repair Endpoints
+POST   /api/repairs                    # Create repair
+GET    /api/repairs                    # List repairs
+GET    /api/repairs/:id                # Get single repair
+PUT    /api/repairs/:id                # Update repair
+DELETE /api/repairs/:id                # Delete repair
+POST   /api/repairs/:id/status         # Change status
+POST   /api/repairs/:id/assign         # Assign technician
+GET    /api/repairs/:id/history        # Status history
+POST   /api/repairs/:id/notify-customer # SMS/Email notification
+```
+
+### 3. DEVICE MANAGEMENT
+
+**All Roles:**
+
+- Register new device
+- Search by IMEI/Serial
+- Link to customer
+- View repair history
+
+**Owner/Supervisor:**
+
+- Edit device details
+- Update status
+- Set pricing
+- Delete devices
+- Bulk import from CSV
+
+**Implementation Requirements:**
+
+```python
+# Device Endpoints
+POST   /api/devices           # Create device
+GET    /api/devices           # List devices
+GET    /api/devices/:id       # Get single device
+PUT    /api/devices/:id       # Update device
+DELETE /api/devices/:id       # Delete device
+GET    /api/devices/:id/repairs # Repair history
+POST   /api/devices/import    # Bulk import
+```
+
+### 4. INVENTORY MANAGEMENT
+
+**Automatic Features:**
+
+- Auto-deduct stock on sale
+- Low stock alerts
+- Reorder notifications
+- Stock movement tracking
+
+**Owner Capabilities:**
+
+- Add/Edit/Delete products
+- Adjust stock manually
+- Set cost & selling price
+- Set min stock levels
+- View stock reports
+- Generate purchase orders
+
+**Implementation Requirements:**
+
+```python
+# Product/Inventory Endpoints
+POST   /api/products              # Create product
+GET    /api/products              # List products
+GET    /api/products/:id          # Get single product
+PUT    /api/products/:id          # Update product
+DELETE /api/products/:id          # Delete product
+POST   /api/products/:id/adjust   # Adjust stock
+GET    /api/products/low-stock    # Low stock report
+GET    /api/stock-movements       # Movement history
+```
+
+### 5. DAILY CLOSURE
+
+**Staff Process:**
+
+1. Count cash in drawer
+1. Enter mobile money totals
+1. Enter card payments
+1. System calculates expected vs actual
+1. Submit for review
+
+**Supervisor/Owner:**
+
+- Review submissions
+- Edit if errors
+- Approve/Reject
+- Add notes
+- Lock when finalized
+
+**Implementation Requirements:**
+
+```python
+# Closure Endpoints
+POST   /api/closures              # Create closure
+GET    /api/closures              # List closures
+GET    /api/closures/:id          # Get single closure
+PUT    /api/closures/:id          # Update closure
+POST   /api/closures/:id/approve  # Approve (Owner/Supervisor)
+GET    /api/closures/date/:date   # Get by date
+```
+
+### 6. CUSTOMER MANAGEMENT
+
+**All Roles:**
+
+- Add new customer
+- Search customers
+- View purchase history
+- View devices owned
+
+**Owner/Supervisor:**
+
+- Edit customer details
+- Delete customers
+- View lifetime value
+- Export customer list
+- Loyalty points management
+
+**Implementation Requirements:**
+
+```python
+# Customer Endpoints
+POST   /api/customers              # Create customer
+GET    /api/customers              # List customers
+GET    /api/customers/:id          # Get single customer
+PUT    /api/customers/:id          # Update customer
+DELETE /api/customers/:id          # Delete customer
+GET    /api/customers/:id/purchases # Purchase history
+GET    /api/customers/:id/devices  # Owned devices
+```
+
+### 7. STAFF MANAGEMENT (Owner Only)
+
+**Features:**
+
+- Add new staff
+- Assign roles
+- Activate/Deactivate
+- Reset passwords
+- View activity logs
+- Set permissions
+- Track performance
+
+**Implementation Requirements:**
+
+```python
+# Staff Endpoints
+POST   /api/staff                # Create staff
+GET    /api/staff                # List staff
+GET    /api/staff/:id            # Get single staff
+PUT    /api/staff/:id            # Update staff
+DELETE /api/staff/:id            # Delete staff
+POST   /api/staff/:id/suspend    # Suspend staff
+POST   /api/staff/:id/activate   # Activate staff
+GET    /api/staff/:id/activity   # Activity logs
+```
+
+### 8. EXPENSE MANAGEMENT
+
+**Staff:**
+
+- Submit expense requests
+
+**Supervisor:**
+
+- Submit expenses
+- View team expenses
+
+**Owner:**
+
+- Approve/Reject expenses
+- View all expenses
+- Generate expense reports
+- Set budgets
+
+**Implementation Requirements:**
+
+```python
+# Expense Endpoints
+POST   /api/expenses              # Create expense
+GET    /api/expenses              # List expenses
+GET    /api/expenses/:id          # Get single expense
+PUT    /api/expenses/:id          # Update expense
+DELETE /api/expenses/:id          # Delete expense
+POST   /api/expenses/:id/approve  # Approve expense
+```
+
+-----
+
+## 📱 FRONTEND SPECIFICATIONS
+
+### Responsive Design Requirements
+
+**Mobile-First (iPhone 12+):**
+
+- Touch-optimized buttons (min 44x44px)
+- Swipe gestures for actions
+- Bottom navigation bar
+- Pull-to-refresh
+- Offline mode with sync
+- Native app feel (PWA)
+
+**Tablet (iPad):**
+
+- Split-screen views
+- Enhanced touch targets
+- Optimized layouts
+
+**Desktop:**
+
+- Full dashboard with widgets
+- Keyboard shortcuts
+- Multi-window support
+- Advanced filters
+
+### UI Components Required
+
+```html
+<!-- Navigation -->
+- Responsive sidebar/drawer
+- Top header with user menu
+- Breadcrumb navigation
+- Mobile bottom nav
+
+<!-- Forms -->
+- Quick-add product buttons
+- Autocomplete inputs
+- Date/time pickers
+- File upload (drag-drop)
+- Form validation (real-time)
+
+<!-- Tables -->
+- Sortable columns
+- Filterable
+- Pagination
+- Bulk actions
+- Export buttons
+- Mobile card view
+
+<!-- Modals/Dialogs -->
+- Confirmation dialogs
+- Edit modals
+- Detail views
+- Image galleries
+
+<!-- Notifications -->
+- Toast messages
+- Alert banners
+- Badge counters
+- Push notifications
+
+<!-- Charts/Reports -->
+- Line charts (sales trends)
+- Bar charts (product performance)
+- Pie charts (payment methods)
+- KPI cards
+- Date range selectors
+```
+
+### Page Structure
+
+```
+/login
+/dashboard
+/sales
+  /new
+  /:id
+/repairs
+  /new
+  /:id
+/devices
+  /new
+  /:id
+/products
+  /new
+  /:id
+/customers
+  /new
+  /:id
+/closures
+  /new
+  /:id
+/staff (Owner only)
+  /new
+  /:id
+/expenses
+  /new
+  /:id
+/reports
+  /sales
+  /repairs
+  /inventory
+  /financial
+/settings
+/profile
+/audit-logs (Owner only)
+```
+
+-----
+
+## 📊 REPORTING & ANALYTICS
+
+### Dashboard Widgets (Role-Based)
+
+**Staff Dashboard:**
+
+- Today’s sales count
+- Pending repairs assigned
+- Quick actions
+
+**Supervisor Dashboard:**
+
+- Today’s revenue
+- Team performance
+- Pending approvals
+- Inventory alerts
+- Repair status overview
+
+**Owner Dashboard:**
+
+- Revenue (daily/weekly/monthly)
+- Profit margins
+- Top products
+- Top customers
+- Staff performance
+- Cash flow
+- Repair completion rates
+- Inventory turnover
+- System health
+
+### Reports Required
+
+**Sales Reports:**
+
+- Daily sales summary
+- Sales by product
+- Sales by staff
+- Sales by payment method
+- Sales trends (charts)
+- Profit analysis
+
+**Repair Reports:**
+
+- Repairs by status
+- Repairs by type
+- Technician performance
+- Average repair time
+- Repair revenue
+
+**Inventory Reports:**
+
+- Current stock levels
+- Low stock items
+- Stock movement history
+- Product performance
+- Reorder recommendations
+
+**Financial Reports:**
+
+- Daily closure summary
+- Cash flow statement
+- Expense breakdown
+- Profit & Loss
+- Tax reports
+
+**Customer Reports:**
+
+- Customer lifetime value
+- Top customers
+- Customer acquisition
+- Purchase patterns
+
+**Staff Reports:**
+
+- Performance metrics
+- Sales per staff
+- Attendance logs
+- Commission calculations
+
+### Export Formats
+
+- PDF (formatted reports)
+- Excel (.xlsx)
+- CSV (raw data)
+- JSON (API integration)
+
+-----
+
+## 🔔 NOTIFICATIONS & ALERTS
+
+### Real-Time Notifications
+
+**Low Stock Alerts:**
+
+- Triggered when product < min_stock_level
+- Notify: Owner, Supervisor
+- Channel: In-app, Email
+
+**Repair Updates:**
+
+- Status changes
+- Completion notifications
+- Notify: Customer, Owner
+- Channel: SMS, Email, In-app
+
+**Sale Approvals:**
+
+- New sale submitted
+- Notify: Owner, Supervisor
+- Channel: In-app, Push
+
+**Daily Closure:**
+
+- Submission pending
+- Large variance detected
+- Notify: Owner
+- Channel: In-app, Email
+
+**System Alerts:**
+
+- Failed payments
+- Database errors
+- Low disk space
+- Subscription expiring
+- Notify: Owner
+- Channel: Email, SMS
+
+-----
+
+## 🔧 TECHNICAL IMPLEMENTATION
+
+### Backend Structure
+
+```
+project/
+├── app.py (main application)
+├── config.py (configuration)
+├── models/
+│   ├── __init__.py
+│   ├── user.py
+│   ├── product.py
+│   ├── sale.py
+│   ├── repair.py
+│   ├── device.py
+│   ├── customer.py
+│   ├── closure.py
+│   └── audit.py
+├── routes/
+│   ├── __init__.py
+│   ├── auth.py
+│   ├── sales.py
+│   ├── repairs.py
+│   ├── devices.py
+│   ├── products.py
+│   ├── customers.py
+│   ├── closures.py
+│   ├── staff.py
+│   ├── reports.py
+│   └── api.py
+├── services/
+│   ├── __init__.py
+│   ├── auth_service.py
+│   ├── email_service.py
+│   ├── sms_service.py
+│   ├── pdf_service.py
+│   ├── export_service.py
+│   └── notification_service.py
+├── utils/
+│   ├── __init__.py
+│   ├── decorators.py (permissions)
+│   ├── validators.py
+│   ├── helpers.py
+│   └── audit.py
+├── templates/
+│   ├── base.html
+│   ├── login.html
+│   ├── dashboard.html
+│   ├── sales/
+│   ├── repairs/
+│   ├── devices/
+│   ├── products/
+│   ├── customers/
+│   ├── closures/
+│   ├── staff/
+│   ├── reports/
+│   └── components/
+├── static/
+│   ├── css/
+│   ├── js/
+│   ├── img/
+│   └── vendor/
+├── migrations/
+├── tests/
+├── requirements.txt
+├── .env.example
+├── docker-compose.yml
+├── Dockerfile
+└── README.md
+```
+
+### Key Dependencies
+
+```txt
+# requirements.txt
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+Flask-Migrate==4.0.5
+Flask-CORS==4.0.0
+Flask-SocketIO==5.3.5
+psycopg2-binary==2.9.9
+PyJWT==2.8.0
+bcrypt==4.1.2
+python-dotenv==1.0.0
+celery==5.3.4
+redis==5.0.1
+reportlab==4.0.7
+openpyxl==3.1.2
+pandas==2.1.4
+requests==2.31.0
+Pillow==10.1.0
+gunicorn==21.2.0
+```
+
+### Environment Variables
+
+```bash
+# .env
+DATABASE_URL=postgresql://user:pass@localhost/phoneshop
+SECRET_KEY=your-secret-key-here
+JWT_SECRET_KEY=your-jwt-secret
+REDIS_URL=redis://localhost:6379/0
+
+# Email (SendGrid/AWS SES)
+MAIL_SERVER=smtp.sendgrid.net
+MAIL_PORT=587
+MAIL_USERNAME=apikey
+MAIL_PASSWORD=your-api-key
+MAIL_FROM=noreply@yourshop.com
+
+# SMS (Africa's Talking/Twilio)
+SMS_API_KEY=your-sms-api-key
+SMS_USERNAME=your-username
+
+# Storage (AWS S3/Cloudinary)
+STORAGE_TYPE=s3
+AWS_ACCESS_KEY=your-access-key
+AWS_SECRET_KEY=your-secret-key
+AWS_BUCKET=your-bucket-name
+
+# Payment (Flutterwave/Paystack)
+PAYMENT_PUBLIC_KEY=your-public-key
+PAYMENT_SECRET_KEY=your-secret-key
+
+# App Settings
+FLASK_ENV=production
+DEBUG=False
+TIMEZONE=Africa/Kampala
+CURRENCY=UGX
+```
+
+-----
+
+## 🐳 DEPLOYMENT
+
+### Docker Configuration
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/phoneshop
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./:/app
+    command: gunicorn -w 4 -b 0.0.0.0:5000 app:app
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: phoneshop
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  celery:
+    build: .
+    command: celery -A app.celery worker --loglevel=info
+    depends_on:
+      - redis
+      - db
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+```
+
+### Nginx Configuration
+
+```nginx
+# nginx.conf
+upstream app {
+    server web:5000;
+}
+
+server {
+    listen 80;
+    server_name yourshop.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name yourshop.com;
+
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://app;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /static {
+        alias /app/static;
+        expires 30d;
+    }
+
+    location /socket.io {
+        proxy_pass http://app/socket.io;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+-----
+
+## 🧪 TESTING REQUIREMENTS
+
+### Test Coverage
+
+```python
+# tests/test_sales.py
+def test_create_sale_as_staff()
+def test_create_sale_as_owner()
+def test_edit_sale_as_staff_forbidden()
+def test_edit_sale_as_owner()
+def test_delete_sale_as_supervisor_forbidden()
+def test_approve_sale_as_owner()
+def
+```

@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useData } from "@/lib/data-context";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { 
@@ -10,7 +11,12 @@ import {
   Package,
   Users,
   MessageSquare,
-  Wrench
+  Wrench,
+  Smartphone,
+  CreditCard,
+  Settings,
+  ShieldAlert,
+  ShoppingCart
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -18,12 +24,15 @@ import logoUrl from "@assets/generated_images/minimalist_phone_shop_logo_icon.pn
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
+  const { activeShop, notifications } = useData(); // Get dynamic shop name
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   if (!user) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">{children}</div>;
   }
+
+  const unreadNotifications = notifications.filter(n => !n.read).length;
 
   const NavLink = ({ href, icon: Icon, label }: { href: string; icon: any; label: string }) => {
     const active = location === href;
@@ -48,21 +57,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-2 font-bold text-slate-800">
           <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
-          <span>TechPOS</span>
+          <span>{activeShop?.name || "TechPOS"}</span>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
           {mobileMenuOpen ? <X /> : <Menu />}
         </Button>
       </div>
 
-      {/* Sidebar Navigation (Desktop + Mobile Drawer) */}
+      {/* Sidebar Navigation */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 transform transition-transform duration-200 ease-in-out md:translate-x-0 md:static md:h-screen flex flex-col",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="p-6 border-b border-slate-100 hidden md:flex items-center gap-3">
            <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
-           <span className="font-bold text-xl text-slate-800 tracking-tight">TechPOS</span>
+           <div className="flex flex-col">
+             <span className="font-bold text-lg text-slate-800 leading-tight">{activeShop?.name || "TechPOS"}</span>
+             <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">SaaS Edition</span>
+           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
@@ -72,23 +84,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
           )}
           
+          <NavLink href="/pos" icon={ShoppingCart} label="Point of Sale" />
           <NavLink href="/daily-close" icon={PlusCircle} label="Daily Close" />
           
           <div className="mt-8 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Management</div>
           
-          <NavLink href="/products" icon={Package} label="Inventory" />
+          <NavLink href="/devices" icon={Smartphone} label="Devices (IMEI)" />
+          <NavLink href="/products" icon={Package} label="Products" />
           <NavLink href="/customers" icon={Users} label="Customers" />
           <NavLink href="/repairs" icon={Wrench} label="Repairs" />
           
-          {user.role === "owner" && (
-            <div className="mt-8">
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Admin</div>
-               <Button variant="ghost" className="w-full justify-start text-slate-600 hover:text-slate-900" disabled>
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Messages (Soon)
-              </Button>
-            </div>
-          )}
+          <div className="mt-8 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Admin</div>
+          
+          <NavLink href="/expenses" icon={CreditCard} label="Expenses" />
+          <NavLink href="/audit-logs" icon={ShieldAlert} label="Audit Logs" />
+          <NavLink href="/settings" icon={Settings} label="Settings" />
 
           <div className="mt-auto pt-8 border-t border-slate-100">
              <div className="px-3 py-2 text-sm text-slate-600 flex items-center gap-2 mb-2">
@@ -116,7 +126,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-7xl mx-auto">
             {children}
           </div>
         </div>
