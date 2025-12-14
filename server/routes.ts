@@ -88,59 +88,84 @@ export async function registerRoutes(
     }
   });
 
-  // Get unique brands from base values
+  // Get all brands from normalized brands table
   app.get("/api/brands", async (req: Request, res: Response) => {
     try {
+      const brandList = await storage.getBrands();
+      
+      // If normalized brands exist, use them
+      if (brandList.length > 0) {
+        res.json(brandList.map(b => ({ id: b.id, name: b.name })));
+        return;
+      }
+      
+      // Fallback: derive from base values for backward compatibility
       const shopId = req.query.shopId as string | undefined;
       const values = await storage.getDeviceBaseValues(shopId);
       const brands = Array.from(new Set(values.map(v => v.brand))).sort();
-      res.json(brands.map((name, index) => ({ id: index + 1, name })));
+      res.json(brands.map((name, index) => ({ id: String(index + 1), name })));
     } catch (error) {
       console.error("Error fetching brands:", error);
       res.status(500).json({ error: "Failed to fetch brands" });
     }
   });
 
-  // Get models for a specific brand
+  // Get models for a specific brand (supports brandId or brand name)
   app.get("/api/models", async (req: Request, res: Response) => {
     try {
+      const brandId = req.query.brand_id as string;
       const brand = req.query.brand as string;
-      const shopId = req.query.shopId as string | undefined;
       
-      if (!brand) {
-        return res.status(400).json({ error: "Brand is required" });
+      // If brandId provided, use normalized tables
+      if (brandId) {
+        const modelList = await storage.getModels(brandId);
+        res.json(modelList.map(m => ({ id: m.id, name: m.name, brandId: m.brandId })));
+        return;
       }
       
+      // Fallback: derive from base values by brand name
+      if (!brand) {
+        return res.status(400).json({ error: "Brand or brand_id is required" });
+      }
+      
+      const shopId = req.query.shopId as string | undefined;
       const values = await storage.getDeviceBaseValues(shopId);
       const models = Array.from(new Set(values.filter(v => v.brand === brand).map(v => v.model))).sort();
-      res.json(models.map((name, index) => ({ id: index + 1, name })));
+      res.json(models.map((name, index) => ({ id: String(index + 1), name })));
     } catch (error) {
       console.error("Error fetching models:", error);
       res.status(500).json({ error: "Failed to fetch models" });
     }
   });
 
-  // Get storage options for a specific brand and model
+  // Get storage options for a specific model (supports modelId or brand+model name)
   app.get("/api/storages", async (req: Request, res: Response) => {
     try {
+      const modelId = req.query.model_id as string;
       const brand = req.query.brand as string;
       const model = req.query.model as string;
-      const modelId = req.query.model_id as string;
-      const shopId = req.query.shopId as string | undefined;
       
+      // If modelId provided, use normalized tables
+      if (modelId) {
+        const storageList = await storage.getStorageOptions(modelId);
+        res.json(storageList.map(s => ({ id: s.id, size: s.size, modelId: s.modelId })));
+        return;
+      }
+      
+      // Fallback: derive from base values by brand+model name
+      const shopId = req.query.shopId as string | undefined;
       const values = await storage.getDeviceBaseValues(shopId);
       
       let filtered = values;
       if (brand) {
         filtered = filtered.filter(v => v.brand === brand);
       }
-      if (model || modelId) {
-        const modelName = model || modelId;
-        filtered = filtered.filter(v => v.model === modelName);
+      if (model) {
+        filtered = filtered.filter(v => v.model === model);
       }
       
       const storages = Array.from(new Set(filtered.map(v => v.storage))).sort();
-      res.json(storages.map((size, index) => ({ id: index + 1, size })));
+      res.json(storages.map((size, index) => ({ id: String(index + 1), size })));
     } catch (error) {
       console.error("Error fetching storages:", error);
       res.status(500).json({ error: "Failed to fetch storages" });
