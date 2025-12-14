@@ -12,6 +12,7 @@ import { Search, ShoppingCart, Trash2, User, CreditCard, Plus, Smartphone, Packa
 import { useToast } from "@/hooks/use-toast";
 
 import { BarcodeScanner } from "@/components/barcode-scanner";
+import { Receipt, generateSaleReceipt, type ReceiptData } from "@/components/receipt";
 
 export default function POSPage() {
   const { products, devices, customers, recordSale, currentUser } = useData();
@@ -23,6 +24,8 @@ export default function POSPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   // Auto-scan logic
   const handleScanResult = (decodedText: string) => {
@@ -89,6 +92,8 @@ export default function POSPage() {
   const cartTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
 
   const handleCheckout = () => {
+    const saleNumber = `S${Date.now().toString(36).toUpperCase()}`;
+    
     recordSale({
       customerId: selectedCustomer?.id,
       customerName: selectedCustomer?.name || "Walk-in Customer",
@@ -99,6 +104,26 @@ export default function POSPage() {
       soldBy: currentUser?.name || "Staff",
     });
     
+    const receipt = generateSaleReceipt(
+      {
+        saleNumber,
+        customerName: selectedCustomer?.name || "Walk-in Customer",
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+        })),
+        totalAmount: cartTotal,
+        paymentMethod,
+        soldBy: currentUser?.name || "Staff",
+        createdAt: new Date().toISOString(),
+      },
+      { name: "Phone Shop", location: "Kampala, Uganda" }
+    );
+    
+    setReceiptData(receipt);
+    setReceiptOpen(true);
     setCart([]);
     setCheckoutOpen(false);
     toast({
@@ -323,6 +348,13 @@ export default function POSPage() {
           </div>
         </Card>
       </div>
+      {receiptData && (
+        <Receipt
+          isOpen={receiptOpen}
+          onClose={() => setReceiptOpen(false)}
+          data={receiptData}
+        />
+      )}
     </div>
   );
 }
