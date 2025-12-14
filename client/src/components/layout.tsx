@@ -16,7 +16,8 @@ import {
   CreditCard,
   Settings,
   ShieldAlert,
-  ShoppingCart
+  ShoppingCart,
+  RefreshCw
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -89,6 +90,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           
           <div className="mt-8 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Management</div>
           
+          <NavLink href="/trade-in" icon={RefreshCw} label="Trade-In / Buyback" />
           <NavLink href="/devices" icon={Smartphone} label="Devices (IMEI)" />
           <NavLink href="/products" icon={Package} label="Products" />
           <NavLink href="/customers" icon={Users} label="Customers" />

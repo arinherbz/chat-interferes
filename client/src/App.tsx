@@ -18,6 +18,7 @@ import ExpensesPage from "@/pages/expenses";
 import POSPage from "@/pages/pos";
 import SettingsPage from "@/pages/settings";
 import AuditLogsPage from "@/pages/audit-logs";
+import TradeInPage from "@/pages/trade-in";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/pos" component={POSPage} />
         <Route path="/daily-close" component={DailyClose} />
+        <Route path="/trade-in" component={TradeInPage} />
         
         <Route path="/products" component={ProductsPage} />
         <Route path="/devices" component={DevicesPage} />

@@ -45,6 +45,21 @@ export interface Device {
   price: number;
   cost: number;
   addedAt: string;
+  warrantyPeriod?: number; // months
+  warrantyExpiresAt?: string;
+}
+
+export interface TradeIn {
+  id: string;
+  deviceId: string; // The ID generated in inventory
+  brand: string;
+  model: string;
+  imei: string;
+  condition: string;
+  offerPrice: number;
+  customerId: string;
+  status: "Pending" | "Approved" | "Rejected";
+  createdAt: string;
 }
 
 export interface Customer {
@@ -163,6 +178,7 @@ interface DataContextType {
   sales: Sale[];
   expenses: Expense[];
   repairs: Repair[];
+  tradeIns: TradeIn[];
   closures: DailyClosure[];
   auditLogs: AuditLog[];
   notifications: Notification[];
@@ -176,6 +192,7 @@ interface DataContextType {
   recordSale: (data: Omit<Sale, "id" | "saleNumber" | "createdAt">) => void;
   recordExpense: (data: Omit<Expense, "id">) => void;
   addRepair: (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => void;
+  recordTradeIn: (data: Omit<TradeIn, "id" | "createdAt" | "status">) => void;
   updateRepairStatus: (id: string, status: RepairStatus) => void;
   addClosure: (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId">) => void;
   
@@ -250,6 +267,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [sales, setSales] = useState(MOCK_SALES);
   const [expenses, setExpenses] = useState(MOCK_EXPENSES);
   const [repairs, setRepairs] = useState(MOCK_REPAIRS);
+  const [tradeIns, setTradeIns] = useState<TradeIn[]>([]);
   const [closures, setClosures] = useState<DailyClosure[]>([]);
   const [auditLogs, setAuditLogs] = useState(MOCK_LOGS);
   const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
@@ -313,6 +331,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
     logAction("CREATE", "Expense", `Recorded expense ${data.category} - ${data.amount}`);
   };
 
+  const recordTradeIn = (data: Omit<TradeIn, "id" | "createdAt" | "status">) => {
+    const tradeInId = `tr-${Date.now()}`;
+    const newTradeIn: TradeIn = {
+      ...data,
+      id: tradeInId,
+      status: "Approved",
+      createdAt: new Date().toISOString()
+    };
+    setTradeIns([newTradeIn, ...tradeIns]);
+    
+    // Automatically add to inventory as "Used"
+    addDevice({
+      brand: data.brand,
+      model: data.model,
+      imei: data.imei,
+      color: "Unknown", // Simplified
+      storage: "Unknown", // Simplified
+      condition: "Used",
+      price: Math.ceil(data.offerPrice * 1.3), // 30% markup default
+      cost: data.offerPrice
+    });
+
+    // Record as expense (payout)
+    recordExpense({
+      category: "Inventory Purchase",
+      description: `Trade-in Payout: ${data.brand} ${data.model} (${data.imei})`,
+      amount: data.offerPrice,
+      date: new Date().toISOString(),
+      recordedBy: currentUser.name
+    });
+
+    logAction("CREATE", "TradeIn", `Processed trade-in for ${data.brand} ${data.model}`);
+  };
+
   const addRepair = (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => {
     const repairNumber = `REP-${5000 + repairs.length + 1}`;
     setRepairs([{ ...data, id: `r-${Date.now()}`, repairNumber, status: "Pending", createdAt: new Date().toISOString() }, ...repairs]);
@@ -349,6 +401,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       sales,
       expenses,
       repairs,
+      tradeIns,
       closures: closures.filter(c => c.shopId === activeShopId),
       auditLogs,
       notifications,
@@ -359,6 +412,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       recordSale,
       recordExpense,
       addRepair,
+      recordTradeIn,
       updateRepairStatus,
       addClosure,
       getPermissions
