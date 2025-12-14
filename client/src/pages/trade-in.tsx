@@ -19,7 +19,8 @@ import {
   Cpu, Battery, Camera, Volume2, Fingerprint, Package, Lock, CheckCircle,
   Eye, Edit, FileText
 } from "lucide-react";
-import { BarcodeScanner } from "@/components/barcode-scanner";
+import { BarcodeScanner, ScanResult } from "@/components/barcode-scanner";
+import { checkForFakeDevice, type FakeDeviceCheck } from "@/lib/scan-utils";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -125,6 +126,12 @@ export default function TradeInPage() {
   const [imeiValidation, setImeiValidation] = useState<{ valid: boolean; error?: string; blocked?: boolean; duplicate?: boolean } | null>(null);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<TradeInAssessment | null>(null);
+  
+  // Fake device detection state
+  const [fakeDeviceWarning, setFakeDeviceWarning] = useState<FakeDeviceCheck | null>(null);
+  const [showFakeDeviceDialog, setShowFakeDeviceDialog] = useState(false);
+  const [ownerOverrideReason, setOwnerOverrideReason] = useState("");
+  const [scanDetectedDevice, setScanDetectedDevice] = useState<{ brand?: string; model?: string } | null>(null);
 
   // Fetch condition questions
   const { data: questions = [] } = useQuery<ConditionQuestion[]>({
@@ -286,6 +293,98 @@ export default function TradeInPage() {
     setPayoutMethod("Cash");
     setScoringResult(null);
     setImeiValidation(null);
+    setFakeDeviceWarning(null);
+    setScanDetectedDevice(null);
+    setOwnerOverrideReason("");
+  };
+
+  const handleScanResult = (cleanedValue: string, scanResult?: ScanResult) => {
+    setIsScannerOpen(false);
+    
+    if (scanResult && scanResult.type === "imei") {
+      const scannedImei = scanResult.cleanedValue.replace(/\D/g, "").slice(0, 15);
+      setImei(scannedImei);
+      
+      if (scanResult.deviceInfo?.brand) {
+        setScanDetectedDevice({
+          brand: scanResult.deviceInfo.brand,
+          model: scanResult.deviceInfo.model
+        });
+        
+        const detectedBrand = scanResult.deviceInfo.brand;
+        if (detectedBrand && brands.includes(detectedBrand)) {
+          setBrand(detectedBrand);
+          setModel("");
+          setStorage("");
+          
+          if (scanResult.deviceInfo.model) {
+            const availableModels = baseValues
+              .filter(v => v.brand === detectedBrand)
+              .map(v => v.model);
+            const matchingModel = availableModels.find(m => 
+              m.toLowerCase().includes(scanResult.deviceInfo!.model!.toLowerCase().split(" ").pop() || "")
+            );
+            if (matchingModel) {
+              setModel(matchingModel);
+            }
+          }
+          
+          toast({
+            title: "Device Detected",
+            description: `Auto-filled: ${detectedBrand}${scanResult.deviceInfo.model ? ` ${scanResult.deviceInfo.model}` : ""}`,
+            className: "bg-blue-600 text-white border-none",
+          });
+        }
+      }
+      
+      if (!scanResult.validation.valid) {
+        toast({
+          title: "Warning",
+          description: scanResult.validation.error,
+          variant: "destructive",
+        });
+      }
+      
+      toast({ title: "IMEI Scanned", description: `IMEI: ${scannedImei}` });
+    } else if (scanResult && scanResult.type === "serial") {
+      toast({
+        title: "Serial Number Scanned",
+        description: `This appears to be a serial number, not an IMEI. Please enter the IMEI manually or scan the IMEI barcode.`,
+        variant: "destructive",
+      });
+    } else {
+      const scannedImei = cleanedValue.replace(/\D/g, "").slice(0, 15);
+      if (scannedImei.length === 15) {
+        setImei(scannedImei);
+        toast({ title: "Scanned", description: `IMEI: ${scannedImei}` });
+      } else {
+        toast({
+          title: "Unknown Format",
+          description: "Could not detect IMEI. Please enter manually.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const checkFakeDevice = () => {
+    if (imei && brand && model) {
+      const result = checkForFakeDevice(imei, undefined, brand, model);
+      setFakeDeviceWarning(result);
+      if (result.isSuspicious && result.severity !== "low") {
+        setShowFakeDeviceDialog(true);
+      }
+    }
+  };
+
+  const handleOwnerOverride = () => {
+    toast({
+      title: "Override Confirmed",
+      description: `Proceeding despite warnings. Reason: ${ownerOverrideReason}`,
+      className: "bg-amber-600 text-white border-none",
+    });
+    setShowFakeDeviceDialog(false);
+    nextStep();
   };
 
   const canProceedStep1 = brand && model && storage && imei.length === 15 && imeiValidation?.valid;
@@ -296,6 +395,17 @@ export default function TradeInPage() {
 
   const nextStep = () => {
     if (step < 5) setStep(step + 1);
+  };
+
+  const handleStep1Next = () => {
+    const fakeCheck = checkForFakeDevice(imei, undefined, brand, model);
+    setFakeDeviceWarning(fakeCheck);
+    
+    if (fakeCheck.isSuspicious && fakeCheck.severity !== "low") {
+      setShowFakeDeviceDialog(true);
+    } else {
+      nextStep();
+    }
   };
   
   const prevStep = () => {
@@ -488,15 +598,59 @@ export default function TradeInPage() {
                       </div>
                     )}
 
+                    {scanDetectedDevice && (
+                      <div className="p-4 bg-purple-50 rounded-lg border border-purple-200" data-testid="detected-device-autofill">
+                        <p className="text-sm text-purple-800">
+                          <strong>Scan Detection:</strong> {scanDetectedDevice.brand}
+                          {scanDetectedDevice.model && ` ${scanDetectedDevice.model}`}
+                        </p>
+                        <p className="text-xs text-purple-600 mt-1">
+                          Device info auto-filled from IMEI scan
+                        </p>
+                      </div>
+                    )}
+
+                    {fakeDeviceWarning?.isSuspicious && (
+                      <div className={`p-4 rounded-lg border ${
+                        fakeDeviceWarning.severity === "high" ? "bg-red-50 border-red-200" :
+                        fakeDeviceWarning.severity === "medium" ? "bg-amber-50 border-amber-200" :
+                        "bg-yellow-50 border-yellow-200"
+                      }`} data-testid="fake-device-warning">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className={`w-5 h-5 mt-0.5 ${
+                            fakeDeviceWarning.severity === "high" ? "text-red-600" :
+                            fakeDeviceWarning.severity === "medium" ? "text-amber-600" :
+                            "text-yellow-600"
+                          }`} />
+                          <div>
+                            <p className={`text-sm font-medium ${
+                              fakeDeviceWarning.severity === "high" ? "text-red-800" :
+                              fakeDeviceWarning.severity === "medium" ? "text-amber-800" :
+                              "text-yellow-800"
+                            }`}>
+                              Suspicious Device Detected
+                            </p>
+                            <ul className="text-xs mt-1 space-y-1">
+                              {fakeDeviceWarning.reasons.map((reason, i) => (
+                                <li key={i} className={
+                                  fakeDeviceWarning.severity === "high" ? "text-red-600" :
+                                  fakeDeviceWarning.severity === "medium" ? "text-amber-600" :
+                                  "text-yellow-600"
+                                }>{reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <BarcodeScanner 
                       isOpen={isScannerOpen} 
                       onClose={() => setIsScannerOpen(false)} 
-                      onScan={(val) => {
-                        setImei(val.replace(/\D/g, "").slice(0, 15));
-                        setIsScannerOpen(false);
-                        toast({ title: "Scanned", description: `IMEI: ${val}` });
-                      }}
+                      onScan={handleScanResult}
                       title="Scan IMEI Barcode"
+                      enableTTS={true}
+                      showValidation={true}
                     />
                   </div>
                 )}
@@ -816,7 +970,7 @@ export default function TradeInPage() {
                 
                 {step < 5 ? (
                   <Button 
-                    onClick={nextStep}
+                    onClick={step === 1 ? handleStep1Next : nextStep}
                     disabled={
                       (step === 1 && !canProceedStep1) ||
                       (step === 2 && !canProceedStep2) ||
@@ -1075,6 +1229,75 @@ export default function TradeInPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowReviewDialog(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fake Device Override Dialog */}
+      <Dialog open={showFakeDeviceDialog} onOpenChange={setShowFakeDeviceDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="w-5 h-5" />
+              Suspicious Device Warning
+            </DialogTitle>
+            <DialogDescription>
+              This device has been flagged for the following issues:
+            </DialogDescription>
+          </DialogHeader>
+          
+          {fakeDeviceWarning && (
+            <div className="space-y-4">
+              <div className={`p-4 rounded-lg border ${
+                fakeDeviceWarning.severity === "high" ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"
+              }`}>
+                <ul className="space-y-2">
+                  {fakeDeviceWarning.reasons.map((reason, i) => (
+                    <li key={i} className={`text-sm flex items-start gap-2 ${
+                      fakeDeviceWarning.severity === "high" ? "text-red-700" : "text-amber-700"
+                    }`}>
+                      <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      {reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="override-reason">Owner Override Reason (Required)</Label>
+                <Input
+                  id="override-reason"
+                  placeholder="Enter reason to proceed despite warnings..."
+                  value={ownerOverrideReason}
+                  onChange={(e) => setOwnerOverrideReason(e.target.value)}
+                  data-testid="input-override-reason"
+                />
+                <p className="text-xs text-slate-500">
+                  This will be logged for audit purposes.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowFakeDeviceDialog(false);
+                setOwnerOverrideReason("");
+              }}
+              data-testid="btn-cancel-override"
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={handleOwnerOverride}
+              disabled={!ownerOverrideReason.trim()}
+              data-testid="btn-confirm-override"
+            >
+              Proceed Anyway
             </Button>
           </DialogFooter>
         </DialogContent>
