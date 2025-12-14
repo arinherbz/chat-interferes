@@ -20,6 +20,7 @@ const repairSchema = z.object({
   imei: z.string().min(1, "IMEI/Serial required"),
   repairType: z.string().min(1, "Repair type required"),
   price: z.coerce.number().min(0, "Price required"),
+  paymentMethod: z.enum(["Cash", "MTN", "Airtel", "Card"]).default("Cash"),
   notes: z.string().optional(),
 });
 
@@ -28,6 +29,7 @@ const saleSchema = z.object({
   productName: z.string().min(1, "Product name required"),
   quantity: z.coerce.number().min(1, "Min quantity 1"),
   totalPrice: z.coerce.number().min(0, "Total price required"),
+  paymentMethod: z.enum(["Cash", "MTN", "Airtel", "Card"]).default("Cash"),
 });
 
 const cashEntrySchema = z.object({
@@ -208,7 +210,7 @@ export default function DailyClose() {
                   type="button" 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => appendSale({ productName: "", quantity: 1, totalPrice: 0 })}
+                  onClick={() => appendSale({ productName: "", quantity: 1, totalPrice: 0, paymentMethod: "Cash" })}
                   className="gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -311,6 +313,32 @@ export default function DailyClose() {
                           )}
                         />
                       </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name={`sales.${index}.paymentMethod`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Payment Method</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Select method" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Cash">Cash</SelectItem>
+                                  <SelectItem value="MTN">MTN Mobile Money</SelectItem>
+                                  <SelectItem value="Airtel">Airtel Money</SelectItem>
+                                  <SelectItem value="Card">Card / POS</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -333,7 +361,7 @@ export default function DailyClose() {
                   type="button" 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => appendRepair({ deviceBrand: "", deviceModel: "", imei: "", repairType: "", price: 0, notes: "" })}
+                  onClick={() => appendRepair({ deviceBrand: "", deviceModel: "", imei: "", repairType: "", price: 0, paymentMethod: "Cash", notes: "" })}
                   className="gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -431,6 +459,29 @@ export default function DailyClose() {
                               <FormControl>
                                 <Input type="number" placeholder="0" {...field} className="h-9 font-mono" />
                               </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                         <FormField
+                          control={form.control}
+                          name={`repairs.${index}.paymentMethod`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">Payment Method</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Select method" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Cash">Cash</SelectItem>
+                                  <SelectItem value="MTN">MTN Mobile Money</SelectItem>
+                                  <SelectItem value="Airtel">Airtel Money</SelectItem>
+                                  <SelectItem value="Card">Card / POS</SelectItem>
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}

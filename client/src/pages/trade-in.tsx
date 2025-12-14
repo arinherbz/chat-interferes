@@ -22,6 +22,7 @@ const tradeInSchema = z.object({
   imei: z.string().min(10, "Valid IMEI required"),
   condition: z.string().min(1, "Condition required"),
   offerPrice: z.coerce.number().min(0, "Price required"),
+  payoutMethod: z.enum(["Cash", "MTN", "Airtel", "Credit"]).default("Cash"),
   customerName: z.string().min(1, "Customer name required"),
   customerPhone: z.string().min(1, "Customer phone required"),
 });
@@ -39,6 +40,7 @@ export default function TradeInPage() {
       imei: "",
       condition: "Good",
       offerPrice: 0,
+      payoutMethod: "Cash",
       customerName: "",
       customerPhone: "",
     }
@@ -252,6 +254,29 @@ export default function TradeInPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
+                        name="payoutMethod"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Payout Method</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select method" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Cash">Cash</SelectItem>
+                                <SelectItem value="MTN">MTN Mobile Money</SelectItem>
+                                <SelectItem value="Airtel">Airtel Money</SelectItem>
+                                <SelectItem value="Credit">Store Credit</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
                         name="customerName"
                         render={({ field }) => (
                           <FormItem>
@@ -263,6 +288,8 @@ export default function TradeInPage() {
                           </FormItem>
                         )}
                       />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
                       <FormField
                         control={form.control}
                         name="customerPhone"

@@ -18,6 +18,7 @@ const expenseSchema = z.object({
   category: z.string().min(1, "Category required"),
   description: z.string().min(1, "Description required"),
   amount: z.coerce.number().min(1, "Amount required"),
+  paymentMethod: z.enum(["Cash", "MTN", "Airtel", "Card"]).default("Cash"),
   date: z.string().min(1, "Date required"),
 });
 
@@ -31,6 +32,7 @@ export default function ExpensesPage() {
       category: "Supplies",
       description: "",
       amount: 0,
+      paymentMethod: "Cash",
       date: format(new Date(), 'yyyy-MM-dd'),
     }
   });
@@ -123,6 +125,29 @@ export default function ExpensesPage() {
                   />
                   <FormField
                     control={form.control}
+                    name="paymentMethod"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Payment Source</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select source" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Cash">Cash</SelectItem>
+                            <SelectItem value="MTN">MTN Mobile Money</SelectItem>
+                            <SelectItem value="Airtel">Airtel Money</SelectItem>
+                            <SelectItem value="Card">Card</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
                     name="date"
                     render={({ field }) => (
                       <FormItem>
@@ -167,6 +192,7 @@ export default function ExpensesPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Method</TableHead>
                 <TableHead>Recorded By</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
               </TableRow>
@@ -179,6 +205,7 @@ export default function ExpensesPage() {
                     <Badge variant="outline">{expense.category}</Badge>
                   </TableCell>
                   <TableCell>{expense.description}</TableCell>
+                  <TableCell className="text-xs text-slate-500">{(expense as any).paymentMethod || "Cash"}</TableCell>
                   <TableCell className="text-sm text-slate-500">{expense.recordedBy}</TableCell>
                   <TableCell className="text-right font-medium text-red-600">
                     -{expense.amount.toLocaleString()}
