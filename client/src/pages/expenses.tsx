@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge"; // Ensure Badge is imported
 import { Wallet, Search, Plus, Calendar } from "lucide-react";
 import { format } from "date-fns";
 
