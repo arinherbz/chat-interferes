@@ -9,33 +9,35 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Users, Search, Plus, Mail, MessageSquare } from "lucide-react";
-import { format } from "date-fns";
+import { Users, Search, Plus, Mail, MessageSquare, Send } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 
-const customerSchema = z.object({
-  name: z.string().min(1, "Name required"),
-  phone: z.string().min(1, "Phone required"),
-  email: z.string().email("Invalid email"),
-});
+// ... existing schema ...
 
 export default function CustomersPage() {
   const { customers, addCustomer } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [msgOpen, setMsgOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<{name: string, phone: string} | null>(null);
+  const { toast } = useToast();
 
-  const form = useForm<z.infer<typeof customerSchema>>({
-    resolver: zodResolver(customerSchema),
-    defaultValues: {
-      name: "",
-      phone: "",
-      email: "",
-    }
-  });
+  // ... existing form setup ...
 
-  const onSubmit = (values: z.infer<typeof customerSchema>) => {
-    addCustomer(values);
-    setOpen(false);
-    form.reset();
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    setMsgOpen(false);
+    toast({
+      title: "Message Sent",
+      description: `SMS sent to ${selectedCustomer?.name} (${selectedCustomer?.phone})`,
+      className: "bg-green-600 text-white border-none",
+    });
+  };
+
+  const openMessageDialog = (customer: {name: string, phone: string}) => {
+    setSelectedCustomer(customer);
+    setMsgOpen(true);
   };
 
   const filteredCustomers = customers.filter(c => 
@@ -111,10 +113,35 @@ export default function CustomersPage() {
             </Form>
           </DialogContent>
         </Dialog>
+        <Dialog open={msgOpen} onOpenChange={setMsgOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Send Message</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSendMessage} className="space-y-4 pt-2">
+              <div className="p-3 bg-slate-50 rounded-md text-sm">
+                <span className="font-medium">To:</span> {selectedCustomer?.name} ({selectedCustomer?.phone})
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Message Type</label>
+                <select className="w-full h-10 px-3 rounded-md border border-slate-200 text-sm">
+                  <option>SMS</option>
+                  <option>Email</option>
+                  <option>WhatsApp</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Content</label>
+                <Textarea placeholder="Type your message here..." className="min-h-[100px]" />
+              </div>
+              <Button type="submit" className="w-full gap-2">
+                <Send className="w-4 h-4" />
+                Send Message
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
-
-      <Card>
-        <CardHeader className="pb-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
             <Input 
@@ -153,7 +180,12 @@ export default function CustomersPage() {
                   <TableCell>{format(new Date(customer.joinedAt), 'MMM dd, yyyy')}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-blue-600"
+                        onClick={() => openMessageDialog(customer)}
+                      >
                         <MessageSquare className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-600">

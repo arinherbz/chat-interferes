@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, ShoppingCart, Trash2, User, CreditCard, Plus, Smartphone, Package } from "lucide-react";
+import { Search, ShoppingCart, Trash2, User, CreditCard, Plus, Smartphone, Package, Scan } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function POSPage() {
@@ -77,14 +77,20 @@ export default function POSPage() {
       {/* LEFT: Product Catalog */}
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <Input 
-              placeholder="Search products, devices, or IMEI..." 
-              className="pl-10 h-10"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="relative flex-1 flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+              <Input 
+                placeholder="Search products, devices, or IMEI..." 
+                className="pl-10 h-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button variant="outline" className="gap-2 shrink-0">
+              <Scan className="w-4 h-4" />
+              <span className="hidden sm:inline">Scan Barcode</span>
+            </Button>
           </div>
         </div>
 
@@ -247,17 +253,22 @@ export default function POSPage() {
                     <p className="text-3xl font-bold text-primary">{cartTotal.toLocaleString()} <span className="text-sm font-normal text-slate-400">UGX</span></p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    {["Cash", "MTN", "Airtel", "Card"].map(method => (
-                      <div 
-                        key={method}
-                        className={`border rounded-lg p-4 cursor-pointer text-center hover:bg-slate-50 transition-colors ${paymentMethod === method ? 'border-primary bg-primary/5 ring-1 ring-primary' : ''}`}
-                        onClick={() => setPaymentMethod(method)}
-                      >
-                         <CreditCard className="w-6 h-6 mx-auto mb-2 text-slate-600" />
-                         <span className="font-medium text-sm">{method}</span>
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-1 gap-4">
+                    <label className="text-sm font-medium">Payment Method</label>
+                    <Select onValueChange={setPaymentMethod} defaultValue={paymentMethod}>
+                      <SelectTrigger className="w-full h-12">
+                         <div className="flex items-center gap-2">
+                           <CreditCard className="w-4 h-4 text-slate-500" />
+                           <SelectValue placeholder="Select Payment Method" />
+                         </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cash">Cash</SelectItem>
+                        <SelectItem value="MTN">MTN Mobile Money</SelectItem>
+                        <SelectItem value="Airtel">Airtel Money</SelectItem>
+                        <SelectItem value="Card">Credit/Debit Card</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
