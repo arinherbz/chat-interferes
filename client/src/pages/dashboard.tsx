@@ -13,14 +13,16 @@ import {
   Tooltip, 
   ResponsiveContainer,
   LineChart,
-  Line
+  Line,
+  AreaChart,
+  Area
 } from "recharts";
-import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench, ShoppingCart, Users, AlertTriangle, Store, Download } from "lucide-react";
+import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench, ShoppingCart, Users, AlertTriangle, Store, Download, Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
-  const { closures, alerts, customers, products, shops, activeShopId, setActiveShopId } = useData();
+  const { closures, customers, products, shops, activeShopId, setActiveShopId, expenses, repairs } = useData();
   const { toast } = useToast();
 
   const handleExport = () => {
@@ -30,42 +32,51 @@ export default function Dashboard() {
     });
   };
 
-  // Calculate summary stats
-  const totalVariance = closures.reduce((acc, curr) => acc + curr.variance, 0);
-  const flaggedCount = closures.filter(c => c.status === "flagged").length;
-  const pendingCount = closures.filter(c => c.status === "pending").length;
+  // --- KPI CALCULATIONS ---
   
-  const totalRepairRevenue = closures.reduce((acc, curr) => {
-    return acc + (curr.repairs?.reduce((rAcc, r) => rAcc + r.price, 0) || 0);
-  }, 0);
-
+  // 1. Total Revenue (Sales + Repairs)
   const totalSalesRevenue = closures.reduce((acc, curr) => {
     return acc + (curr.sales?.reduce((sAcc, s) => sAcc + s.totalPrice, 0) || 0);
   }, 0);
+  
+  const totalRepairRevenue = repairs.reduce((acc, r) => acc + r.price, 0); // Simplified for demo
+  const totalRevenue = totalSalesRevenue + totalRepairRevenue;
 
+  // 2. Total Expenses
+  const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
+
+  // 3. Net Profit
+  // Assuming 20% cost of goods for sales (mock) and 30% parts cost for repairs
+  const cogs = totalSalesRevenue * 0.7; 
+  const repairParts = totalRepairRevenue * 0.3;
+  const netProfit = totalRevenue - cogs - repairParts - totalExpenses;
+
+  // 4. Alerts
+  const lowStockProducts = products.filter(p => p.stock <= p.minStock);
+  const pendingRepairs = repairs.filter(r => r.status === "Pending" || r.status === "In Progress").length;
+  
   // Chart data preparation
   const chartData = [...closures].reverse().map(c => ({
     date: format(new Date(c.date), 'MMM dd'),
-    expected: c.cashExpected,
-    actual: c.cashCounted + c.mtnAmount + c.airtelAmount,
-    sales: c.sales?.reduce((acc, s) => acc + s.totalPrice, 0) || 0,
-    variance: c.variance
+    revenue: (c.sales?.reduce((acc, s) => acc + s.totalPrice, 0) || 0) + (c.repairs?.reduce((acc, r) => acc + r.price, 0) || 0),
+    expenses: 150000, // Mock fixed daily expense
+    profit: ((c.sales?.reduce((acc, s) => acc + s.totalPrice, 0) || 0) * 0.3) // Mock profit margin
   }));
 
-  // Top products (mock aggregation)
-  const topProducts = [...products].sort((a, b) => b.price - a.price).slice(0, 3); // Simplified sort
+  // Top products
+  const topProducts = [...products].sort((a, b) => b.price - a.price).slice(0, 3);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Owner Dashboard</h1>
-          <p className="text-slate-500">Overview of shop performance and alerts.</p>
+          <p className="text-slate-500">Real-time overview of business performance.</p>
         </div>
         <div className="flex flex-wrap gap-2">
            <Select value={activeShopId} onValueChange={setActiveShopId}>
-             <SelectTrigger className="w-[180px]">
-               <Store className="w-4 h-4 mr-2" />
+             <SelectTrigger className="w-[200px] bg-white">
+               <Store className="w-4 h-4 mr-2 text-slate-500" />
                <SelectValue />
              </SelectTrigger>
              <SelectContent>
@@ -74,91 +85,98 @@ export default function Dashboard() {
                ))}
              </SelectContent>
            </Select>
-           <Button variant="outline" onClick={handleExport}>
+           <Button variant="outline" onClick={handleExport} className="bg-white">
              <Download className="w-4 h-4 mr-2" />
-             Export Report
+             Export
            </Button>
-           <Button>Add Shop</Button>
         </div>
       </div>
 
-      {/* Alerts Section */}
-      {alerts.length > 0 && (
-        <div className="grid gap-4">
-          {alerts.map(alert => (
-            <div key={alert.id} className={`border rounded-lg p-4 flex items-start gap-3 ${alert.type === 'low_stock' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
-              {alert.type === 'low_stock' ? (
-                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
-              )}
-              <div className="flex-1">
-                <h3 className={`font-semibold ${alert.type === 'low_stock' ? 'text-amber-900' : 'text-red-900'}`}>
-                  Action Required: {alert.type.replace('_', ' ')}
-                </h3>
-                <p className={`${alert.type === 'low_stock' ? 'text-amber-700' : 'text-red-700'} text-sm`}>
-                  {alert.message}
-                </p>
+      {/* Actionable Alerts Bar */}
+      {(lowStockProducts.length > 0 || pendingRepairs > 5) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {lowStockProducts.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-100 rounded-full text-amber-600">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                   <h3 className="font-semibold text-amber-900">{lowStockProducts.length} Items Low on Stock</h3>
+                   <p className="text-sm text-amber-700">Iphones and Accessories need restocking.</p>
+                </div>
               </div>
-              <Button size="sm" variant={alert.type === 'low_stock' ? 'outline' : 'destructive'} className="h-8">
-                {alert.type === 'low_stock' ? 'Restock' : 'Resolve'}
-              </Button>
+              <Button size="sm" variant="outline" className="text-amber-700 border-amber-300 hover:bg-amber-100">Restock</Button>
             </div>
-          ))}
+          )}
+          {pendingRepairs > 0 && (
+             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-full text-blue-600">
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div>
+                   <h3 className="font-semibold text-blue-900">{pendingRepairs} Pending Repairs</h3>
+                   <p className="text-sm text-blue-700">Technician attention required.</p>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" className="text-blue-700 border-blue-300 hover:bg-blue-100">View Jobs</Button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Stats Cards */}
+      {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Variance (7d)</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-slate-500">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${totalVariance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {totalVariance.toLocaleString()} UGX
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {totalVariance < 0 ? (
-                <span className="flex items-center text-red-500"><ArrowDownRight className="w-3 h-3 mr-1" /> Loss detected</span>
-              ) : (
-                <span className="flex items-center text-green-500"><ArrowUpRight className="w-3 h-3 mr-1" /> Net positive</span>
-              )}
+            <div className="text-2xl font-bold text-slate-900">{totalRevenue.toLocaleString()} <span className="text-sm font-normal text-slate-400">UGX</span></div>
+            <p className="text-xs text-green-600 flex items-center mt-1">
+              <ArrowUpRight className="w-3 h-3 mr-1" /> +12% from last month
             </p>
           </CardContent>
         </Card>
 
         <Card>
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Revenue</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-slate-500">Net Profit (Est.)</CardTitle>
+            <TrendingUp className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{totalSalesRevenue.toLocaleString()} UGX</div>
-            <p className="text-xs text-muted-foreground mt-1">Total from products</p>
+            <div className={`text-2xl font-bold ${netProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {netProfit.toLocaleString()} <span className="text-sm font-normal text-slate-400">UGX</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">After expenses & COGS</p>
           </CardContent>
         </Card>
         
         <Card>
            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Repair Revenue</CardTitle>
-            <Wrench className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-slate-500">Total Expenses</CardTitle>
+            <Wallet className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{totalRepairRevenue.toLocaleString()} UGX</div>
-            <p className="text-xs text-muted-foreground mt-1">Total from services</p>
+            <div className="text-2xl font-bold text-slate-900">{totalExpenses.toLocaleString()} <span className="text-sm font-normal text-slate-400">UGX</span></div>
+            <p className="text-xs text-red-500 flex items-center mt-1">
+               <ArrowUpRight className="w-3 h-3 mr-1" /> +5% vs avg
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Customers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-slate-500">Active Customers</CardTitle>
+            <Users className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">{customers.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">+2 this week</p>
+            <p className="text-xs text-green-600 flex items-center mt-1">
+              <ArrowUpRight className="w-3 h-3 mr-1" /> +4 new this week
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -167,46 +185,59 @@ export default function Dashboard() {
         {/* Main Chart */}
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Cash Flow Trend</CardTitle>
-            <CardDescription>Expected vs Actual cash collected over the last 7 days.</CardDescription>
+            <CardTitle>Financial Performance</CardTitle>
+            <CardDescription>Revenue vs Profit Trends (Last 7 Days)</CardDescription>
           </CardHeader>
           <CardContent className="pl-2">
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="date" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value / 1000}k`} />
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value / 1000}k`} />
                   <Tooltip 
-                    cursor={{fill: 'transparent'}}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   />
-                  <Bar dataKey="expected" fill="hsl(var(--primary) / 0.3)" radius={[4, 4, 0, 0]} name="Expected" />
-                  <Bar dataKey="actual" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Actual" />
-                </BarChart>
+                  <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" name="Revenue" />
+                  <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorProfit)" name="Net Profit" />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        {/* Top Selling Products & Recent Closures */}
+        {/* Top Inventory & Quick Actions */}
         <div className="col-span-3 space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Top Inventory</CardTitle>
-              <CardDescription>Highest value items in stock.</CardDescription>
+              <CardTitle>Top Inventory Value</CardTitle>
+              <CardDescription>High-value assets currently in stock.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {topProducts.map(p => (
                    <div key={p.id} className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-slate-900">{p.name}</span>
-                        <span className="text-xs text-slate-500">{p.category}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center text-slate-500">
+                          <ShoppingCart className="w-5 h-5" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-slate-900">{p.name}</span>
+                          <span className="text-xs text-slate-500">Qty: {p.stock}</span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                         <span className="text-sm font-medium">{p.price.toLocaleString()}</span>
-                         <span className="text-xs text-slate-500 block">Qty: {p.stock}</span>
+                      <div className="text-right font-medium">
+                         {p.price.toLocaleString()}
                       </div>
                    </div>
                 ))}
@@ -214,24 +245,23 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-slate-900 text-white border-none">
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle className="text-white">Quick Actions</CardTitle>
             </CardHeader>
-            <CardContent>
-               <div className="space-y-4">
-                {closures.slice(0, 3).map(closure => (
-                  <div key={closure.id} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${closure.status === 'flagged' ? 'bg-red-500' : 'bg-green-500'}`} />
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">{format(new Date(closure.date), 'MMM dd')}</p>
-                        <p className="text-xs text-slate-500">{(closure.sales?.length || 0)} sales, {(closure.repairs?.length || 0)} repairs</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-               </div>
+            <CardContent className="grid grid-cols-2 gap-2">
+               <Button variant="secondary" className="w-full justify-start" onClick={() => window.location.href='/pos'}>
+                 <ShoppingCart className="w-4 h-4 mr-2" /> New Sale
+               </Button>
+               <Button variant="secondary" className="w-full justify-start" onClick={() => window.location.href='/repairs'}>
+                 <Wrench className="w-4 h-4 mr-2" /> New Repair
+               </Button>
+               <Button variant="secondary" className="w-full justify-start" onClick={() => window.location.href='/daily-close'}>
+                 <CheckCircle className="w-4 h-4 mr-2" /> Daily Close
+               </Button>
+               <Button variant="secondary" className="w-full justify-start" onClick={() => window.location.href='/expenses'}>
+                 <Wallet className="w-4 h-4 mr-2" /> Expense
+               </Button>
             </CardContent>
           </Card>
         </div>

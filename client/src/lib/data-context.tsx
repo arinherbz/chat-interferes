@@ -126,6 +126,9 @@ export interface DailyClosure {
     card?: string;
   };
   shopId: string;
+  // Denormalized for dashboard speed in mockup
+  sales?: SaleItem[]; 
+  repairs?: Repair[]; 
 }
 
 export interface AuditLog {
@@ -166,6 +169,7 @@ interface DataContextType {
 
   // Actions
   setActiveShopId: (id: string) => void;
+  activeShopId: string; // Add this line
   addProduct: (data: Omit<Product, "id">) => void;
   addDevice: (data: Omit<Device, "id" | "status" | "addedAt">) => void;
   addCustomer: (data: Omit<Customer, "id" | "joinedAt" | "totalPurchases">) => void;
@@ -336,6 +340,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     <DataContext.Provider value={{
       currentUser,
       activeShop,
+      activeShopId, // Add this line
       shops: MOCK_SHOPS,
       users: MOCK_USERS,
       products,
