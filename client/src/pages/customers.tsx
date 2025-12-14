@@ -12,8 +12,13 @@ import { z } from "zod";
 import { Users, Search, Plus, Mail, MessageSquare, Send } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
-// ... existing schema ...
+const customerSchema = z.object({
+  name: z.string().min(1, "Name required"),
+  phone: z.string().min(1, "Phone required"),
+  email: z.string().email("Invalid email"),
+});
 
 export default function CustomersPage() {
   const { customers, addCustomer } = useData();
@@ -23,7 +28,20 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<{name: string, phone: string} | null>(null);
   const { toast } = useToast();
 
-  // ... existing form setup ...
+  const form = useForm<z.infer<typeof customerSchema>>({
+    resolver: zodResolver(customerSchema),
+    defaultValues: {
+      name: "",
+      phone: "",
+      email: "",
+    }
+  });
+
+  const onSubmit = (values: z.infer<typeof customerSchema>) => {
+    addCustomer(values);
+    setOpen(false);
+    form.reset();
+  };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,6 +160,9 @@ export default function CustomersPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
             <Input 
@@ -168,7 +189,7 @@ export default function CustomersPage() {
                   <TableCell className="font-medium">
                     <div className="flex flex-col">
                       <span>{customer.name}</span>
-                      <span className="text-xs text-slate-500">{customer.devices.length} devices</span>
+                      <span className="text-xs text-slate-500">{customer.totalPurchases} purchases</span>
                     </div>
                   </TableCell>
                   <TableCell>
