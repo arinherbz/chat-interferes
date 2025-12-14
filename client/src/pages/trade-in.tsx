@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -503,45 +504,44 @@ export default function TradeInPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Brand</Label>
-                        <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setStorage(""); }}>
-                          <SelectTrigger data-testid="select-brand">
-                            <SelectValue placeholder="Select brand" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {brands.map(b => (
-                              <SelectItem key={b} value={b}>{b}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          options={brands.map(b => ({ value: b, label: b }))}
+                          value={brand}
+                          onValueChange={(v) => { setBrand(v); setModel(""); setStorage(""); }}
+                          placeholder="Select brand"
+                          searchPlaceholder="Search brands..."
+                          emptyMessage="No brands found."
+                          data-testid="select-brand"
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>Model</Label>
-                        <Select value={model} onValueChange={(v) => { setModel(v); setStorage(""); }} disabled={!brand}>
-                          <SelectTrigger data-testid="select-model">
-                            <SelectValue placeholder="Select model" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {models.map(m => (
-                              <SelectItem key={m} value={m}>{m}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          options={models.map(m => ({ value: m, label: m }))}
+                          value={model}
+                          onValueChange={(v) => { setModel(v); setStorage(""); }}
+                          placeholder="Select model"
+                          searchPlaceholder="Search models..."
+                          emptyMessage="No models found."
+                          disabled={!brand}
+                          data-testid="select-model"
+                        />
                       </div>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Storage</Label>
-                        <Select value={storage} onValueChange={setStorage} disabled={!model}>
-                          <SelectTrigger data-testid="select-storage">
-                            <SelectValue placeholder="Select storage" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {storages.map(s => (
-                              <SelectItem key={s} value={s}>{s}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          options={storages.map(s => ({ value: s, label: s }))}
+                          value={storage}
+                          onValueChange={setStorage}
+                          placeholder="Select storage"
+                          searchPlaceholder="Search storage..."
+                          emptyMessage="No storage options."
+                          disabled={!model}
+                          data-testid="select-storage"
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>Color (Optional)</Label>
