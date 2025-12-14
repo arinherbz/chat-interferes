@@ -4,25 +4,37 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
+import { AuthProvider } from "@/lib/auth-context";
+import { DataProvider } from "@/lib/data-context";
+import Layout from "@/components/layout";
+import Login from "@/pages/login";
+import DailyClose from "@/pages/daily-close";
+import Dashboard from "@/pages/dashboard";
 
 function Router() {
   return (
-    <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
-      <Route component={NotFound} />
-    </Switch>
+    <Layout>
+      <Switch>
+        <Route path="/" component={Login} />
+        <Route path="/daily-close" component={DailyClose} />
+        <Route path="/dashboard" component={Dashboard} />
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
   );
 }
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <DataProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </DataProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
