@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, Smartphone, DollarSign, User, AlertCircle, RefreshCw } from "lucide-react";
+import { CheckCircle2, Smartphone, DollarSign, User, AlertCircle, RefreshCw, Scan } from "lucide-react";
+import { BarcodeScanner } from "@/components/barcode-scanner";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { z } from "zod";
@@ -31,6 +32,7 @@ export default function TradeInPage() {
   const { tradeIns, recordTradeIn, addCustomer } = useData();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   
   const form = useForm<z.infer<typeof tradeInSchema>>({
     resolver: zodResolver(tradeInSchema),
@@ -158,12 +160,28 @@ export default function TradeInPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>IMEI Number</FormLabel>
-                          <FormControl>
-                            <Input placeholder="356..." {...field} />
-                          </FormControl>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <Input placeholder="356..." {...field} />
+                            </FormControl>
+                            <Button type="button" variant="outline" size="icon" onClick={() => setIsScannerOpen(true)}>
+                              <Scan className="w-4 h-4" />
+                            </Button>
+                          </div>
                           <FormMessage />
                         </FormItem>
                       )}
+                    />
+
+                    <BarcodeScanner 
+                      isOpen={isScannerOpen} 
+                      onClose={() => setIsScannerOpen(false)} 
+                      onScan={(val) => {
+                        form.setValue("imei", val);
+                        setIsScannerOpen(false);
+                        toast({ title: "Scanned", description: `IMEI Captured: ${val}` });
+                      }}
+                      title="Scan IMEI"
                     />
                     
                     <div className="pt-4 flex justify-end">

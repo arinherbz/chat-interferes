@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Package, Search, Plus } from "lucide-react";
+import { Package, Search, Plus, Scan } from "lucide-react";
 
 const productSchema = z.object({
   name: z.string().min(1, "Name required"),
@@ -19,10 +19,13 @@ const productSchema = z.object({
   stock: z.coerce.number().min(0, "Stock required"),
 });
 
+import { BarcodeScanner } from "@/components/barcode-scanner";
+
 export default function ProductsPage() {
   const { products, addProduct } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const form = useForm<z.infer<typeof productSchema>>({
     resolver: zodResolver(productSchema),
@@ -34,8 +37,17 @@ export default function ProductsPage() {
     }
   });
 
+  const handleScanResult = (decodedText: string) => {
+    setSearch(decodedText);
+    setIsScannerOpen(false);
+  };
+
   const onSubmit = (values: z.infer<typeof productSchema>) => {
-    addProduct(values);
+    addProduct({
+      ...values,
+      costPrice: 0,
+      minStock: 5,
+    });
     setOpen(false);
     form.reset();
   };
@@ -143,16 +155,26 @@ export default function ProductsPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
-            <Input 
-              placeholder="Search products..." 
-              className="pl-9 max-w-sm" 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+              <Input 
+                placeholder="Search products..." 
+                className="pl-9" 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)}>
+              <Scan className="w-4 h-4" />
+            </Button>
           </div>
         </CardHeader>
+        <BarcodeScanner 
+          isOpen={isScannerOpen} 
+          onClose={() => setIsScannerOpen(false)} 
+          onScan={handleScanResult} 
+        />
         <CardContent>
           <Table>
             <TableHeader>

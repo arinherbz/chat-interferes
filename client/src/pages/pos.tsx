@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, ShoppingCart, Trash2, User, CreditCard, Plus, Smartphone, Package, Scan } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+import { BarcodeScanner } from "@/components/barcode-scanner";
+
 export default function POSPage() {
   const { products, devices, customers, recordSale, currentUser } = useData();
   const { toast } = useToast();
@@ -20,27 +22,37 @@ export default function POSPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Auto-scan logic
+  const handleScanResult = (decodedText: string) => {
+    setSearch(decodedText);
+    setIsScannerOpen(false);
+    
+    // Simulate Enter key press behavior
+    const exactDevice = devices.find(d => d.status === "In Stock" && d.imei === decodedText.trim());
+    const exactProduct = products.find(p => p.name.toLowerCase() === decodedText.toLowerCase());
+
+    if (exactDevice) {
+      addToCart("device", exactDevice);
+      setSearch("");
+      toast({ title: "Scanned", description: `Added ${exactDevice.model}` });
+    } else if (exactProduct) {
+      addToCart("product", exactProduct);
+      setSearch("");
+      toast({ title: "Scanned", description: `Added ${exactProduct.name}` });
+    } else {
+      toast({ 
+        title: "Item Not Found", 
+        description: `No item found for code: ${decodedText}`,
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && search.trim()) {
-      // Try to find exact match by IMEI or Product Name (case insensitive) or SKU if we had it
-      const exactDevice = devices.find(d => d.status === "In Stock" && d.imei === search.trim());
-      const exactProduct = products.find(p => p.name.toLowerCase() === search.toLowerCase());
-
-      if (exactDevice) {
-        addToCart("device", exactDevice);
-        setSearch("");
-        toast({ title: "Scanned", description: `Added ${exactDevice.model}` });
-      } else if (exactProduct) {
-        addToCart("product", exactProduct);
-        setSearch("");
-        toast({ title: "Scanned", description: `Added ${exactProduct.name}` });
-      } else {
-        // If no exact match, maybe just keep the filter (standard behavior), 
-        // or notify user nothing found to scan.
-        // For now, we just let the filter handle it, but you could play a "beep" error sound here.
-      }
+      handleScanResult(search);
     }
   };
 
@@ -111,12 +123,18 @@ export default function POSPage() {
                 onKeyDown={handleScan}
               />
             </div>
-            <Button variant="outline" className="gap-2 shrink-0">
+            <Button variant="outline" className="gap-2 shrink-0" onClick={() => setIsScannerOpen(true)}>
               <Scan className="w-4 h-4" />
               <span className="hidden sm:inline">Scan Barcode</span>
             </Button>
           </div>
         </div>
+
+        <BarcodeScanner 
+          isOpen={isScannerOpen} 
+          onClose={() => setIsScannerOpen(false)} 
+          onScan={handleScanResult} 
+        />
 
         <Tabs defaultValue="products" className="flex-1 flex flex-col">
           <TabsList>
