@@ -6,11 +6,11 @@ import {
   LogOut, 
   Menu, 
   PlusCircle, 
-  Store, 
   X,
   Package,
   Users,
-  MessageSquare
+  MessageSquare,
+  Wrench
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -78,6 +78,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           
           <NavLink href="/products" icon={Package} label="Inventory" />
           <NavLink href="/customers" icon={Users} label="Customers" />
+          <NavLink href="/repairs" icon={Wrench} label="Repairs" />
           
           {user.role === "owner" && (
             <div className="mt-8">

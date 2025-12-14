@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   BarChart, 
   Bar, 
@@ -14,11 +15,20 @@ import {
   LineChart,
   Line
 } from "recharts";
-import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench, ShoppingCart, Users } from "lucide-react";
+import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench, ShoppingCart, Users, AlertTriangle, Store, Download } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
-  const { closures, alerts, customers, products } = useData();
+  const { closures, alerts, customers, products, shops, activeShopId, setActiveShopId } = useData();
+  const { toast } = useToast();
+
+  const handleExport = () => {
+    toast({
+      title: "Exporting Report...",
+      description: "Your PDF report is being generated and will download shortly.",
+    });
+  };
 
   // Calculate summary stats
   const totalVariance = closures.reduce((acc, curr) => acc + curr.variance, 0);
@@ -52,8 +62,22 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Owner Dashboard</h1>
           <p className="text-slate-500">Overview of shop performance and alerts.</p>
         </div>
-        <div className="flex gap-2">
-           <Button variant="outline">Export Report</Button>
+        <div className="flex flex-wrap gap-2">
+           <Select value={activeShopId} onValueChange={setActiveShopId}>
+             <SelectTrigger className="w-[180px]">
+               <Store className="w-4 h-4 mr-2" />
+               <SelectValue />
+             </SelectTrigger>
+             <SelectContent>
+               {shops.map(shop => (
+                 <SelectItem key={shop.id} value={shop.id}>{shop.name}</SelectItem>
+               ))}
+             </SelectContent>
+           </Select>
+           <Button variant="outline" onClick={handleExport}>
+             <Download className="w-4 h-4 mr-2" />
+             Export Report
+           </Button>
            <Button>Add Shop</Button>
         </div>
       </div>
@@ -62,13 +86,23 @@ export default function Dashboard() {
       {alerts.length > 0 && (
         <div className="grid gap-4">
           {alerts.map(alert => (
-            <div key={alert.id} className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+            <div key={alert.id} className={`border rounded-lg p-4 flex items-start gap-3 ${alert.type === 'low_stock' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+              {alert.type === 'low_stock' ? (
+                <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+              )}
               <div className="flex-1">
-                <h3 className="font-semibold text-red-900">Action Required: {alert.type.replace('_', ' ')}</h3>
-                <p className="text-red-700 text-sm">{alert.message}</p>
+                <h3 className={`font-semibold ${alert.type === 'low_stock' ? 'text-amber-900' : 'text-red-900'}`}>
+                  Action Required: {alert.type.replace('_', ' ')}
+                </h3>
+                <p className={`${alert.type === 'low_stock' ? 'text-amber-700' : 'text-red-700'} text-sm`}>
+                  {alert.message}
+                </p>
               </div>
-              <Button size="sm" variant="destructive" className="h-8">Resolve</Button>
+              <Button size="sm" variant={alert.type === 'low_stock' ? 'outline' : 'destructive'} className="h-8">
+                {alert.type === 'low_stock' ? 'Restock' : 'Resolve'}
+              </Button>
             </div>
           ))}
         </div>

@@ -1,0 +1,134 @@
+You are an expert full-stack developer. I need you to generate a **complete, production-ready Phone Shop Management System** that can be run on Replit. The system should manage **phones, accessories, sales, repairs, devices, customers, staff, daily closures, alerts, and reports**. It should be mobile-first (for iPhones) and desktop-friendly (owner dashboard). Include placeholders for future client notifications (SMS/email).
+
+Requirements:
+
+---
+
+1️⃣ Users & Roles:
+- Owner: full access to dashboard, reports, alerts, customer messaging, product and device management.
+- Supervisor: manage daily closures and repairs, view reports.
+- Staff: submit sales, repairs, daily closures, limited access to products/devices.
+- Authentication with role-based access (login/logout).
+- Audit trail for all actions (who added/edited/deleted).
+
+---
+
+2️⃣ Database Models:
+- **User**: id, name, role, email, password_hash
+- **Product**: id, name, category (iPhone/Samsung/Accessories/etc.), price, stock_quantity, is_active. Preload accessories: screen protectors, chargers, earphones, AirPods, camera guards, cases.
+- **Device**: id, brand, model, imei_or_serial, added_by, added_at
+- **DailyClosure**: id, date, cash_expected, cash_counted, mtn_amount, airtel_amount, card_amount (optional), variance, submitted_by, submitted_at
+- **Sale**: id, closure_id, product_id (nullable), other_product_name, quantity, total_price
+- **Repair**: id, closure_id, device_id, repair_type, price, notes, status (Pending/In Progress/Completed/Delivered), created_by, created_at
+- **Customer**: id, name, phone, email, device_id
+- **ProofUpload**: id, closure_id, type (cash_drawer/mtn/airtel/card), image_url
+- **Alert**: id, date, alert_type (cash_shortage/missing_submission/low_stock), status
+- **Shop**: id, name, location (for future SaaS/multi-shop support)
+- Ensure all tables can support multi-shop data isolation (shop_id).
+
+---
+
+3️⃣ Backend (Python + Flask + SQLAlchemy):
+- CRUD operations for all models.
+- Daily closure submission:
+  - Capture cash, MTN, Airtel, card amounts.
+  - Capture sales: select products from preloaded catalog, add "other" products dynamically.
+  - Capture repairs: select device or add new device, input repair type, price, notes, status.
+  - Capture proof photos (cash, MTN, Airtel, card).
+  - Auto-calculate variance.
+  - Generate alerts for negative variance or low stock.
+- Repair workflow: Pending → In Progress → Completed → Delivered.
+- Device tracking: link devices to customers and repairs.
+- Bulk data import (CSV/Excel) for products, customers, devices, past sales.
+- Export reports: CSV, Excel, PDF.
+- Placeholder methods for sending SMS/email notifications to customers.
+- Secure authentication & session management.
+- Modular code structure to allow future SaaS features.
+
+---
+
+4️⃣ Frontend (HTML Templates + CSS + JS):
+- **Login page** with role-based access.
+- **Daily Close Form**:
+  - Tap/select product from catalog, input quantity sold.
+  - Option to add "Other Product".
+  - Select or add device for repairs, input repair type, price, notes, status.
+  - Upload proof photos.
+- **Owner Dashboard**:
+  - Alerts panel with color-coded indicators (red/green).
+  - Recent closures (last 7 days).
+  - Product sales summary by category.
+  - Repair summary by type and device.
+  - Staff performance metrics.
+  - Trend charts for sales and repairs (Chart.js).
+  - Customer list with device and repair history.
+- **Customer Management Page**:
+  - Add/edit customer, link devices.
+  - Placeholder buttons to send messages.
+- Fully responsive: mobile-first for iPhones, desktop-friendly for owners.
+
+---
+
+5️⃣ CSS & JS:
+- Use Bootstrap 5 for layout and responsive design.
+- Clean and professional UI.
+- Dynamic form fields (show/hide "Other product", "New device").
+- Validation for required fields and image uploads.
+- Charts using Chart.js for trends and analytics.
+
+---
+
+6️⃣ Reports & Analytics:
+- Daily, weekly, monthly reports for:
+  - Product sales (quantity, revenue)
+  - Repairs (type, device, revenue)
+  - Cash, MTN, Airtel, card totals, variance
+  - Staff performance
+  - Device history
+  - Customer activity
+- Exportable to CSV, Excel, PDF.
+
+---
+
+7️⃣ Inventory Management:
+- Track stock for all products (phones + accessories).
+- Deduct sold quantities automatically.
+- Alert for low stock.
+- Preloaded common accessories with stock levels.
+
+---
+
+8️⃣ Notifications / Messaging (Placeholders):
+- SMS/email notifications for:
+  - Repair status updates.
+  - Promotions (e.g., Merry Christmas, discounts).
+  - Payment reminders.
+
+---
+
+9️⃣ Replit Deployment:
+- Folder structure: /templates, /static/css, /static/js, /static/uploads
+- Run command: python main.py
+- Port: 3000
+- Secret key via environment variable
+- SQLite database for testing (Postgres optional for SaaS)
+- Always-on enabled
+
+---
+
+10️⃣ Extra Features for Future Monetization:
+- Multi-shop/multi-tenant support.
+- Subscription tiers placeholder.
+- Modular code to add loyalty programs, online booking, payment integration.
+- Audit trail and logs for all staff actions.
+
+---
+
+11️⃣ Deliverables:
+- main.py (Flask backend)
+- HTML templates: login.html, submit_closure.html, dashboard.html, customer_management.html, base.html
+- CSS: mobile + desktop, alerts
+- JS: form validation, charts, dynamic fields
+- Folder structure ready for Replit
+- Preloaded product catalog with accessories and phones
+- Fully functional, mobile-first, desktop-friendly, ready for SaaS scaling

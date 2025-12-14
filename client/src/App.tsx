@@ -12,6 +12,7 @@ import DailyClose from "@/pages/daily-close";
 import Dashboard from "@/pages/dashboard";
 import ProductsPage from "@/pages/products";
 import CustomersPage from "@/pages/customers";
+import RepairsPage from "@/pages/repairs";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/products" component={ProductsPage} />
         <Route path="/customers" component={CustomersPage} />
+        <Route path="/repairs" component={RepairsPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
