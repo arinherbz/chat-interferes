@@ -18,6 +18,8 @@ export default function POSPage() {
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
 
   // Auto-scan logic
   const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
