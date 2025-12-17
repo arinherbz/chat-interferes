@@ -2,8 +2,8 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from models import db, Brand, Model, StorageOption, Product, Device, Customer, Sale, TradeIn, Repair, User, ActivityLog, AuditLog, Lead, Delivery
 from datetime import datetime, timedelta
 from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
-import hashlib
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///phone_shop.db')
@@ -20,7 +20,7 @@ def inject_globals():
     }
 
 def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    return generate_password_hash(password, method='pbkdf2:sha256')
 
 def log_activity(action, entity_type=None, entity_id=None, details=None):
     if 'user_id' in session:
@@ -132,21 +132,21 @@ def seed_data():
     if User.query.count() == 0:
         owner = User(
             username="owner",
-            password_hash=hash_password("owner123"),
+            password_hash=generate_password_hash("owner123", method='pbkdf2:sha256'),
             pin="1234",
             name="Shop Owner",
             role="owner"
         )
         manager = User(
             username="manager",
-            password_hash=hash_password("manager123"),
+            password_hash=generate_password_hash("manager123", method='pbkdf2:sha256'),
             pin="5678",
             name="Store Manager",
             role="manager"
         )
         staff = User(
             username="staff",
-            password_hash=hash_password("staff123"),
+            password_hash=generate_password_hash("staff123", method='pbkdf2:sha256'),
             pin="0000",
             name="Sales Staff",
             role="staff"
@@ -171,7 +171,7 @@ def login():
         
         if user:
             auth_valid = False
-            if password and user.password_hash == hash_password(password):
+            if password and check_password_hash(user.password_hash, password):
                 auth_valid = True
             elif pin and user.pin == pin:
                 auth_valid = True
