@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Deliveries - Ario Tech{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>Deliveries</h1>
+        <p style="color: var(--apple-gray);">Track and manage all deliveries.</p>
+    </div>
+    <a href="{{ url_for('add_delivery') }}" class="btn btn-primary" data-testid="button-add-delivery">New Delivery</a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card warning" id="stat-pending">
+            <div class="stat-value">-</div>
+            <div class="stat-label">Pending</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card info" id="stat-transit">
+            <div class="stat-value">-</div>
+            <div class="stat-label">In Transit</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card success" id="stat-delivered">
+            <div class="stat-value">-</div>
+            <div class="stat-label">Delivered</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card" style="background: linear-gradient(135deg, #ff3b30, #ff453a); color: white;" id="stat-failed">
+            <div class="stat-value">-</div>
+            <div class="stat-label">Failed</div>
+        </div>
+    </div>
+</div>
+
+<div class="card apple-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding-left: 1rem;">Delivery #</th>
+                        <th>Customer</th>
+                        <th>Address</th>
+                        <th>Scheduled</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in deliveries %}
+                    <tr data-testid="row-delivery-{{ d.id }}">
+                        <td style="padding-left: 1rem;"><strong>{{ d.delivery_number }}</strong></td>
+                        <td>
+                            {{ d.customer_name }}<br>
+                            <small style="color: var(--apple-gray);">{{ d.customer_phone }}</small>
+                        </td>
+                        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
+                            {{ d.address[:50] if d.address else '-' }}{{ '...' if d.address and d.address|length > 50 else '' }}
+                        </td>
+                        <td>{{ d.delivery_date.strftime('%Y-%m-%d') if d.delivery_date else '-' }}</td>
+                        <td>
+                            {% if d.status == 'pending' %}
+                            <span class="badge bg-warning">Pending</span>
+                            {% elif d.status == 'in_transit' %}
+                            <span class="badge bg-info">In Transit</span>
+                            {% elif d.status == 'delivered' %}
+                            <span class="badge bg-success">Delivered</span>
+                            {% elif d.status == 'failed' %}
+                            <span class="badge bg-danger">Failed</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ d.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('view_delivery', delivery_id=d.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4" style="color: var(--apple-gray);">No deliveries yet. Create your first delivery!</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    fetch('/api/deliveries/stats')
+        .then(res => res.json())
+        .then(data => {
+            $('#stat-pending .stat-value').text(data.pending);
+            $('#stat-transit .stat-value').text(data.in_transit);
+            $('#stat-delivered .stat-value').text(data.delivered);
+            $('#stat-failed .stat-value').text(data.failed);
+        });
+});
+</script>
+{% endblock %}

@@ -626,6 +626,211 @@ def activity_log_api():
         "current_page": page
     })
 
+# ==================== LEAD MANAGEMENT ====================
+
+@app.route('/leads/<int:lead_id>')
+@login_required
+def view_lead(lead_id):
+    lead = Lead.query.get_or_404(lead_id)
+    user = g.current_user
+    if user.role == 'staff' and lead.created_by != user.id and lead.assigned_to != user.id:
+        return render_template('error.html', message='Access denied'), 403
+    staff = User.query.filter(User.role.in_(['staff', 'manager']), User.is_active == True).all()
+    creator = User.query.get(lead.created_by) if lead.created_by else None
+    assigned = User.query.get(lead.assigned_to) if lead.assigned_to else None
+    return render_template('view_lead.html', lead=lead, staff=staff, creator=creator, assigned=assigned)
+
+@app.route('/leads/<int:lead_id>/update', methods=['POST'])
+@login_required
+def update_lead(lead_id):
+    lead = Lead.query.get_or_404(lead_id)
+    user = g.current_user
+    if user.role == 'staff' and lead.created_by != user.id and lead.assigned_to != user.id:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    data = request.json or request.form
+    old_status = lead.status
+    
+    if data.get('status'):
+        lead.status = data.get('status')
+        if lead.status == 'converted':
+            lead.closed_by = user.id
+            lead.closed_at = datetime.utcnow()
+    if data.get('notes'):
+        lead.notes = data.get('notes')
+    if 'follow_up_date' in (data if isinstance(data, dict) else data.to_dict()):
+        date_val = data.get('follow_up_date')
+        if date_val and date_val.strip():
+            lead.follow_up_date = datetime.strptime(date_val, '%Y-%m-%d')
+        else:
+            lead.follow_up_date = None
+    if data.get('assigned_to') and user.can_assign_leads():
+        lead.assigned_to = int(data.get('assigned_to'))
+    
+    lead.updated_by = user.id
+    lead.updated_at = datetime.utcnow()
+    lead.last_contact = datetime.utcnow()
+    
+    db.session.commit()
+    log_activity('lead_updated', 'lead', lead.id, f'Lead {lead.lead_number} updated: {old_status} -> {lead.status}')
+    
+    if request.is_json:
+        return jsonify({'success': True})
+    return redirect(url_for('view_lead', lead_id=lead.id))
+
+@app.route('/followups')
+@login_required
+def followups():
+    user = g.current_user
+    today = datetime.now()
+    
+    if user.can_view_all_leads():
+        overdue = Lead.query.filter(
+            Lead.follow_up_date < today,
+            Lead.status.in_(['new', 'contacted', 'follow_up'])
+        ).order_by(Lead.follow_up_date).all()
+        
+        today_followups = Lead.query.filter(
+            db.func.date(Lead.follow_up_date) == today.date(),
+            Lead.status.in_(['new', 'contacted', 'follow_up'])
+        ).order_by(Lead.follow_up_date).all()
+        
+        upcoming = Lead.query.filter(
+            Lead.follow_up_date > today,
+            Lead.follow_up_date <= today + timedelta(days=7),
+            Lead.status.in_(['new', 'contacted', 'follow_up'])
+        ).order_by(Lead.follow_up_date).all()
+    else:
+        overdue = Lead.query.filter(
+            Lead.follow_up_date < today,
+            Lead.status.in_(['new', 'contacted', 'follow_up']),
+            db.or_(Lead.created_by == user.id, Lead.assigned_to == user.id)
+        ).order_by(Lead.follow_up_date).all()
+        
+        today_followups = Lead.query.filter(
+            db.func.date(Lead.follow_up_date) == today.date(),
+            Lead.status.in_(['new', 'contacted', 'follow_up']),
+            db.or_(Lead.created_by == user.id, Lead.assigned_to == user.id)
+        ).order_by(Lead.follow_up_date).all()
+        
+        upcoming = Lead.query.filter(
+            Lead.follow_up_date > today,
+            Lead.follow_up_date <= today + timedelta(days=7),
+            Lead.status.in_(['new', 'contacted', 'follow_up']),
+            db.or_(Lead.created_by == user.id, Lead.assigned_to == user.id)
+        ).order_by(Lead.follow_up_date).all()
+    
+    return render_template('followups.html', overdue=overdue, today=today_followups, upcoming=upcoming)
+
+# ==================== DELIVERY TRACKING ====================
+
+@app.route('/deliveries')
+@login_required
+def deliveries_list():
+    user = g.current_user
+    if user.can_view_all_deliveries():
+        deliveries = Delivery.query.order_by(Delivery.created_at.desc()).all()
+    else:
+        deliveries = Delivery.query.filter_by(created_by=user.id).order_by(Delivery.created_at.desc()).all()
+    return render_template('deliveries.html', deliveries=deliveries)
+
+@app.route('/deliveries/add', methods=['GET', 'POST'])
+@login_required
+def add_delivery():
+    if request.method == 'POST':
+        data = request.form
+        count = Delivery.query.count()
+        delivery = Delivery(
+            delivery_number=f"DL-{str(10001 + count).zfill(5)}",
+            sale_id=data.get('sale_id') if data.get('sale_id') else None,
+            customer_name=data.get('customer_name'),
+            customer_phone=data.get('customer_phone'),
+            address=data.get('address'),
+            delivery_date=datetime.strptime(data.get('delivery_date'), '%Y-%m-%d') if data.get('delivery_date') else None,
+            notes=data.get('notes'),
+            status='pending',
+            created_by=session.get('user_id')
+        )
+        db.session.add(delivery)
+        db.session.commit()
+        log_activity('delivery_created', 'delivery', delivery.id, f'Delivery {delivery.delivery_number} created')
+        return redirect(url_for('deliveries_list'))
+    
+    sales = Sale.query.order_by(Sale.created_at.desc()).limit(50).all()
+    return render_template('add_delivery.html', sales=sales)
+
+@app.route('/deliveries/<int:delivery_id>')
+@login_required
+def view_delivery(delivery_id):
+    delivery = Delivery.query.get_or_404(delivery_id)
+    user = g.current_user
+    if user.role == 'staff' and delivery.created_by != user.id:
+        return render_template('error.html', message='Access denied'), 403
+    creator = User.query.get(delivery.created_by) if delivery.created_by else None
+    assigned = User.query.get(delivery.assigned_to) if delivery.assigned_to else None
+    staff = User.query.filter(User.role.in_(['staff', 'manager']), User.is_active == True).all()
+    return render_template('view_delivery.html', delivery=delivery, creator=creator, assigned=assigned, staff=staff)
+
+@app.route('/deliveries/<int:delivery_id>/update', methods=['POST'])
+@login_required
+def update_delivery(delivery_id):
+    delivery = Delivery.query.get_or_404(delivery_id)
+    user = g.current_user
+    
+    data = request.json or request.form
+    old_status = delivery.status
+    
+    if data.get('status'):
+        delivery.status = data.get('status')
+        if delivery.status == 'delivered':
+            delivery.completed_by = user.id
+            delivery.completed_at = datetime.utcnow()
+    if data.get('notes'):
+        delivery.notes = data.get('notes')
+    if 'delivery_date' in (data if isinstance(data, dict) else data.to_dict()):
+        date_val = data.get('delivery_date')
+        if date_val and date_val.strip():
+            delivery.delivery_date = datetime.strptime(date_val, '%Y-%m-%d')
+        else:
+            delivery.delivery_date = None
+    if data.get('assigned_to') and user.can_view_all_deliveries():
+        delivery.assigned_to = int(data.get('assigned_to'))
+    if data.get('address'):
+        delivery.address = data.get('address')
+    
+    delivery.updated_by = user.id
+    delivery.updated_at = datetime.utcnow()
+    
+    db.session.commit()
+    log_activity('delivery_updated', 'delivery', delivery.id, f'Delivery {delivery.delivery_number}: {old_status} -> {delivery.status}')
+    
+    if request.is_json:
+        return jsonify({'success': True})
+    return redirect(url_for('view_delivery', delivery_id=delivery.id))
+
+@app.route('/api/deliveries/stats')
+@login_required
+def delivery_stats():
+    user = g.current_user
+    
+    if user.can_view_all_deliveries():
+        pending = Delivery.query.filter_by(status='pending').count()
+        in_transit = Delivery.query.filter_by(status='in_transit').count()
+        delivered = Delivery.query.filter_by(status='delivered').count()
+        failed = Delivery.query.filter_by(status='failed').count()
+    else:
+        pending = Delivery.query.filter_by(status='pending', created_by=user.id).count()
+        in_transit = Delivery.query.filter_by(status='in_transit', created_by=user.id).count()
+        delivered = Delivery.query.filter_by(status='delivered', created_by=user.id).count()
+        failed = Delivery.query.filter_by(status='failed', created_by=user.id).count()
+    
+    return jsonify({
+        'pending': pending,
+        'in_transit': in_transit,
+        'delivered': delivered,
+        'failed': failed
+    })
+
 @app.errorhandler(404)
 def not_found(e):
     return render_template('error.html', message='Page not found'), 404

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Follow-ups - Ario Tech{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>Follow-ups</h1>
+        <p style="color: var(--apple-gray);">Stay on top of customer follow-ups.</p>
+    </div>
+    <a href="{{ url_for('add_lead') }}" class="btn btn-primary" data-testid="button-add-lead">Add New Lead</a>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="stat-card" style="background: linear-gradient(135deg, #ff3b30, #ff453a); color: white;">
+            <div class="stat-value">{{ overdue|length }}</div>
+            <div class="stat-label">Overdue</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card warning">
+            <div class="stat-value">{{ today|length }}</div>
+            <div class="stat-label">Due Today</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card info">
+            <div class="stat-value">{{ upcoming|length }}</div>
+            <div class="stat-label">This Week</div>
+        </div>
+    </div>
+</div>
+
+{% if overdue %}
+<div class="card apple-card mb-4">
+    <div class="card-header" style="background: rgba(255, 59, 48, 0.1); color: #ff3b30;">
+        ⚠️ Overdue Follow-ups
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding-left: 1rem;">Customer</th>
+                        <th>Interest</th>
+                        <th>Due Date</th>
+                        <th>Days Overdue</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lead in overdue %}
+                    <tr>
+                        <td style="padding-left: 1rem;">
+                            <strong>{{ lead.customer_name }}</strong><br>
+                            <small style="color: var(--apple-gray);">{{ lead.customer_phone }}</small>
+                        </td>
+                        <td>{{ lead.interest or '-' }}</td>
+                        <td>{{ lead.follow_up_date.strftime('%Y-%m-%d') if lead.follow_up_date else '-' }}</td>
+                        <td><span style="color: #ff3b30; font-weight: 600;">{{ ((now() - lead.follow_up_date).days) if lead.follow_up_date else '-' }} days</span></td>
+                        <td>
+                            <a href="{{ url_for('view_lead', lead_id=lead.id) }}" class="btn btn-sm btn-primary">View</a>
+                            <a href="tel:{{ lead.customer_phone }}" class="btn btn-sm btn-outline-primary">📞</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if today %}
+<div class="card apple-card mb-4">
+    <div class="card-header" style="background: rgba(255, 149, 0, 0.1); color: #ff9500;">
+        📅 Due Today
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding-left: 1rem;">Customer</th>
+                        <th>Interest</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lead in today %}
+                    <tr>
+                        <td style="padding-left: 1rem;">
+                            <strong>{{ lead.customer_name }}</strong><br>
+                            <small style="color: var(--apple-gray);">{{ lead.customer_phone }}</small>
+                        </td>
+                        <td>{{ lead.interest or '-' }}</td>
+                        <td><span class="badge bg-warning">{{ lead.status|title }}</span></td>
+                        <td>
+                            <a href="{{ url_for('view_lead', lead_id=lead.id) }}" class="btn btn-sm btn-primary">View</a>
+                            <a href="tel:{{ lead.customer_phone }}" class="btn btn-sm btn-outline-primary">📞</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if upcoming %}
+<div class="card apple-card">
+    <div class="card-header">
+        📆 Upcoming This Week
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding-left: 1rem;">Customer</th>
+                        <th>Interest</th>
+                        <th>Follow-up Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lead in upcoming %}
+                    <tr>
+                        <td style="padding-left: 1rem;">
+                            <strong>{{ lead.customer_name }}</strong><br>
+                            <small style="color: var(--apple-gray);">{{ lead.customer_phone }}</small>
+                        </td>
+                        <td>{{ lead.interest or '-' }}</td>
+                        <td>{{ lead.follow_up_date.strftime('%A, %b %d') if lead.follow_up_date else '-' }}</td>
+                        <td>
+                            <a href="{{ url_for('view_lead', lead_id=lead.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if not overdue and not today and not upcoming %}
+<div class="card apple-card">
+    <div class="card-body text-center py-5">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+        <h4>All caught up!</h4>
+        <p style="color: var(--apple-gray);">No pending follow-ups at the moment.</p>
+        <a href="{{ url_for('add_lead') }}" class="btn btn-primary">Add New Lead</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

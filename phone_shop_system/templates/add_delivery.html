@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}New Delivery - Ario Tech{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('deliveries_list') }}" style="color: var(--apple-blue); text-decoration: none;">&larr; Back to Deliveries</a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card apple-card">
+            <div class="card-header">Schedule New Delivery</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_delivery') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Link to Sale (optional)</label>
+                        <select name="sale_id" class="form-select" data-testid="select-sale">
+                            <option value="">No linked sale</option>
+                            {% for s in sales %}
+                            <option value="{{ s.id }}">{{ s.sale_number }} - ${{ "%.2f"|format(s.total_price) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Customer Name</label>
+                        <input type="text" name="customer_name" class="form-control" required data-testid="input-customer-name" placeholder="Full name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" name="customer_phone" class="form-control" required data-testid="input-customer-phone" placeholder="Contact number">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Delivery Address</label>
+                        <textarea name="address" class="form-control" rows="3" required data-testid="input-address" placeholder="Full delivery address..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Scheduled Date</label>
+                        <input type="date" name="delivery_date" class="form-control" data-testid="input-delivery-date">
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label">Notes (optional)</label>
+                        <textarea name="notes" class="form-control" rows="2" data-testid="input-notes" placeholder="Any special instructions..."></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100" data-testid="button-submit">Schedule Delivery</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

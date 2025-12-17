@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.lead_number }} - Ario Tech{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('leads_list') }}" style="color: var(--apple-blue); text-decoration: none;">&larr; Back to Leads</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card apple-card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Lead {{ lead.lead_number }}</span>
+                <span class="badge {% if lead.status == 'new' %}bg-primary{% elif lead.status == 'contacted' %}bg-info{% elif lead.status == 'follow_up' %}bg-warning{% elif lead.status == 'converted' %}bg-success{% elif lead.status == 'lost' %}bg-danger{% else %}bg-secondary{% endif %}">
+                    {{ lead.status|title }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5>{{ lead.customer_name }}</h5>
+                        <p style="color: var(--apple-gray); margin: 0;">
+                            <a href="tel:{{ lead.customer_phone }}" style="color: var(--apple-blue);">{{ lead.customer_phone }}</a>
+                            {% if lead.customer_email %}<br>{{ lead.customer_email }}{% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <p style="color: var(--apple-gray); margin: 0;">
+                            <strong>Interest:</strong> {{ lead.interest or 'Not specified' }}<br>
+                            <strong>Source:</strong> {{ lead.source or 'Unknown' }}
+                        </p>
+                    </div>
+                </div>
+                
+                {% if lead.notes %}
+                <div class="p-3 mb-4" style="background: var(--apple-light-gray); border-radius: 12px;">
+                    <strong>Notes:</strong><br>
+                    {{ lead.notes }}
+                </div>
+                {% endif %}
+                
+                <form id="update-form">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select" data-testid="select-status">
+                                <option value="new" {% if lead.status == 'new' %}selected{% endif %}>New</option>
+                                <option value="contacted" {% if lead.status == 'contacted' %}selected{% endif %}>Contacted</option>
+                                <option value="follow_up" {% if lead.status == 'follow_up' %}selected{% endif %}>Follow-up</option>
+                                <option value="converted" {% if lead.status == 'converted' %}selected{% endif %}>Converted</option>
+                                <option value="lost" {% if lead.status == 'lost' %}selected{% endif %}>Lost</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Follow-up Date</label>
+                            <input type="date" name="follow_up_date" class="form-control" value="{{ lead.follow_up_date.strftime('%Y-%m-%d') if lead.follow_up_date else '' }}" data-testid="input-followup-date">
+                        </div>
+                        {% if session.role in ['owner', 'manager'] %}
+                        <div class="col-md-4">
+                            <label class="form-label">Assign To</label>
+                            <select name="assigned_to" class="form-select" data-testid="select-assigned">
+                                <option value="">Unassigned</option>
+                                {% for s in staff %}
+                                <option value="{{ s.id }}" {% if lead.assigned_to == s.id %}selected{% endif %}>{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label">Add Note</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Add notes about this lead..." data-testid="input-notes">{{ lead.notes or '' }}</textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" data-testid="button-update">Update Lead</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card apple-card mb-4">
+            <div class="card-header">Quick Actions</div>
+            <div class="card-body">
+                <a href="tel:{{ lead.customer_phone }}" class="btn btn-primary w-100 mb-2">📞 Call Customer</a>
+                <a href="https://wa.me/{{ lead.customer_phone|replace(' ', '')|replace('+', '') }}" target="_blank" class="btn btn-success w-100 mb-2">💬 WhatsApp</a>
+                {% if lead.status != 'converted' %}
+                <button type="button" class="btn btn-outline-success w-100 convert-btn" data-testid="button-convert">✓ Mark as Converted</button>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card apple-card">
+            <div class="card-header">Activity</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <small style="color: var(--apple-gray);">Created by</small><br>
+                    <strong>{{ creator.name if creator else 'Unknown' }}</strong><br>
+                    <small>{{ lead.created_at.strftime('%Y-%m-%d %H:%M') if lead.created_at else '-' }}</small>
+                </div>
+                {% if assigned %}
+                <div class="mb-2">
+                    <small style="color: var(--apple-gray);">Assigned to</small><br>
+                    <strong>{{ assigned.name }}</strong>
+                </div>
+                {% endif %}
+                {% if lead.last_contact %}
+                <div class="mb-2">
+                    <small style="color: var(--apple-gray);">Last contact</small><br>
+                    <strong>{{ lead.last_contact.strftime('%Y-%m-%d %H:%M') }}</strong>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#update-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = {
+            status: $('select[name="status"]').val(),
+            follow_up_date: $('input[name="follow_up_date"]').val(),
+            assigned_to: $('select[name="assigned_to"]').val(),
+            notes: $('textarea[name="notes"]').val()
+        };
+        
+        fetch('/leads/{{ lead.id }}/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to update'));
+            }
+        });
+    });
+    
+    $('.convert-btn').on('click', function() {
+        if (confirm('Mark this lead as converted?')) {
+            fetch('/leads/{{ lead.id }}/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'converted' })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

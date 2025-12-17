@@ -23,12 +23,13 @@
                         <th>Status</th>
                         <th>Follow-up</th>
                         <th>Created</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for lead in leads %}
                     <tr data-testid="row-lead-{{ lead.id }}">
-                        <td style="padding-left: 1.5rem;"><strong>{{ lead.lead_number }}</strong></td>
+                        <td style="padding-left: 1.5rem;"><a href="{{ url_for('view_lead', lead_id=lead.id) }}" style="color: var(--apple-blue); text-decoration: none;"><strong>{{ lead.lead_number }}</strong></a></td>
                         <td>
                             {{ lead.customer_name }}<br>
                             <small style="color: var(--apple-gray);">{{ lead.customer_phone }}</small>
@@ -58,10 +59,13 @@
                             {% endif %}
                         </td>
                         <td>{{ lead.created_at.strftime('%Y-%m-%d') if lead.created_at else '-' }}</td>
+                        <td>
+                            <a href="{{ url_for('view_lead', lead_id=lead.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center py-4" style="color: var(--apple-gray);">No leads yet. Add your first lead!</td>
+                        <td colspan="8" class="text-center py-4" style="color: var(--apple-gray);">No leads yet. Add your first lead!</td>
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -43,6 +43,12 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('repairs_form') }}" data-testid="nav-repairs">Repairs</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('followups') }}" data-testid="nav-followups">Follow-ups</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('deliveries_list') }}" data-testid="nav-deliveries">Deliveries</a>
+                    </li>
                     {% if session.role == 'owner' %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" data-testid="nav-admin">Admin</a>
