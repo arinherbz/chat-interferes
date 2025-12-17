@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Owner Dashboard - Ario Tech{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>Owner Dashboard</h1>
+        <p style="color: var(--apple-gray);">Complete business overview and staff performance.</p>
+    </div>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Main Dashboard</a>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card warning">
+            <div class="stat-value">{{ overdue_followups }}</div>
+            <div class="stat-label">Overdue Follow-ups</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card info">
+            <div class="stat-value">{{ pending_deliveries }}</div>
+            <div class="stat-label">Pending Deliveries</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="background: linear-gradient(135deg, #ff3b30, #ff453a); color: white;">
+            <div class="stat-value">{{ failed_deliveries }}</div>
+            <div class="stat-label">Failed Deliveries</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card primary">
+            <a href="{{ url_for('staff_management') }}" class="btn btn-light w-100 mb-2">Manage Staff</a>
+            <a href="{{ url_for('admin_models') }}" class="btn btn-light w-100">Manage Models</a>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card apple-card mb-4">
+            <div class="card-header">Staff Performance (Today)</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="padding-left: 1.5rem;">Staff Member</th>
+                                <th>Role</th>
+                                <th class="text-center">Sales</th>
+                                <th class="text-end">Revenue</th>
+                                <th class="text-end">Profit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for staff in staff_performance %}
+                            <tr>
+                                <td style="padding-left: 1.5rem;"><strong>{{ staff.name }}</strong></td>
+                                <td>
+                                    {% if staff.role == 'manager' %}
+                                    <span class="badge" style="background: var(--apple-blue);">Manager</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Staff</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ staff.sales_count or 0 }}</td>
+                                <td class="text-end">${{ "%.2f"|format(staff.total_sales or 0) }}</td>
+                                <td class="text-end" style="color: var(--apple-green);">${{ "%.2f"|format(staff.total_profit or 0) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4" style="color: var(--apple-gray);">No sales recorded today</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card apple-card">
+            <div class="card-header">Lead Conversion by Staff</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="padding-left: 1.5rem;">Staff Member</th>
+                                <th class="text-center">Total Leads</th>
+                                <th class="text-center">Converted</th>
+                                <th class="text-center">Conversion Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in leads_stats %}
+                            <tr>
+                                <td style="padding-left: 1.5rem;"><strong>{{ lead.name }}</strong></td>
+                                <td class="text-center">{{ lead.total_leads or 0 }}</td>
+                                <td class="text-center">{{ lead.converted or 0 }}</td>
+                                <td class="text-center">
+                                    {% if lead.total_leads and lead.total_leads > 0 %}
+                                    <span style="color: var(--apple-green);">{{ "%.1f"|format((lead.converted or 0) / lead.total_leads * 100) }}%</span>
+                                    {% else %}
+                                    <span style="color: var(--apple-gray);">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4" style="color: var(--apple-gray);">No leads data</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card apple-card">
+            <div class="card-header">Recent Activity</div>
+            <div class="card-body p-0" style="max-height: 500px; overflow-y: auto;">
+                <div class="list-group list-group-flush">
+                    {% for activity in recent_activities %}
+                    <div class="list-group-item border-0" style="padding: 0.75rem 1rem;">
+                        <div class="d-flex justify-content-between">
+                            <strong style="font-size: 0.85rem;">{{ activity.user_name or 'System' }}</strong>
+                            <small style="color: var(--apple-gray);">{{ activity.timestamp.strftime('%H:%M') }}</small>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--apple-gray);">
+                            {{ activity.action.replace('_', ' ').title() }}
+                            {% if activity.details %}<br><small>{{ activity.details }}</small>{% endif %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-center py-4" style="color: var(--apple-gray);">No recent activity</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

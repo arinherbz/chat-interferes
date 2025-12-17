@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Add Staff - Ario Tech{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('staff_management') }}" style="color: var(--apple-blue); text-decoration: none;">&larr; Back to Staff</a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card apple-card">
+            <div class="card-header">Add New Staff Member</div>
+            <div class="card-body">
+                {% if error %}
+                <div class="alert alert-danger" style="border-radius: 12px;">{{ error }}</div>
+                {% endif %}
+                
+                <form method="POST" action="{{ url_for('add_staff') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Full Name</label>
+                        <input type="text" name="name" class="form-control" required data-testid="input-name" placeholder="Enter full name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" name="username" class="form-control" required data-testid="input-username" placeholder="Login username (lowercase)">
+                        <small style="color: var(--apple-gray);">Used for login. Must be unique.</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number (optional)</label>
+                        <input type="tel" name="phone" class="form-control" data-testid="input-phone" placeholder="Contact number">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" name="password" class="form-control" required data-testid="input-password" placeholder="Set password">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Quick PIN (4 digits)</label>
+                        <input type="text" name="pin" class="form-control" maxlength="4" pattern="[0-9]{4}" data-testid="input-pin" placeholder="4-digit PIN for quick login">
+                        <small style="color: var(--apple-gray);">Optional. For quick shop floor login.</small>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label">Role</label>
+                        <select name="role" class="form-select" data-testid="select-role">
+                            <option value="staff">Sales Staff</option>
+                            <option value="manager">Manager</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100" data-testid="button-submit">Create Staff Account</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

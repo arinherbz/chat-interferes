@@ -1,0 +1,226 @@
+Excellent — this is the **right final move**.
+Below is a **SINGLE EXECUTION PROMPT** you can feed into **Replit AI** to **add staff logins and make this a real shop–ready deployment**, run like **my own business system** (not a demo, not a school project).
+
+👉 **Copy everything below and paste directly into Replit AI**
+👉 **Do NOT add code yourself**
+
+---
+
+# 🚀 ARIOSTORE SALES TRACKER
+
+## STAFF LOGINS + REAL SHOP DEPLOYMENT (EXECUTION PROMPT)
+
+---
+
+You are acting as a **business owner, senior full-stack engineer, security architect, and deployment lead**.
+
+Your responsibility is to **convert the existing Ariostore Sales Tracker into a REAL phone-shop system** with **staff logins, role control, and deployment readiness**.
+
+This system will be used **daily in a real shop**.
+
+---
+
+## 🚨 ABSOLUTE RULES
+
+* Do NOT remove existing features
+* Extend the system professionally
+* No broken tabs, buttons, or flows
+* All actions must be traceable to a user
+* Mobile-first, shop-ready UX
+* Data persistence is mandatory
+* Treat this as **your own business software**
+
+---
+
+## 1️⃣ STAFF LOGIN SYSTEM (CORE REQUIREMENT)
+
+### User Roles
+
+Implement **role-based access**:
+
+#### Roles:
+
+* **Owner**
+* **Manager**
+* **Sales Staff**
+
+Each role must have **clear permissions**.
+
+---
+
+### Authentication Rules
+
+* Simple username + PIN or password (shop-friendly)
+* Session persistence (remain logged in after refresh)
+* Logout functionality
+* No access to system without login
+
+---
+
+### Permissions
+
+#### Owner:
+
+* Full access
+* All leads
+* All follow-ups
+* All deliveries
+* All dashboards
+* Staff performance
+* Settings
+
+#### Manager:
+
+* View all leads
+* Assign leads
+* View deliveries
+* Cannot delete records
+* Limited dashboard
+
+#### Sales Staff:
+
+* Add leads
+* Update their own leads
+* Cannot see owner follow-ups
+* Cannot see profit or staff metrics
+* Cannot delete records
+
+---
+
+## 2️⃣ STAFF ACCOUNT MANAGEMENT
+
+* Owner can:
+
+  * Create staff accounts
+  * Assign roles
+  * Activate / deactivate staff
+* Staff list must include:
+
+  * Name
+  * Role
+  * Status (Active / Disabled)
+  * Last activity
+
+---
+
+## 3️⃣ STAFF ACTIVITY TRACKING (BUSINESS-CRITICAL)
+
+Every action must record:
+
+* Who created the lead
+* Who updated it
+* Who closed the sale
+* Who handled delivery
+* Timestamp of action
+
+This prevents:
+
+* Staff denial
+* Fake sales
+* Disputes
+
+---
+
+## 4️⃣ SHOP-READY DASHBOARD (OWNER VIEW)
+
+Owner dashboard must clearly show:
+
+* Sales per staff
+* Conversion per staff
+* Follow-ups overdue
+* Deliveries pending
+* Failed deliveries
+* Staff productivity ranking
+
+Numbers must be **accurate and trustworthy**.
+
+---
+
+## 5️⃣ SHOP DEPLOYMENT READINESS
+
+Prepare the system for **real deployment**:
+
+* Ensure fast load time
+* Ensure safe local data handling
+* Clear error handling
+* No test/demo labels
+* Clean UI for daily use
+* Works on:
+
+  * Android phones
+  * iPhones
+  * Shop desktop
+
+---
+
+## 6️⃣ REAL-WORLD USABILITY REQUIREMENTS
+
+* One-hand phone usage
+* Large tap targets
+* Minimal typing
+* Clear confirmations
+* No confusing flows
+
+---
+
+## 7️⃣ SECURITY & DATA INTEGRITY
+
+* Prevent unauthorized access
+* Prevent staff from seeing restricted data
+* Protect owner-only sections
+* Ensure logout clears session
+* Handle corrupted storage gracefully
+
+---
+
+## 8️⃣ QUALITY ASSURANCE (MANDATORY)
+
+Before finalizing, simulate:
+
+* Owner login
+* Staff login
+* Staff adding leads
+* Owner following up leads
+* Manager viewing deliveries
+* Staff logging out
+* Page reload persistence
+* Mobile interaction
+
+Fix **every issue found**.
+
+---
+
+## ✅ FINAL SUCCESS CRITERIA
+
+The system is complete only when:
+
+* Staff must log in to use the app
+* Roles behave correctly
+* Owner has full visibility and control
+* Staff actions are traceable
+* App is stable for daily shop use
+* Owner can confidently run the business from it
+
+---
+
+## 🚀 EXECUTION MODE
+
+Act like this is **your own phone shop**.
+Choose reliability over shortcuts.
+Finish only when the system is **production-ready**.
+
+**BEGIN EXECUTION NOW.**
+
+---
+
+### 🧠 NEXT (When You’re Ready)
+
+After this runs, I can help you:
+
+* Add **cloud backup**
+* Add **WhatsApp integration**
+* Add **M-Pesa / Cash sales tracking**
+* Turn this into a **real mobile app (PWA)**
+
+You’re no longer building an app —
+you’re building **business infrastructure** 💼🔥

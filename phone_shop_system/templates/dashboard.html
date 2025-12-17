@@ -5,53 +5,129 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <h1>Good {{ 'Morning' if now().hour < 12 else ('Afternoon' if now().hour < 17 else 'Evening') }}, {{ session.name }}</h1>
-        <p style="color: var(--apple-gray);">Here's what's happening at Ario Tech today.</p>
+        <p style="color: var(--apple-gray);">
+            {% if session.role == 'owner' %}
+            Complete business overview at your fingertips.
+            {% elif session.role == 'manager' %}
+            Team performance and daily operations.
+            {% else %}
+            Your sales and activities for today.
+            {% endif %}
+        </p>
+    </div>
+    {% if session.role == 'owner' %}
+    <a href="{{ url_for('owner_dashboard') }}" class="btn btn-secondary" data-testid="button-owner-dashboard">Owner Dashboard</a>
+    {% endif %}
+</div>
+
+<div class="row mb-4 g-3">
+    <div class="col-6 col-md-3">
+        <div class="stat-card success" data-testid="card-revenue">
+            <div class="stat-value" id="sales-today">${{ "%.2f"|format(total_revenue or 0) }}</div>
+            <div class="stat-label">Today's Revenue</div>
+            <small style="opacity: 0.7;">{{ sales_count }} transactions</small>
+        </div>
+    </div>
+    {% if session.role == 'owner' and total_profit is not none %}
+    <div class="col-6 col-md-3">
+        <div class="stat-card" style="background: linear-gradient(135deg, #34c759, #30d158); color: white;">
+            <div class="stat-value">${{ "%.2f"|format(total_profit or 0) }}</div>
+            <div class="stat-label">Today's Profit</div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="col-6 col-md-3">
+        <div class="stat-card warning" data-testid="card-tradeins">
+            <div class="stat-value">{{ tradeins|length }}</div>
+            <div class="stat-label">Pending Trade-Ins</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card info" data-testid="card-repairs">
+            <div class="stat-value">{{ repairs|length }}</div>
+            <div class="stat-label">Active Repairs</div>
+        </div>
     </div>
 </div>
 
-<div class="row mb-4 g-4">
-    <div class="col-md-3">
-        <div class="stat-card success">
-            <div class="stat-value" id="sales-today">$0</div>
-            <div class="stat-label">Today's Revenue</div>
-            <small id="sales-count" style="opacity: 0.7;">0 transactions</small>
-        </div>
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('sales_form') }}" class="btn btn-primary btn-lg w-100 py-4" data-testid="button-new-sale" style="font-size: 1rem;">
+            💰 New Sale
+        </a>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card warning">
-            <div class="stat-value" id="pending-tradeins">0</div>
-            <div class="stat-label">Pending Trade-Ins</div>
-            <small style="opacity: 0.7;">Awaiting review</small>
-        </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('add_lead') }}" class="btn btn-outline-primary btn-lg w-100 py-4" data-testid="button-new-lead" style="font-size: 1rem;">
+            👤 Add Lead
+        </a>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card info">
-            <div class="stat-value" id="active-repairs">0</div>
-            <div class="stat-label">Active Repairs</div>
-            <small style="opacity: 0.7;">In progress</small>
-        </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('tradein') }}" class="btn btn-outline-primary btn-lg w-100 py-4" data-testid="button-tradein" style="font-size: 1rem;">
+            📱 Trade-In
+        </a>
     </div>
-    <div class="col-md-3">
-        <div class="stat-card primary">
-            <div style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Quick Actions</div>
-            <a href="{{ url_for('sales_form') }}" class="btn btn-light btn-sm mb-2 w-100">New Sale</a>
-            <a href="{{ url_for('tradein') }}" class="btn btn-light btn-sm w-100">Trade-In</a>
-        </div>
+    <div class="col-6 col-md-3">
+        <a href="{{ url_for('repairs_form') }}" class="btn btn-outline-primary btn-lg w-100 py-4" data-testid="button-repair" style="font-size: 1rem;">
+            🔧 Repair
+        </a>
     </div>
 </div>
 
 <div class="row g-4">
     <div class="col-lg-8">
-        <div class="card apple-card">
+        <div class="card apple-card mb-4">
             <div class="card-header">Weekly Performance</div>
             <div class="card-body">
                 <canvas id="salesChart" height="100"></canvas>
             </div>
         </div>
+        
+        {% if leads %}
+        <div class="card apple-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Active Leads</span>
+                <a href="{{ url_for('leads_list') }}" style="font-size: 0.85rem;">View All →</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="padding-left: 1rem;">Customer</th>
+                                <th>Interest</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lead in leads[:5] %}
+                            <tr>
+                                <td style="padding-left: 1rem;">
+                                    <strong>{{ lead.customer_name }}</strong><br>
+                                    <small style="color: var(--apple-gray);">{{ lead.customer_phone }}</small>
+                                </td>
+                                <td>{{ lead.interest or '-' }}</td>
+                                <td>
+                                    {% if lead.status == 'new' %}
+                                    <span class="badge bg-primary">New</span>
+                                    {% elif lead.status == 'contacted' %}
+                                    <span class="badge bg-info">Contacted</span>
+                                    {% elif lead.status == 'follow_up' %}
+                                    <span class="badge bg-warning">Follow-up</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
+    
     <div class="col-lg-4">
         <div class="card apple-card mb-4">
             <div class="card-header">
@@ -59,21 +135,19 @@
                 <span class="badge bg-warning float-end">{{ tradeins|length }}</span>
             </div>
             <div class="card-body p-0" style="max-height: 200px; overflow-y: auto;">
-                <table class="table table-hover mb-0">
-                    <tbody>
-                        {% for ti in tradeins %}
-                        <tr>
-                            <td>
-                                <strong>{{ ti.trade_in_number }}</strong><br>
-                                <small style="color: var(--apple-gray);">{{ ti.brand }} {{ ti.model }}</small>
-                            </td>
-                            <td class="text-end"><span class="badge bg-warning">Pending</span></td>
-                        </tr>
-                        {% else %}
-                        <tr><td class="text-center text-muted py-4">No pending trade-ins</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="list-group list-group-flush">
+                    {% for ti in tradeins %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ ti.trade_in_number }}</strong><br>
+                            <small style="color: var(--apple-gray);">{{ ti.brand }} {{ ti.model }}</small>
+                        </div>
+                        <span class="badge bg-warning">Pending</span>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-center py-4" style="color: var(--apple-gray);">No pending trade-ins</div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
         
@@ -83,21 +157,19 @@
                 <span class="badge bg-info float-end">{{ repairs|length }}</span>
             </div>
             <div class="card-body p-0" style="max-height: 200px; overflow-y: auto;">
-                <table class="table table-hover mb-0">
-                    <tbody>
-                        {% for r in repairs %}
-                        <tr>
-                            <td>
-                                <strong>{{ r.repair_number }}</strong><br>
-                                <small style="color: var(--apple-gray);">{{ r.device_brand }} {{ r.device_model }}</small>
-                            </td>
-                            <td class="text-end"><span class="badge bg-info">{{ r.status }}</span></td>
-                        </tr>
-                        {% else %}
-                        <tr><td class="text-center text-muted py-4">No active repairs</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="list-group list-group-flush">
+                    {% for r in repairs %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ r.repair_number }}</strong><br>
+                            <small style="color: var(--apple-gray);">{{ r.device_brand }} {{ r.device_model }}</small>
+                        </div>
+                        <span class="badge bg-info">{{ r.status }}</span>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-center py-4" style="color: var(--apple-gray);">No active repairs</div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
@@ -107,15 +179,6 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
-    fetch('/api/dashboard-stats')
-        .then(res => res.json())
-        .then(data => {
-            $('#sales-today').text('$' + data.sales_today.toFixed(2));
-            $('#sales-count').text(data.sales_count + ' transactions');
-            $('#pending-tradeins').text(data.pending_tradeins);
-            $('#active-repairs').text(data.active_repairs);
-        });
-    
     const ctx = document.getElementById('salesChart').getContext('2d');
     new Chart(ctx, {
         type: 'line',

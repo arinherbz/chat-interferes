@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Add Lead - Ario Tech{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('leads_list') }}" style="color: var(--apple-blue); text-decoration: none;">&larr; Back to Leads</a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card apple-card">
+            <div class="card-header">Add New Lead</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_lead') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Customer Name</label>
+                        <input type="text" name="customer_name" class="form-control" required data-testid="input-customer-name" placeholder="Full name">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" name="customer_phone" class="form-control" required data-testid="input-customer-phone" placeholder="Contact number">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Email (optional)</label>
+                        <input type="email" name="customer_email" class="form-control" data-testid="input-customer-email" placeholder="Email address">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Interest</label>
+                        <input type="text" name="interest" class="form-control" data-testid="input-interest" placeholder="What are they interested in?">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Source</label>
+                        <select name="source" class="form-select" data-testid="select-source">
+                            <option value="">Select source</option>
+                            <option value="walk_in">Walk-in</option>
+                            <option value="phone_call">Phone Call</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="social_media">Social Media</option>
+                            <option value="referral">Referral</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-control" rows="3" data-testid="input-notes" placeholder="Any additional notes..."></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100" data-testid="button-submit">Add Lead</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -15,23 +15,65 @@
             {% if error %}
             <div class="alert alert-danger" style="border-radius: 12px;">{{ error }}</div>
             {% endif %}
-            <form method="POST" action="{{ url_for('login') }}">
-                <div class="mb-3">
-                    <label class="form-label">Username</label>
-                    <input type="text" name="username" class="form-control" required data-testid="input-username" placeholder="Enter your username">
+            
+            <ul class="nav nav-pills nav-fill mb-4" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="password-tab" data-bs-toggle="pill" data-bs-target="#password-login" type="button" role="tab">Password</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pin-tab" data-bs-toggle="pill" data-bs-target="#pin-login" type="button" role="tab">Quick PIN</button>
+                </li>
+            </ul>
+            
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="password-login" role="tabpanel">
+                    <form method="POST" action="{{ url_for('login') }}">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="form-control form-control-lg" required data-testid="input-username" placeholder="Enter username" autocomplete="username">
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label">Password</label>
+                            <input type="password" name="password" class="form-control form-control-lg" required data-testid="input-password" placeholder="Enter password" autocomplete="current-password">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg w-100" data-testid="button-login">Sign In</button>
+                    </form>
                 </div>
-                <div class="mb-4">
-                    <label class="form-label">Password</label>
-                    <input type="password" name="password" class="form-control" required data-testid="input-password" placeholder="Enter your password">
+                
+                <div class="tab-pane fade" id="pin-login" role="tabpanel">
+                    <form method="POST" action="{{ url_for('login') }}">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="form-control form-control-lg" required data-testid="input-pin-username" placeholder="Enter username" autocomplete="username">
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label">4-Digit PIN</label>
+                            <input type="tel" name="pin" class="form-control form-control-lg text-center" maxlength="4" pattern="[0-9]{4}" required data-testid="input-pin" placeholder="• • • •" style="font-size: 2rem; letter-spacing: 1rem;">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg w-100" data-testid="button-pin-login">Sign In with PIN</button>
+                    </form>
                 </div>
-                <button type="submit" class="btn btn-primary w-100" data-testid="button-login">Sign In</button>
-            </form>
+            </div>
+            
             <div class="mt-4 text-center" style="color: var(--apple-gray); font-size: 0.8rem;">
-                <p class="mb-1">Demo Accounts:</p>
-                <p class="mb-0">admin / admin123</p>
-                <p class="mb-0">staff / staff123</p>
+                <p class="mb-1"><strong>Demo Accounts:</strong></p>
+                <p class="mb-0">owner / owner123 (PIN: 1234)</p>
+                <p class="mb-0">manager / manager123 (PIN: 5678)</p>
+                <p class="mb-0">staff / staff123 (PIN: 0000)</p>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('input[name="pin"]').on('input', function() {
+        if ($(this).val().length === 4) {
+            $(this).closest('form').submit();
+        }
+    });
+});
+</script>
 {% endblock %}

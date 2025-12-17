@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Staff Management - Ario Tech{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>Staff Management</h1>
+        <p style="color: var(--apple-gray);">Manage team members and access permissions.</p>
+    </div>
+    <a href="{{ url_for('add_staff') }}" class="btn btn-primary" data-testid="button-add-staff">Add Staff Member</a>
+</div>
+
+<div class="card apple-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding-left: 1.5rem;">Name</th>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Last Activity</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr data-testid="row-staff-{{ user.id }}">
+                        <td style="padding-left: 1.5rem;">
+                            <strong>{{ user.name or user.username }}</strong>
+                            {% if user.phone %}<br><small style="color: var(--apple-gray);">{{ user.phone }}</small>{% endif %}
+                        </td>
+                        <td>{{ user.username }}</td>
+                        <td>
+                            {% if user.role == 'owner' %}
+                            <span class="badge" style="background: linear-gradient(135deg, #ff9500, #ff3b30);">Owner</span>
+                            {% elif user.role == 'manager' %}
+                            <span class="badge" style="background: linear-gradient(135deg, #0071e3, #5856d6);">Manager</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Staff</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_active %}
+                            <span class="badge bg-success">Active</span>
+                            {% else %}
+                            <span class="badge bg-danger">Disabled</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.last_activity %}
+                            {{ user.last_activity.strftime('%Y-%m-%d %H:%M') }}
+                            {% else %}
+                            <span style="color: var(--apple-gray);">Never</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.role != 'owner' %}
+                            <button class="btn btn-sm btn-outline-secondary toggle-btn" 
+                                    data-user-id="{{ user.id }}"
+                                    data-testid="button-toggle-{{ user.id }}"
+                                    style="border-radius: 8px;">
+                                {{ 'Disable' if user.is_active else 'Enable' }}
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card apple-card mt-4">
+    <div class="card-header">Role Permissions</div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h6 style="color: #ff9500;">Owner</h6>
+                <ul class="list-unstyled" style="font-size: 0.9rem;">
+                    <li>Full access to all features</li>
+                    <li>View all leads and sales</li>
+                    <li>View profits and financials</li>
+                    <li>Manage staff accounts</li>
+                    <li>Delete records</li>
+                    <li>Access settings</li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <h6 style="color: #0071e3;">Manager</h6>
+                <ul class="list-unstyled" style="font-size: 0.9rem;">
+                    <li>View all leads</li>
+                    <li>Assign leads to staff</li>
+                    <li>View all deliveries</li>
+                    <li>Cannot delete records</li>
+                    <li>Cannot view profits</li>
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <h6 style="color: var(--apple-gray);">Sales Staff</h6>
+                <ul class="list-unstyled" style="font-size: 0.9rem;">
+                    <li>Add new leads</li>
+                    <li>Update own leads only</li>
+                    <li>Create sales</li>
+                    <li>Cannot view other staff data</li>
+                    <li>Cannot delete records</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('.toggle-btn').on('click', function() {
+        const btn = $(this);
+        const userId = btn.data('user-id');
+        
+        fetch(`/staff/${userId}/toggle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.error || 'Failed to update staff status');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

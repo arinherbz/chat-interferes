@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Leads - Ario Tech{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1>Leads</h1>
+        <p style="color: var(--apple-gray);">Track and manage customer leads.</p>
+    </div>
+    <a href="{{ url_for('add_lead') }}" class="btn btn-primary" data-testid="button-add-lead">Add New Lead</a>
+</div>
+
+<div class="card apple-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding-left: 1.5rem;">Lead #</th>
+                        <th>Customer</th>
+                        <th>Interest</th>
+                        <th>Source</th>
+                        <th>Status</th>
+                        <th>Follow-up</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lead in leads %}
+                    <tr data-testid="row-lead-{{ lead.id }}">
+                        <td style="padding-left: 1.5rem;"><strong>{{ lead.lead_number }}</strong></td>
+                        <td>
+                            {{ lead.customer_name }}<br>
+                            <small style="color: var(--apple-gray);">{{ lead.customer_phone }}</small>
+                        </td>
+                        <td>{{ lead.interest or '-' }}</td>
+                        <td>{{ lead.source or '-' }}</td>
+                        <td>
+                            {% if lead.status == 'new' %}
+                            <span class="badge bg-primary">New</span>
+                            {% elif lead.status == 'contacted' %}
+                            <span class="badge bg-info">Contacted</span>
+                            {% elif lead.status == 'follow_up' %}
+                            <span class="badge bg-warning">Follow-up</span>
+                            {% elif lead.status == 'converted' %}
+                            <span class="badge bg-success">Converted</span>
+                            {% elif lead.status == 'lost' %}
+                            <span class="badge bg-danger">Lost</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ lead.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if lead.follow_up_date %}
+                            {{ lead.follow_up_date.strftime('%Y-%m-%d') }}
+                            {% else %}
+                            <span style="color: var(--apple-gray);">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ lead.created_at.strftime('%Y-%m-%d') if lead.created_at else '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4" style="color: var(--apple-gray);">No leads yet. Add your first lead!</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
