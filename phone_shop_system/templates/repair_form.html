@@ -1,65 +1,72 @@
 {% extends "base.html" %}
-{% block title %}New Repair - Phone Shop{% endblock %}
+{% block title %}New Repair - Ario Tech{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">New Repair Request</h1>
+<div class="mb-4">
+    <h1>New Repair Request</h1>
+    <p style="color: var(--apple-gray);">Submit a device for repair at Ario Tech.</p>
+</div>
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">Repair Details</div>
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card apple-card">
             <div class="card-body">
                 <form id="repair-form">
-                    <h5>Device Information</h5>
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Brand</label>
-                            <select id="brand-dropdown" name="brand" class="form-select select2" data-testid="select-brand">
-                                <option value="">Select Brand</option>
-                                {% for brand in brands %}
-                                <option value="{{ brand.name }}">{{ brand.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Model</label>
-                            <select id="model-dropdown" name="model" class="form-select select2" data-testid="select-model">
-                                <option value="">Select Model</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Serial/IMEI</label>
-                            <input type="text" name="serial" class="form-control" data-testid="input-serial">
-                        </div>
-                    </div>
-                    
-                    <h5 class="mt-4">Customer Information</h5>
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Customer Name</label>
-                            <input type="text" name="customer_name" class="form-control" required data-testid="input-customer-name">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Phone Number</label>
-                            <input type="tel" name="customer_phone" class="form-control" required data-testid="input-customer-phone">
+                    <div class="mb-4">
+                        <h5 style="font-weight: 600; margin-bottom: 1rem;">Device Information</h5>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Brand</label>
+                                <select id="brand-dropdown" name="brand" class="form-select select2" data-testid="select-brand">
+                                    <option value="">Select Brand</option>
+                                    {% for brand in brands %}
+                                    <option value="{{ brand.name }}">{{ brand.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Model</label>
+                                <select id="model-dropdown" name="model" class="form-select select2" data-testid="select-model">
+                                    <option value="">Select Model</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Serial/IMEI</label>
+                                <input type="text" name="serial" class="form-control" data-testid="input-serial">
+                            </div>
                         </div>
                     </div>
                     
-                    <h5 class="mt-4">Issue Description</h5>
-                    <div class="mb-3">
-                        <label class="form-label">What's wrong with the device?</label>
-                        <textarea name="issue_description" class="form-control" rows="4" placeholder="Describe the issue in detail..." data-testid="input-issue"></textarea>
+                    <div class="mb-4">
+                        <h5 style="font-weight: 600; margin-bottom: 1rem;">Customer Information</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Customer Name</label>
+                                <input type="text" name="customer_name" class="form-control" required data-testid="input-customer-name">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Phone Number</label>
+                                <input type="tel" name="customer_phone" class="form-control" required data-testid="input-customer-phone">
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label class="form-label">Common Issues</label>
-                        <div class="btn-group flex-wrap" role="group">
-                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Screen cracked/broken">Cracked Screen</button>
-                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Battery drains quickly">Battery Issue</button>
-                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Charging port not working">Charging Issue</button>
-                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Camera not working">Camera Issue</button>
-                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Speaker/microphone issue">Audio Issue</button>
-                            <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Water damage">Water Damage</button>
+                    <div class="mb-4">
+                        <h5 style="font-weight: 600; margin-bottom: 1rem;">Issue Description</h5>
+                        <div class="mb-3">
+                            <label class="form-label">What's wrong with the device?</label>
+                            <textarea name="issue_description" class="form-control" rows="4" placeholder="Describe the issue in detail..." data-testid="input-issue"></textarea>
+                        </div>
+                        <div>
+                            <label class="form-label">Quick Select Common Issues</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Screen cracked/broken">Cracked Screen</button>
+                                <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Battery drains quickly">Battery Issue</button>
+                                <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Charging port not working">Charging Issue</button>
+                                <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Camera not working">Camera Issue</button>
+                                <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Speaker/microphone issue">Audio Issue</button>
+                                <button type="button" class="btn btn-outline-secondary issue-btn" data-issue="Water damage">Water Damage</button>
+                            </div>
                         </div>
                     </div>
                     
@@ -69,18 +76,30 @@
         </div>
     </div>
     
-    <div class="col-md-4">
-        <div class="card">
+    <div class="col-lg-4">
+        <div class="card apple-card" style="position: sticky; top: 100px;">
             <div class="card-header">Repair Process</div>
             <div class="card-body">
-                <ol>
-                    <li><strong>Receive</strong> - Device checked in</li>
-                    <li><strong>Diagnose</strong> - Technician evaluates issue</li>
-                    <li><strong>Quote</strong> - Customer approves repair cost</li>
-                    <li><strong>Repair</strong> - Technician fixes device</li>
-                    <li><strong>Test</strong> - Quality check performed</li>
-                    <li><strong>Complete</strong> - Customer picks up device</li>
-                </ol>
+                <div class="d-flex align-items-start mb-3">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--apple-blue); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 12px;">1</div>
+                    <div><strong>Receive</strong><br><small style="color: var(--apple-gray);">Device checked in</small></div>
+                </div>
+                <div class="d-flex align-items-start mb-3">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--apple-light-gray); color: var(--apple-gray); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 12px;">2</div>
+                    <div><strong>Diagnose</strong><br><small style="color: var(--apple-gray);">Technician evaluates</small></div>
+                </div>
+                <div class="d-flex align-items-start mb-3">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--apple-light-gray); color: var(--apple-gray); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 12px;">3</div>
+                    <div><strong>Quote</strong><br><small style="color: var(--apple-gray);">Customer approval</small></div>
+                </div>
+                <div class="d-flex align-items-start mb-3">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--apple-light-gray); color: var(--apple-gray); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 12px;">4</div>
+                    <div><strong>Repair</strong><br><small style="color: var(--apple-gray);">Device fixed</small></div>
+                </div>
+                <div class="d-flex align-items-start">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--apple-light-gray); color: var(--apple-gray); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 12px;">5</div>
+                    <div><strong>Complete</strong><br><small style="color: var(--apple-gray);">Ready for pickup</small></div>
+                </div>
             </div>
         </div>
     </div>
@@ -100,7 +119,6 @@ $(document).ready(function() {
         const brand = $(this).val();
         if (!brand) return;
         
-        const brandId = $('option:selected', this).val();
         fetch(`/api/models?brand_id=${$('option[value="' + brand + '"]').closest('select').find(':selected').index()}`)
             .then(res => res.json())
             .then(models => {

@@ -1,12 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Staff Management - Phone Shop{% endblock %}
+{% block title %}Staff Management - Ario Tech{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Staff Management</h1>
+<div class="mb-4">
+    <h1>Staff Management</h1>
+    <p style="color: var(--apple-gray);">Manage team members and access permissions.</p>
+</div>
 
-<div class="row">
-    <div class="col-md-4">
-        <div class="card mb-4">
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card apple-card">
             <div class="card-header">Add New Staff</div>
             <div class="card-body">
                 <form id="add-staff-form">
@@ -29,20 +32,23 @@
                             <option value="admin">Admin</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-success">Add Staff</button>
+                    <button type="submit" class="btn btn-primary w-100">Add Staff</button>
                 </form>
             </div>
         </div>
     </div>
     
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">All Staff Members</div>
-            <div class="card-body">
-                <table class="table table-striped">
+    <div class="col-lg-8">
+        <div class="card apple-card">
+            <div class="card-header">
+                Team Members
+                <span class="badge bg-primary float-end">{{ users|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
                     <thead>
                         <tr>
-                            <th>Username</th>
+                            <th style="padding-left: 1.5rem;">Username</th>
                             <th>Name</th>
                             <th>Role</th>
                             <th>Status</th>
@@ -52,7 +58,7 @@
                     <tbody>
                         {% for user in users %}
                         <tr>
-                            <td>{{ user.username }}</td>
+                            <td style="padding-left: 1.5rem;"><strong>{{ user.username }}</strong></td>
                             <td>{{ user.name or '-' }}</td>
                             <td>
                                 {% if user.role == 'admin' %}
@@ -69,8 +75,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary">Edit</button>
-                                <button class="btn btn-sm btn-outline-danger">Deactivate</button>
+                                <button class="btn btn-sm btn-outline-secondary" style="border-radius: 8px;">Edit</button>
                             </td>
                         </tr>
                         {% endfor %}

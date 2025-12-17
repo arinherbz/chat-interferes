@@ -1,12 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Manage Models - Phone Shop{% endblock %}
+{% block title %}Manage Models - Ario Tech{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">Manage Phone Models</h1>
+<div class="mb-4">
+    <h1>Manage Phone Models</h1>
+    <p style="color: var(--apple-gray);">Add, edit, and organize device models in your inventory.</p>
+</div>
 
-<div class="row">
-    <div class="col-md-4">
-        <div class="card mb-4">
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card apple-card">
             <div class="card-header">Add New Model</div>
             <div class="card-body">
                 <form id="add-model-form">
@@ -25,21 +28,25 @@
                     <div class="mb-3">
                         <label class="form-label">Order Index</label>
                         <input type="number" name="order_index" class="form-control" value="0">
+                        <small style="color: var(--apple-gray);">Higher numbers appear first</small>
                     </div>
-                    <button type="submit" class="btn btn-primary">Add Model</button>
+                    <button type="submit" class="btn btn-primary w-100">Add Model</button>
                 </form>
             </div>
         </div>
     </div>
     
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">All Models</div>
-            <div class="card-body">
-                <table class="table table-striped">
+    <div class="col-lg-8">
+        <div class="card apple-card">
+            <div class="card-header">
+                All Models
+                <span class="badge bg-primary float-end">{{ models|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
                     <thead>
                         <tr>
-                            <th>Brand</th>
+                            <th style="padding-left: 1.5rem;">Brand</th>
                             <th>Model</th>
                             <th>Order</th>
                             <th>Storage Options</th>
@@ -49,8 +56,8 @@
                     <tbody>
                         {% for model in models %}
                         <tr>
-                            <td>{{ model.brand.name }}</td>
-                            <td>{{ model.name }}</td>
+                            <td style="padding-left: 1.5rem;">{{ model.brand.name }}</td>
+                            <td><strong>{{ model.name }}</strong></td>
                             <td>{{ model.order_index }}</td>
                             <td>{{ model.storages|length }} options</td>
                             <td>

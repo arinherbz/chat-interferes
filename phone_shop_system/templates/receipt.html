@@ -1,42 +1,57 @@
 {% extends "base.html" %}
-{% block title %}Receipt - Phone Shop{% endblock %}
+{% block title %}Receipt - Ario Tech{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card" id="receipt">
-            <div class="card-body text-center">
-                <h2>Phone Shop</h2>
-                <p class="text-muted">Receipt</p>
-                <hr>
+    <div class="col-md-5">
+        <div class="card apple-card" id="receipt">
+            <div class="card-body text-center p-4">
+                <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" style="margin-bottom: 0.5rem;">
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                </svg>
+                <h2 style="font-weight: 700;">Ario Tech</h2>
+                <p style="color: var(--apple-gray); font-size: 0.9rem;">Premium Device Solutions</p>
+                <hr style="border-color: rgba(0,0,0,0.1);">
                 
                 <div class="text-start">
-                    <p><strong>Date:</strong> {{ sale.created_at.strftime('%Y-%m-%d %H:%M') if sale.created_at else 'N/A' }}</p>
-                    <p><strong>Served by:</strong> {{ sale.created_by or 'Staff' }}</p>
-                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span style="color: var(--apple-gray);">Date</span>
+                        <span>{{ sale.created_at.strftime('%Y-%m-%d %H:%M') if sale.created_at else 'N/A' }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span style="color: var(--apple-gray);">Served by</span>
+                        <span>{{ sale.created_by or 'Staff' }}</span>
+                    </div>
                     
-                    <table class="table table-borderless">
-                        <tr>
-                            <td>{{ sale.other_product_name or 'Product' }}</td>
-                            <td class="text-end">x{{ sale.quantity }}</td>
-                        </tr>
-                        <tr>
-                            <td>Unit Price:</td>
-                            <td class="text-end">${{ "%.2f"|format(sale.unit_price) }}</td>
-                        </tr>
-                    </table>
+                    <hr style="border-color: rgba(0,0,0,0.1);">
                     
-                    <hr>
-                    <h4 class="text-end">Total: ${{ "%.2f"|format(sale.total_price) }}</h4>
-                    <p class="text-end"><strong>Payment:</strong> {{ sale.payment_method }}</p>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>{{ sale.other_product_name or 'Product' }}</span>
+                        <span>x{{ sale.quantity }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span style="color: var(--apple-gray);">Unit Price</span>
+                        <span>${{ "%.2f"|format(sale.unit_price) }}</span>
+                    </div>
+                    
+                    <hr style="border-color: rgba(0,0,0,0.1);">
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span style="font-weight: 600; font-size: 1.1rem;">Total</span>
+                        <span style="font-size: 1.5rem; font-weight: 700; color: var(--apple-blue);">${{ "%.2f"|format(sale.total_price) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <span style="color: var(--apple-gray);">Payment</span>
+                        <span>{{ sale.payment_method }}</span>
+                    </div>
                 </div>
                 
-                <hr>
-                <p class="text-muted small">Thank you for your business!</p>
+                <hr style="border-color: rgba(0,0,0,0.1);">
+                <p style="color: var(--apple-gray); font-size: 0.85rem; margin: 0;">Thank you for choosing Ario Tech!</p>
             </div>
         </div>
         
-        <div class="text-center mt-3">
+        <div class="text-center mt-4">
             <button onclick="window.print()" class="btn btn-primary" data-testid="button-print">Print Receipt</button>
             <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
         </div>
@@ -47,8 +62,9 @@
 {% block head %}
 <style>
 @media print {
-    .navbar, .btn, .no-print { display: none !important; }
+    .navbar, .apple-footer, .btn, .no-print { display: none !important; }
     .card { border: none !important; box-shadow: none !important; }
+    body { background: white !important; }
 }
 </style>
 {% endblock %}

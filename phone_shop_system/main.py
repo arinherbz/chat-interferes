@@ -10,6 +10,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 db.init_app(app)
 
+@app.context_processor
+def inject_now():
+    return {'now': datetime.now}
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):

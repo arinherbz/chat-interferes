@@ -1,27 +1,29 @@
 {% extends "base.html" %}
-{% block title %}New Sale - Phone Shop{% endblock %}
+{% block title %}New Sale - Ario Tech{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">New Sale</h1>
+<div class="mb-4">
+    <h1>New Sale</h1>
+    <p style="color: var(--apple-gray);">Complete a transaction for a customer.</p>
+</div>
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">Sale Details</div>
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card apple-card">
             <div class="card-body">
                 <form id="sale-form">
-                    <div class="mb-3">
+                    <div class="mb-4">
                         <label class="form-label">Product Type</label>
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check" name="product_type" id="type-product" value="product" checked>
-                            <label class="btn btn-outline-primary" for="type-product">From Inventory</label>
+                            <label class="btn btn-outline-primary" for="type-product" style="border-radius: 12px 0 0 12px;">From Inventory</label>
                             <input type="radio" class="btn-check" name="product_type" id="type-other" value="other">
-                            <label class="btn btn-outline-primary" for="type-other">Other Item</label>
+                            <label class="btn btn-outline-primary" for="type-other" style="border-radius: 0 12px 12px 0;">Other Item</label>
                         </div>
                     </div>
                     
                     <div id="product-section">
-                        <div class="mb-3">
+                        <div class="mb-4">
                             <label class="form-label">Select Product</label>
                             <select name="product_id" class="form-select select2" data-testid="select-product">
                                 <option value="">Select a product</option>
@@ -33,13 +35,13 @@
                     </div>
                     
                     <div id="other-section" style="display:none;">
-                        <div class="mb-3">
+                        <div class="mb-4">
                             <label class="form-label">Item Description</label>
                             <input type="text" name="other_product_name" class="form-control" placeholder="Describe the item" data-testid="input-other-product">
                         </div>
                     </div>
                     
-                    <div class="row mb-3">
+                    <div class="row g-3 mb-4">
                         <div class="col-md-4">
                             <label class="form-label">Quantity</label>
                             <input type="number" name="quantity" class="form-control" value="1" min="1" data-testid="input-quantity">
@@ -50,21 +52,29 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Total</label>
-                            <input type="text" id="total-price" class="form-control" readonly data-testid="text-total-price">
+                            <input type="text" id="total-price" class="form-control" readonly data-testid="text-total-price" style="background: var(--apple-light-gray);">
                         </div>
                     </div>
                     
-                    <div class="mb-3">
+                    <div class="mb-4">
                         <label class="form-label">Payment Method</label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="payment_method" id="pay-cash" value="Cash" checked>
-                            <label class="btn btn-outline-success" for="pay-cash">Cash</label>
-                            <input type="radio" class="btn-check" name="payment_method" id="pay-mtn" value="MTN">
-                            <label class="btn btn-outline-warning" for="pay-mtn">MTN Mobile</label>
-                            <input type="radio" class="btn-check" name="payment_method" id="pay-airtel" value="Airtel">
-                            <label class="btn btn-outline-danger" for="pay-airtel">Airtel Money</label>
-                            <input type="radio" class="btn-check" name="payment_method" id="pay-card" value="Card">
-                            <label class="btn btn-outline-primary" for="pay-card">Card</label>
+                        <div class="row g-2">
+                            <div class="col-3">
+                                <input type="radio" class="btn-check" name="payment_method" id="pay-cash" value="Cash" checked>
+                                <label class="btn btn-outline-secondary w-100" for="pay-cash" style="border-radius: 12px;">Cash</label>
+                            </div>
+                            <div class="col-3">
+                                <input type="radio" class="btn-check" name="payment_method" id="pay-mtn" value="MTN">
+                                <label class="btn btn-outline-warning w-100" for="pay-mtn" style="border-radius: 12px;">MTN</label>
+                            </div>
+                            <div class="col-3">
+                                <input type="radio" class="btn-check" name="payment_method" id="pay-airtel" value="Airtel">
+                                <label class="btn btn-outline-danger w-100" for="pay-airtel" style="border-radius: 12px;">Airtel</label>
+                            </div>
+                            <div class="col-3">
+                                <input type="radio" class="btn-check" name="payment_method" id="pay-card" value="Card">
+                                <label class="btn btn-outline-primary w-100" for="pay-card" style="border-radius: 12px;">Card</label>
+                            </div>
                         </div>
                     </div>
                     
@@ -74,15 +84,16 @@
         </div>
     </div>
     
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">Sale Summary</div>
+    <div class="col-lg-4">
+        <div class="card apple-card" style="position: sticky; top: 100px;">
+            <div class="card-header">Order Summary</div>
             <div class="card-body">
                 <p><strong>Item:</strong> <span id="summary-item">-</span></p>
                 <p><strong>Quantity:</strong> <span id="summary-qty">1</span></p>
                 <p><strong>Unit Price:</strong> $<span id="summary-price">0.00</span></p>
                 <hr>
-                <h4>Total: $<span id="summary-total">0.00</span></h4>
+                <div style="font-size: 1.75rem; font-weight: 700; color: var(--apple-blue);">$<span id="summary-total">0.00</span></div>
+                <p style="color: var(--apple-gray); margin: 0;">Total Amount</p>
             </div>
         </div>
     </div>
