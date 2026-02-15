@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useData, RepairStatus, Repair } from "@/lib/data-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,21 +12,57 @@ import { Search, Filter, Wrench, CheckCircle2, Clock, Truck, User, Calendar, Dol
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuth } from "@/lib/auth-context";
+
+const repairSchema = z.object({
+  deviceBrand: z.string().min(1, "Brand required"),
+  deviceModel: z.string().min(1, "Model required"),
+  imei: z.string().min(3, "IMEI/Serial required"),
+  issueDescription: z.string().min(3, "Issue required"),
+  repairType: z.string().min(1, "Type required"),
+  price: z.coerce.number().min(0, "Price required"),
+  cost: z.coerce.number().min(0, "Cost required"),
+  technician: z.string().min(1, "Assign a technician"),
+  customerName: z.string().optional(),
+});
 
 export default function RepairsPage() {
-  const { repairs, updateRepairStatus, users } = useData();
+  const { repairs, updateRepairStatus, users, addRepair } = useData();
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [techFilter, setTechFilter] = useState<string>("all");
   const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null);
+  const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  const filteredRepairs = repairs.filter(r => {
+  const filteredRepairs = useMemo(() => repairs.filter(r => {
     const matchesSearch = 
       r.deviceBrand.toLowerCase().includes(search.toLowerCase()) || 
       r.deviceModel.toLowerCase().includes(search.toLowerCase()) ||
       r.imei.includes(search);
     const matchesStatus = statusFilter === "all" || r.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesTech = techFilter === "all" || r.technician === techFilter;
+    return matchesSearch && matchesStatus && matchesTech;
+  }), [repairs, search, statusFilter, techFilter]);
+
+  const form = useForm<z.infer<typeof repairSchema>>({
+    resolver: zodResolver(repairSchema),
+    defaultValues: {
+      deviceBrand: "",
+      deviceModel: "",
+      imei: "",
+      issueDescription: "",
+      repairType: "",
+      price: 0,
+      cost: 0,
+      technician: user?.name || "",
+      customerName: "",
+    }
   });
 
   const handleStatusChange = (id: string, newStatus: RepairStatus) => {
@@ -57,10 +93,88 @@ export default function RepairsPage() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Repair Tracking</h1>
           <p className="text-slate-500">Manage device repairs, assign technicians, and track profitability.</p>
         </div>
-        <Button className="gap-2">
-          <Wrench className="w-4 h-4" />
-          New Repair Ticket
-        </Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <Button className="gap-2" onClick={() => setOpen(true)}>
+            <Wrench className="w-4 h-4" />
+            New Repair Ticket
+          </Button>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Create Repair Ticket</DialogTitle>
+              <DialogDescription>Capture device details, assign technician, and track cost vs. price.</DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={form.handleSubmit((values) => {
+                addRepair({
+                  ...values,
+                  price: Number(values.price),
+                  cost: Number(values.cost),
+                  technician: values.technician,
+                  customerName: values.customerName || "Walk-in",
+                  status: "Pending",
+                  createdAt: new Date().toISOString(),
+                  notes: values.issueDescription,
+                } as any);
+                toast({ title: "Repair created", description: "Ticket logged and assigned." });
+                form.reset();
+                setOpen(false);
+              })}
+              className="space-y-3 mt-2"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Device Brand</Label>
+                  <Input {...form.register("deviceBrand")} placeholder="Apple" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Device Model</Label>
+                  <Input {...form.register("deviceModel")} placeholder="iPhone 12" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>IMEI / Serial</Label>
+                <Input {...form.register("imei")} placeholder="IMEI or serial" />
+              </div>
+              <div className="space-y-1">
+                <Label>Issue</Label>
+                <Textarea rows={2} {...form.register("issueDescription")} placeholder="Describe the problem" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Repair Type</Label>
+                  <Input {...form.register("repairType")} placeholder="Screen, battery, board..." />
+                </div>
+                <div className="space-y-1">
+                  <Label>Customer Name</Label>
+                  <Input {...form.register("customerName")} placeholder="Optional" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Price (UGX)</Label>
+                  <Input type="number" {...form.register("price", { valueAsNumber: true })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Cost (UGX)</Label>
+                  <Input type="number" {...form.register("cost", { valueAsNumber: true })} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Assign Technician</Label>
+                <Select onValueChange={(v) => form.setValue("technician", v)} defaultValue={form.getValues("technician")}>
+                  <SelectTrigger><SelectValue placeholder="Select technician" /></SelectTrigger>
+                  <SelectContent>
+                    {users.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter className="pt-2">
+                <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button type="submit">Save Ticket</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -140,6 +254,16 @@ export default function RepairsPage() {
                   <SelectItem value="Delivered">Delivered</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={techFilter} onValueChange={setTechFilter}>
+                <SelectTrigger className="w-[200px]">
+                  <User className="w-4 h-4 mr-2 text-slate-500" />
+                  <SelectValue placeholder="Filter by Technician" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Technicians</SelectItem>
+                  {users.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardHeader>
@@ -153,6 +277,8 @@ export default function RepairsPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Technician</TableHead>
                 <TableHead className="text-right">Price</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead className="text-right">Profit</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -190,8 +316,14 @@ export default function RepairsPage() {
                       <span className="text-sm">{repair.technician || "Unassigned"}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-medium">
+                <TableCell className="text-right font-medium">
                     {repair.price.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right text-slate-600">
+                    {(repair as any).cost ? (repair as any).cost.toLocaleString() : "-"}
+                  </TableCell>
+                  <TableCell className="text-right text-green-700">
+                    {(repair.price - ((repair as any).cost || 0)).toLocaleString()} UGX
                   </TableCell>
                   <TableCell>
                      <Button variant="ghost" size="sm">Edit</Button>

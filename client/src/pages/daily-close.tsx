@@ -11,8 +11,10 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Camera, Upload, CheckCircle2, Plus, Trash2, Wrench, ShoppingCart } from "lucide-react";
+import { FileUploader, type UploadedFileMeta } from "@/components/file-uploader";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 const repairSchema = z.object({
   deviceBrand: z.string().min(1, "Brand required"),
@@ -56,9 +58,10 @@ const formSchema = z.object({
 
 export default function DailyClose() {
   const { user } = useAuth();
-  const { addClosure, products } = useData();
+  const { addClosure, updateClosure, products, closures } = useData();
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -111,7 +114,7 @@ export default function DailyClose() {
         card: values.cashEntries.find(e => e.type === "Card" && e.proof)?.proof || "",
       };
 
-      addClosure({
+      const payload = {
         submittedBy: user?.name || "Unknown",
         cashCounted,
         mtnAmount,
@@ -135,19 +138,50 @@ export default function DailyClose() {
           name: s.productName,
           unitPrice: s.quantity > 0 ? s.totalPrice / s.quantity : 0 
         })) || []
-      });
-      setSubmitted(true);
-      toast({
-        title: "Closure Submitted",
-        description: "Your daily report has been successfully recorded.",
-        className: "bg-green-600 text-white border-none",
-      });
+      } as any;
+
+      if (editingId) {
+        updateClosure(editingId, payload);
+        setEditingId(null);
+        setSubmitted(true);
+        toast({ title: "Closure Updated", description: "Closure saved.", className: "bg-green-600 text-white border-none" });
+      } else {
+        addClosure(payload);
+        setSubmitted(true);
+        toast({ title: "Closure Submitted", description: "Your daily report has been successfully recorded.", className: "bg-green-600 text-white border-none" });
+      }
     }, 1000);
   }
 
-  const handleMockUpload = (field: any) => {
-    const mockUrl = "https://placehold.co/600x400?text=Uploaded+Proof";
-    field.onChange(mockUrl);
+  // Helper to load an existing closure into the form for editing
+  const loadClosureIntoForm = (closure: any) => {
+    // Build cashEntries from proofs and amounts
+    const cashEntries: any[] = [];
+    if (closure.cashCounted !== undefined) cashEntries.push({ type: 'Cash', amount: closure.cashCounted, proof: closure.proofs?.cashDrawer || '' });
+    if (closure.mtnAmount !== undefined) cashEntries.push({ type: 'MTN', amount: closure.mtnAmount, proof: closure.proofs?.mtn || '' });
+    if (closure.airtelAmount !== undefined) cashEntries.push({ type: 'Airtel', amount: closure.airtelAmount, proof: closure.proofs?.airtel || '' });
+    if (closure.cardAmount !== undefined) cashEntries.push({ type: 'Card', amount: closure.cardAmount, proof: closure.proofs?.card || '' });
+
+    form.reset({
+      cashEntries,
+      repairs: closure.repairs?.map((r: any) => ({ deviceBrand: r.deviceBrand || '', deviceModel: r.deviceModel || '', imei: r.imei || '', repairType: r.repairType || '', price: r.price || 0, paymentMethod: r.paymentMethod || 'Cash', notes: r.notes || '' })) || [],
+      sales: closure.sales?.map((s: any) => ({ productId: s.productId || undefined, productName: s.name || '', quantity: s.quantity || 1, totalPrice: s.totalPrice || 0, paymentMethod: s.paymentMethod || 'Cash' })) || [],
+    });
+  };
+
+  useEffect(() => {
+    // If user is owner and there's a last closure, preload it for editing
+    if (user?.role === 'Owner' && closures && closures.length > 0) {
+      const last = closures[0];
+      // Do not auto-enter edit mode; provide button to edit
+      // But we keep last closure accessible
+    }
+  }, [user?.role, closures]);
+
+  // Replace mock upload with real uploader that posts to /api/uploads
+  const handleFileChangeForField = (field: any) => (files: UploadedFileMeta[]) => {
+    const first = files && files.length > 0 ? files[0] : null;
+    field.onChange(first ? first.url : "");
   };
 
   const handleProductSelect = (index: number, productId: string) => {
@@ -191,6 +225,19 @@ export default function DailyClose() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          {user?.role === 'Owner' && closures && closures.length > 0 && (
+            <div className="flex justify-end">
+              <Button type="button" variant="ghost" onClick={() => {
+                const last = closures[0];
+                if (!last) return;
+                setEditingId(last.id);
+                loadClosureIntoForm(last);
+                toast({ title: 'Editing Mode', description: 'Loaded last closure for editing.' });
+              }}>
+                Edit Last Closure
+              </Button>
+            </div>
+          )}
           
           {/* SALES SECTION */}
           <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -583,25 +630,15 @@ export default function DailyClose() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="sr-only">Proof Upload</FormLabel>
-                            <FormControl>
-                              <div 
-                                className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${field.value ? 'border-green-500 bg-green-50' : 'border-slate-300 hover:border-primary hover:bg-slate-50'}`}
-                                onClick={() => handleMockUpload(field)}
-                              >
-                                {field.value ? (
-                                  <div className="flex flex-col items-center text-green-700">
-                                    <CheckCircle2 className="w-8 h-8 mb-2" />
-                                    <span className="text-xs font-medium">Proof Uploaded</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col items-center text-slate-500">
-                                    <Upload className="w-8 h-8 mb-2" />
-                                    <span className="text-sm font-medium">Upload Proof</span>
-                                    <span className="text-xs text-slate-400 mt-1">Photo / Screenshot</span>
-                                  </div>
-                                )}
-                              </div>
-                            </FormControl>
+                              <FormControl>
+                                <FileUploader
+                                  value={field.value ? [{ id: `proof-${index}`, url: field.value, filename: 'proof.jpg', contentType: 'image/jpeg', size: 0, uploadedAt: new Date().toISOString() }] : []}
+                                  onChange={handleFileChangeForField(field)}
+                                  multiple={false}
+                                  accept="image/*"
+                                  maxFiles={1}
+                                />
+                              </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -615,7 +652,7 @@ export default function DailyClose() {
 
               <div className="pt-4">
                 <Button type="submit" className="w-full h-12 text-lg" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Submitting..." : "Submit Daily Close"}
+                  {form.formState.isSubmitting ? "Submitting..." : (editingId ? "Update Closure" : "Submit Daily Close")}
                 </Button>
               </div>
         </form>

@@ -3,28 +3,65 @@ import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb } f
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+
+
 // ===================== USERS =====================
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  pin: text("pin"),
   name: text("name"),
   email: text("email"),
-  role: text("role").default("Staff"),
+  role: text("role").default("Sales"),
+  status: text("status").default("active"), // active | disabled
+  lastLoginAt: timestamp("last_login_at"),
+  lastActiveAt: timestamp("last_active_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
   shopId: varchar("shop_id"),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  pin: true,
   name: true,
   email: true,
   role: true,
+  status: true,
+  lastLoginAt: true,
+  lastActiveAt: true,
   shopId: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// ===================== SHOPS =====================
+export const shops = pgTable("shops", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  address: text("address"),
+  phone: text("phone"),
+  email: text("email"),
+  timezone: text("timezone"),
+  logo: jsonb("logo"),
+  coverImage: jsonb("cover_image"),
+  themeColorPrimary: text("theme_color_primary"),
+  themeColorAccent: text("theme_color_accent"),
+  isMain: boolean("is_main").default(false),
+  currency: text("currency").default("UGX"),
+  subscriptionPlan: text("subscription_plan").default("trial"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertShopSchema = createInsertSchema(shops).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertShop = z.infer<typeof insertShopSchema>;
+export type Shop = typeof shops.$inferSelect;
 
 // ===================== PHONE BRANDS =====================
 export const brands = pgTable("brands", {
@@ -86,6 +123,28 @@ export const insertDeviceBaseValueSchema = createInsertSchema(deviceBaseValues).
 
 export type InsertDeviceBaseValue = z.infer<typeof insertDeviceBaseValueSchema>;
 export type DeviceBaseValue = typeof deviceBaseValues.$inferSelect;
+
+// ===================== PRODUCTS =====================
+export const products = pgTable("products", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  category: text("category"),
+  brand: text("brand"),
+  model: text("model"),
+  price: integer("price").notNull().default(0),
+  costPrice: integer("cost_price").notNull().default(0),
+  stock: integer("stock").notNull().default(0),
+  minStock: integer("min_stock").notNull().default(0),
+  sku: text("sku"),
+  imageUrl: text("image_url"),
+  shopId: varchar("shop_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type Product = typeof products.$inferSelect;
 
 // ===================== CONDITION QUESTIONS =====================
 // Structured questions for the trade-in wizard (no free-text)
@@ -155,18 +214,19 @@ export const tradeInAssessments = pgTable("trade_in_assessments", {
   payoutMethod: text("payout_method"), // 'Cash', 'MTN', 'Airtel', 'Credit'
   payoutReference: text("payout_reference"),
   payoutCompletedAt: timestamp("payout_completed_at"),
-  
+
   // Linking to sale or repair
   linkedSaleId: varchar("linked_sale_id"),
   linkedRepairId: varchar("linked_repair_id"),
-  
+
   // Inventory (when accepted)
   deviceInventoryId: varchar("device_inventory_id"),
-  
+
   // Meta
   status: text("status").notNull().default("pending"), // 'pending', 'approved', 'rejected', 'completed', 'cancelled'
   shopId: varchar("shop_id"),
   processedBy: varchar("processed_by"),
+  attachments: jsonb("attachments"), // optional images/files attached to the assessment
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -224,6 +284,32 @@ export const insertTradeInAuditLogSchema = createInsertSchema(tradeInAuditLogs).
 export type InsertTradeInAuditLog = z.infer<typeof insertTradeInAuditLogSchema>;
 export type TradeInAuditLog = typeof tradeInAuditLogs.$inferSelect;
 
+// ===================== ACTIVITY LOGS =====================
+// Cross-cutting audit for auth, sales, closures, and staffing
+export const activityLogs = pgTable("activity_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  userName: text("user_name"),
+  role: text("role"),
+  action: text("action").notNull(),
+  entity: text("entity").notNull(),
+  entityId: varchar("entity_id"),
+  details: text("details"),
+  metadata: jsonb("metadata"),
+  shopId: varchar("shop_id"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+export type ActivityLog = typeof activityLogs.$inferSelect;
+
 // ===================== SCORING RULES =====================
 // Configurable scoring thresholds
 export const scoringRules = pgTable("scoring_rules", {
@@ -273,6 +359,18 @@ export const tradeInWizardSchema = z.object({
   // Optional: Link to sale or repair
   linkedSaleId: z.string().optional(),
   linkedRepairId: z.string().optional(),
+
+  // Optional: attachments (photos/docs)
+  attachments: z.array(
+    z.object({
+      id: z.string(),
+      url: z.string(),
+      filename: z.string(),
+      contentType: z.string(),
+      size: z.number(),
+      uploadedAt: z.string(),
+    })
+  ).optional(),
 });
 
 export type TradeInWizardInput = z.infer<typeof tradeInWizardSchema>;
@@ -286,3 +384,45 @@ export const tradeInReviewSchema = z.object({
 });
 
 export type TradeInReviewInput = z.infer<typeof tradeInReviewSchema>;
+
+// ===================== LEADS / FOLLOW-UPS =====================
+// Apple-style leads table: captures customer leads, assignment, follow-up schedule, and history
+export const leads = pgTable("leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerName: text("customer_name").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  customerEmail: text("customer_email"),
+  source: text("source"), // e.g., 'walk-in', 'phone', 'website', 'referral'
+  notes: text("notes"),
+  assignedTo: varchar("assigned_to"), // user id
+  priority: text("priority").default("normal"), // 'low' | 'normal' | 'high'
+  status: text("status").default("new"), // 'new' | 'contacted' | 'in_progress' | 'won' | 'lost'
+  nextFollowUpAt: timestamp("next_follow_up_at"),
+  followUpHistory: jsonb("follow_up_history"), // array of { by, at, note, result }
+  createdBy: varchar("created_by"),
+  createdByName: text("created_by_name"),
+  shopId: varchar("shop_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type InsertLead = z.infer<typeof insertLeadSchema>;
+export type Lead = typeof leads.$inferSelect;
+
+// Audit logs for lead actions
+export const leadAuditLogs = pgTable("lead_audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").notNull(),
+  action: text("action").notNull(), // 'created', 'assigned', 'updated', 'follow_up', 'closed'
+  userId: varchar("user_id"),
+  userName: text("user_name"),
+  details: text("details"),
+  metadata: jsonb("metadata"),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+export const insertLeadAuditLogSchema = createInsertSchema(leadAuditLogs).omit({ id: true, timestamp: true });
+export type InsertLeadAuditLog = z.infer<typeof insertLeadAuditLogSchema>;
+export type LeadAuditLog = typeof leadAuditLogs.$inferSelect;

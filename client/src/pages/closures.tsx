@@ -20,12 +20,12 @@ export default function ClosuresPage() {
   // Filter closures for active shop
   const shopClosures = closures.filter(c => c.shopId === activeShop.id);
 
-  if ((user?.role as string) !== "Owner" && (user?.role as string) !== "Supervisor") {
+  if ((user?.role as string) !== "Owner" && (user?.role as string) !== "Manager") {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] text-center">
         <AlertTriangle className="w-12 h-12 text-slate-300 mb-4" />
         <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
-        <p className="text-slate-500 max-w-sm mt-2">Only owners and supervisors can review daily closures.</p>
+        <p className="text-slate-500 max-w-sm mt-2">Only owners and managers can review daily closures.</p>
       </div>
     );
   }

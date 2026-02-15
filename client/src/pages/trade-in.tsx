@@ -20,8 +20,9 @@ import {
   Cpu, Battery, Camera, Volume2, Fingerprint, Package, Lock, CheckCircle,
   Eye, Edit, FileText
 } from "lucide-react";
-import { BarcodeScanner, ScanResult } from "@/components/barcode-scanner";
-import { checkForFakeDevice, type FakeDeviceCheck } from "@/lib/scan-utils";
+import { Scanner } from "@/components/scanner";
+import { FileUploader, type UploadedFileMeta } from "@/components/file-uploader";
+import { checkForFakeDevice, type FakeDeviceCheck, detectScanType, validateIMEI as validateScannedIMEI, extractDeviceFromTAC } from "@/lib/scan-utils";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -70,6 +71,7 @@ interface TradeInAssessment {
   status: string;
   payoutMethod: string | null;
   createdAt: string;
+  attachments?: UploadedFileMeta[];
 }
 
 interface ScoringResult {
@@ -133,15 +135,23 @@ export default function TradeInPage() {
   const [showFakeDeviceDialog, setShowFakeDeviceDialog] = useState(false);
   const [ownerOverrideReason, setOwnerOverrideReason] = useState("");
   const [scanDetectedDevice, setScanDetectedDevice] = useState<{ brand?: string; model?: string } | null>(null);
+  const [attachments, setAttachments] = useState<UploadedFileMeta[]>([]);
 
   // Fetch condition questions
   const { data: questions = [] } = useQuery<ConditionQuestion[]>({
     queryKey: ["/api/trade-in/questions"],
   });
 
-  // Fetch base values
+  // Fetch base values (include shopId so shop-specific values load)
   const { data: baseValues = [] } = useQuery<DeviceBaseValue[]>({
-    queryKey: ["/api/trade-in/base-values"],
+    queryKey: ["trade-in-base-values", activeShop?.id ?? "global"],
+    queryFn: async () => {
+      const url = `/api/trade-in/base-values${activeShop?.id ? `?shopId=${activeShop.id}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error(`Failed to load base values: ${res.status}`);
+      return (await res.json()) as DeviceBaseValue[];
+    },
+    staleTime: Infinity,
   });
 
   // Fetch assessments
@@ -149,16 +159,97 @@ export default function TradeInPage() {
     queryKey: ["/api/trade-in/assessments"],
   });
 
-  // Get unique brands and models from base values
-  const brands = useMemo(() => Array.from(new Set(baseValues.map(v => v.brand))).sort(), [baseValues]);
-  const models = useMemo(() => 
-    Array.from(new Set(baseValues.filter(v => v.brand === brand).map(v => v.model))).sort(), 
-    [baseValues, brand]
-  );
-  const storages = useMemo(() => 
-    Array.from(new Set(baseValues.filter(v => v.brand === brand && v.model === model).map(v => v.storage))).sort(),
-    [baseValues, brand, model]
-  );
+  // Fetch normalized brands and models from server, fallback to baseValues-derived lists
+  const { data: apiBrands = [], isLoading: brandsLoading } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/brands", activeShop?.id ?? "global"],
+    queryFn: async () => {
+      const url = `/api/brands${activeShop?.id ? `?shopId=${activeShop.id}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) return [] as any;
+      const json = await res.json();
+      // Normalize server responses: could be array of strings or objects
+      if (Array.isArray(json) && json.length > 0 && typeof json[0] === "string") {
+        return json.map((n: string) => ({ id: n, name: n }));
+      }
+      return json as { id: string; name: string }[];
+    },
+    staleTime: Infinity,
+  });
+
+  const { data: apiModels = [], isLoading: modelsLoading } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/models", brand, activeShop?.id ?? "global"],
+    queryFn: async () => {
+      if (!brand) return [] as any;
+      // Determine whether brand is an id from apiBrands
+      const found = apiBrands.find(b => b.id === brand || b.name === brand);
+      let url = "";
+      if (found) {
+        url = `/api/models?brand_id=${found.id}${activeShop?.id ? `&shopId=${activeShop.id}` : ""}`;
+      } else {
+        url = `/api/models?brand=${encodeURIComponent(brand)}${activeShop?.id ? `&shopId=${activeShop.id}` : ""}`;
+      }
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) return [] as any;
+      const json = await res.json();
+      if (Array.isArray(json) && json.length > 0 && typeof json[0] === "string") {
+        return json.map((n: string) => ({ id: n, name: n }));
+      }
+      return json as { id: string; name: string }[];
+    },
+    enabled: !!brand,
+    staleTime: Infinity,
+  });
+
+  const { data: apiStorages = [], isLoading: storagesLoading } = useQuery<string[]>({
+    queryKey: ["/api/storages", brand, model, activeShop?.id ?? "global"],
+    queryFn: async () => {
+      if (!model) return [] as any;
+      // Try model id from apiModels first
+      const foundModel = apiModels.find(m => m.id === model || m.name === model);
+      let url = "";
+      if (foundModel) {
+        url = `/api/storages?model_id=${foundModel.id}${activeShop?.id ? `&shopId=${activeShop.id}` : ""}`;
+      } else {
+        url = `/api/storages?brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(model)}${activeShop?.id ? `&shopId=${activeShop.id}` : ""}`;
+      }
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) return [] as any;
+      const json = await res.json();
+      if (Array.isArray(json) && json.length > 0 && typeof json[0] === "string") return json;
+      // If objects returned, map to size or size property
+      if (Array.isArray(json)) return json.map((s: any) => s.size || s);
+      return [] as string[];
+    },
+    enabled: !!model,
+    staleTime: Infinity,
+  });
+
+  // Fallback derived lists from baseValues
+  const fallbackBrands = useMemo(() => {
+    const set = new Map<string, string>();
+    baseValues.forEach((v) => set.set(v.brand.toLowerCase(), v.brand));
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b)).map(n => ({ id: n, name: n }));
+  }, [baseValues]);
+
+  const fallbackModels = useMemo(() => {
+    const set = new Map<string, string>();
+    baseValues
+      .filter((v) => v.brand.toLowerCase() === (brand || "").toLowerCase())
+      .forEach((v) => set.set(v.model.toLowerCase(), v.model));
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b)).map(n => ({ id: n, name: n }));
+  }, [baseValues, brand]);
+
+  const fallbackStorages = useMemo(() => {
+    const set = new Map<string, string>();
+    baseValues
+      .filter((v) => v.brand.toLowerCase() === (brand || "").toLowerCase() && v.model.toLowerCase() === (model || "").toLowerCase())
+      .forEach((v) => set.set(v.storage.toLowerCase(), v.storage));
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
+  }, [baseValues, brand, model]);
+
+  const brandsList = (apiBrands && apiBrands.length > 0) ? apiBrands : fallbackBrands;
+  const modelsList = (apiModels && apiModels.length > 0) ? apiModels : fallbackModels;
+  const storages = (apiStorages && apiStorages.length > 0) ? apiStorages : fallbackStorages;
 
   // Get current base value
   const currentBaseValue = useMemo(() => {
@@ -194,8 +285,8 @@ export default function TradeInPage() {
         model,
         storage,
         conditionAnswers,
-        isIcloudLocked,
-        isGoogleLocked,
+        isIcloudLocked: !!isIcloudLocked,
+        isGoogleLocked: brand === "Apple" ? false : !!isGoogleLocked,
         imei,
       });
       return res.json();
@@ -214,8 +305,8 @@ export default function TradeInPage() {
         storage,
         color,
         imei,
-        isIcloudLocked,
-        isGoogleLocked,
+        isIcloudLocked: !!isIcloudLocked,
+        isGoogleLocked: brand === "Apple" ? false : !!isGoogleLocked,
         conditionAnswers,
         customerName,
         customerPhone,
@@ -224,6 +315,7 @@ export default function TradeInPage() {
         shopId: activeShop?.id,
         processedBy: currentUser?.id,
         processedByName: currentUser?.name,
+        attachments,
       });
       return res.json();
     },
@@ -297,75 +389,111 @@ export default function TradeInPage() {
     setFakeDeviceWarning(null);
     setScanDetectedDevice(null);
     setOwnerOverrideReason("");
+    setAttachments([]);
   };
 
-  const handleScanResult = (cleanedValue: string, scanResult?: ScanResult) => {
+  // Validation helper before allowing submit
+  const ensureWizardValid = () => {
+    if (!brand || !model || !storage) {
+      toast({ title: "Select device", description: "Choose brand, model, and storage.", variant: "destructive" });
+      return false;
+    }
+    if (imei.length !== 15) {
+      toast({ title: "Invalid IMEI", description: "IMEI must be 15 digits.", variant: "destructive" });
+      return false;
+    }
+    if (isIcloudLocked === null) {
+      toast({ title: "Answer iCloud question", description: "Select Yes or No for iCloud/Find My.", variant: "destructive" });
+      return false;
+    }
+    if (brand !== "Apple" && isGoogleLocked === null) {
+      toast({ title: "Answer Google FRP question", description: "Select Yes or No for FRP.", variant: "destructive" });
+      return false;
+    }
+    const missingRequired = questions
+      .filter(q => q.isRequired)
+      .some(q => !conditionAnswers[q.id]);
+    if (missingRequired) {
+      toast({ title: "Condition answers required", description: "Answer all required condition checks.", variant: "destructive" });
+      return false;
+    }
+    if (!customerName || !customerPhone) {
+      toast({ title: "Customer details required", description: "Name and phone are required.", variant: "destructive" });
+      return false;
+    }
+    return true;
+  };
+
+  const handleScanResult = (rawValue: string) => {
     setIsScannerOpen(false);
-    
-    if (scanResult && scanResult.type === "imei") {
-      const scannedImei = scanResult.cleanedValue.replace(/\D/g, "").slice(0, 15);
-      setImei(scannedImei);
-      
-      if (scanResult.deviceInfo?.brand) {
+    const detection = detectScanType(rawValue);
+    const cleanedValue = detection.value.replace(/\D/g, "");
+    const imeiValue = cleanedValue.slice(0, 15);
+    const validation = detection.type === "imei" ? validateScannedIMEI(imeiValue) : { valid: true };
+    const deviceInfo = detection.type === "imei" ? extractDeviceFromTAC(imeiValue) : undefined;
+
+    if (detection.type === "imei" && imeiValue.length === 15) {
+      setImei(imeiValue);
+
+      if (deviceInfo?.brand) {
         setScanDetectedDevice({
-          brand: scanResult.deviceInfo.brand,
-          model: scanResult.deviceInfo.model
+          brand: deviceInfo.brand,
+          model: deviceInfo.model,
         });
-        
-        const detectedBrand = scanResult.deviceInfo.brand;
-        if (detectedBrand && brands.includes(detectedBrand)) {
+
+        const detectedBrand = deviceInfo.brand;
+        if (detectedBrand && brandsList.some(b => b.name === detectedBrand)) {
           setBrand(detectedBrand);
           setModel("");
           setStorage("");
-          
-          if (scanResult.deviceInfo.model) {
-            const availableModels = baseValues
-              .filter(v => v.brand === detectedBrand)
-              .map(v => v.model);
-            const matchingModel = availableModels.find(m => 
-              m.toLowerCase().includes(scanResult.deviceInfo!.model!.toLowerCase().split(" ").pop() || "")
+
+          if (deviceInfo.model) {
+            // Prefer modelsList from API if available, otherwise derive from baseValues
+            const availableModels = (modelsList && modelsList.length > 0)
+              ? modelsList.map(m => m.name)
+              : baseValues.filter((v) => v.brand === detectedBrand).map((v) => v.model);
+            const matchingModel = availableModels.find((m) =>
+              m.toLowerCase().includes(deviceInfo.model!.toLowerCase().split(" ").pop() || "")
             );
             if (matchingModel) {
               setModel(matchingModel);
             }
           }
-          
+
           toast({
             title: "Device Detected",
-            description: `Auto-filled: ${detectedBrand}${scanResult.deviceInfo.model ? ` ${scanResult.deviceInfo.model}` : ""}`,
+            description: `Auto-filled: ${detectedBrand}${deviceInfo.model ? ` ${deviceInfo.model}` : ""}`,
             className: "bg-blue-600 text-white border-none",
           });
         }
       }
-      
-      if (!scanResult.validation.valid) {
+
+      if (!validation.valid) {
         toast({
           title: "Warning",
-          description: scanResult.validation.error,
+          description: validation.error,
           variant: "destructive",
         });
       }
-      
-      toast({ title: "IMEI Scanned", description: `IMEI: ${scannedImei}` });
-    } else if (scanResult && scanResult.type === "serial") {
+
+      toast({ title: "IMEI Scanned", description: `IMEI: ${imeiValue}` });
+      return;
+    }
+
+    if (detection.type === "serial") {
       toast({
         title: "Serial Number Scanned",
-        description: `This appears to be a serial number, not an IMEI. Please enter the IMEI manually or scan the IMEI barcode.`,
+        description: "This looks like a serial number. Please scan or enter the IMEI to proceed.",
         variant: "destructive",
       });
-    } else {
-      const scannedImei = cleanedValue.replace(/\D/g, "").slice(0, 15);
-      if (scannedImei.length === 15) {
-        setImei(scannedImei);
-        toast({ title: "Scanned", description: `IMEI: ${scannedImei}` });
-      } else {
-        toast({
-          title: "Unknown Format",
-          description: "Could not detect IMEI. Please enter manually.",
-          variant: "destructive",
-        });
-      }
+      return;
     }
+
+    toast({
+      title: "Unknown Format",
+      description: "Could not detect IMEI. Please enter manually.",
+      variant: "destructive",
+    });
   };
 
   const checkFakeDevice = () => {
@@ -414,7 +542,21 @@ export default function TradeInPage() {
   };
 
   const handleSubmit = () => {
+    if (!ensureWizardValid()) return;
     submitTradeInMutation.mutate();
+  };
+
+  const seedBrandsAndModels = async () => {
+    try {
+      const res = await fetch("/api/seed-brands", { method: "POST" });
+      if (!res.ok) throw new Error("Seed failed");
+      await queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/models"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/storages"] });
+      toast({ title: "Brand catalog refreshed", description: "Brands and models have been seeded." });
+    } catch (err: any) {
+      toast({ title: "Seed failed", description: err?.message || "Could not seed brands/models", variant: "destructive" });
+    }
   };
 
   const getDecisionBadge = (decision: string, status: string) => {
@@ -505,7 +647,7 @@ export default function TradeInPage() {
                       <div className="space-y-2">
                         <Label>Brand</Label>
                         <SearchableSelect
-                          options={brands.map(b => ({ value: b, label: b }))}
+                          options={brandsList.map(b => ({ value: b.name, label: b.name }))}
                           value={brand}
                           onValueChange={(v) => { setBrand(v); setModel(""); setStorage(""); }}
                           placeholder="Select brand"
@@ -517,7 +659,7 @@ export default function TradeInPage() {
                       <div className="space-y-2">
                         <Label>Model</Label>
                         <SearchableSelect
-                          options={models.map(m => ({ value: m, label: m }))}
+                          options={modelsList.map(m => ({ value: m.name, label: m.name }))}
                           value={model}
                           onValueChange={(v) => { setModel(v); setStorage(""); }}
                           placeholder="Select model"
@@ -528,6 +670,18 @@ export default function TradeInPage() {
                         />
                       </div>
                     </div>
+                    
+                    {brandsList.length === 0 && (
+                      <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-amber-800">No brands seeded</p>
+                          <p className="text-sm text-amber-700">Seed the catalog to load Apple/Samsung and others.</p>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={seedBrandsAndModels}>
+                          Seed brands
+                        </Button>
+                      </div>
+                    )}
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -644,13 +798,11 @@ export default function TradeInPage() {
                       </div>
                     )}
 
-                    <BarcodeScanner 
-                      isOpen={isScannerOpen} 
-                      onClose={() => setIsScannerOpen(false)} 
-                      onScan={handleScanResult}
-                      title="Scan IMEI Barcode"
-                      enableTTS={true}
-                      showValidation={true}
+                    <Scanner 
+                      open={isScannerOpen}
+                      onClose={() => setIsScannerOpen(false)}
+                      onDetected={handleScanResult}
+                      title="Scan IMEI / QR"
                     />
                   </div>
                 )}
@@ -929,6 +1081,14 @@ export default function TradeInPage() {
                       </Select>
                     </div>
 
+                    <div className="space-y-2">
+                      <Label>Photos &amp; Receipts (optional)</Label>
+                      <p className="text-xs text-slate-500">
+                        Snap device condition, proof of ID, or receipt. Mobile-friendly and saves instantly.
+                      </p>
+                      <FileUploader value={attachments} onChange={setAttachments} />
+                    </div>
+
                     {/* Final Summary */}
                     <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
                       <h4 className="font-semibold text-green-800 mb-4">Trade-In Summary</h4>
@@ -1088,6 +1248,7 @@ export default function TradeInPage() {
                     <TableHead>Score</TableHead>
                     <TableHead>Offer</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Files</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
@@ -1115,6 +1276,9 @@ export default function TradeInPage() {
                         UGX {(a.finalOffer || a.calculatedOffer).toLocaleString()}
                       </TableCell>
                       <TableCell>{getDecisionBadge(a.decision, a.status)}</TableCell>
+                      <TableCell className="text-sm text-slate-500">
+                        {(a.attachments?.length ?? 0) > 0 ? `${a.attachments?.length} file(s)` : "—"}
+                      </TableCell>
                       <TableCell className="text-sm text-slate-500">
                         {format(new Date(a.createdAt), "MMM dd, yyyy")}
                       </TableCell>

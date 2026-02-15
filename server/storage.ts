@@ -8,9 +8,14 @@ import {
   type TradeInAssessment, type InsertTradeInAssessment, tradeInAssessments,
   type BlockedImei, type InsertBlockedImei, blockedImeis,
   type TradeInAuditLog, type InsertTradeInAuditLog, tradeInAuditLogs,
+  type Lead, type InsertLead, leads,
+  type LeadAuditLog, type InsertLeadAuditLog, leadAuditLogs,
   type ScoringRule, type InsertScoringRule, scoringRules,
+  type ActivityLog, type InsertActivityLog, activityLogs,
+  type Shop, type InsertShop, shops,
+  type Product, type InsertProduct, products,
 } from "@shared/schema";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, desc, sql as sqlFn } from "drizzle-orm";
 
 export interface IStorage {
@@ -18,6 +23,10 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  listUsers(): Promise<User[]>;
+  updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
+  setUserStatus(id: string, status: "active" | "disabled"): Promise<User | undefined>;
+  touchUserActivity(id: string, activity?: { lastLogin?: boolean }): Promise<void>;
   
   // Brands
   getBrands(): Promise<Brand[]>;
@@ -37,6 +46,8 @@ export interface IStorage {
   // Device Base Values
   getDeviceBaseValues(shopId?: string): Promise<DeviceBaseValue[]>;
   getDeviceBaseValue(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined>;
+  findDeviceBaseValueAnyStatus(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined>;
+  upsertDeviceBaseValue(value: InsertDeviceBaseValue): Promise<DeviceBaseValue>;
   createDeviceBaseValue(value: InsertDeviceBaseValue): Promise<DeviceBaseValue>;
   updateDeviceBaseValue(id: string, value: Partial<InsertDeviceBaseValue>): Promise<DeviceBaseValue | undefined>;
   deleteDeviceBaseValue(id: string): Promise<boolean>;
@@ -53,6 +64,8 @@ export interface IStorage {
   createTradeInAssessment(assessment: InsertTradeInAssessment): Promise<TradeInAssessment>;
   updateTradeInAssessment(id: string, assessment: Partial<InsertTradeInAssessment>): Promise<TradeInAssessment | undefined>;
   getNextTradeInNumber(): Promise<string>;
+  upsertDeviceBaseValue(value: InsertDeviceBaseValue): Promise<DeviceBaseValue>;
+  upsertDeviceBaseValue(value: InsertDeviceBaseValue): Promise<DeviceBaseValue>;
   
   // Blocked IMEIs
   getBlockedImei(imei: string): Promise<BlockedImei | undefined>;
@@ -66,6 +79,16 @@ export interface IStorage {
   // Scoring Rules
   getScoringRules(shopId?: string): Promise<ScoringRule[]>;
   createScoringRule(rule: InsertScoringRule): Promise<ScoringRule>;
+
+  // Activity Logs
+  createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
+  getActivityLogs(limit?: number): Promise<ActivityLog[]>;
+
+  // Shops
+  getShop(id: string): Promise<import("@shared/schema").Shop | undefined>;
+  getShops(): Promise<import("@shared/schema").Shop[]>;
+  createShop(shop: import("@shared/schema").InsertShop): Promise<import("@shared/schema").Shop>;
+  updateShop(id: string, data: Partial<import("@shared/schema").InsertShop>): Promise<import("@shared/schema").Shop | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -85,9 +108,41 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async listUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(users.name);
+  }
+
+  async updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined> {
+    const [updated] = await db.update(users)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return updated;
+  }
+
+  async setUserStatus(id: string, status: "active" | "disabled"): Promise<User | undefined> {
+    const [updated] = await db.update(users)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return updated;
+  }
+
+  async touchUserActivity(id: string, activity?: { lastLogin?: boolean }): Promise<void> {
+    const updates: Partial<InsertUser> = { lastActiveAt: new Date() };
+    if (activity?.lastLogin) {
+      updates.lastLoginAt = new Date();
+    }
+    await db.update(users)
+      .set(updates)
+      .where(eq(users.id, id));
+  }
+
   // ==================== BRANDS ====================
   async getBrands(): Promise<Brand[]> {
-    return db.select().from(brands).where(eq(brands.isActive, true)).orderBy(brands.sortOrder, brands.name);
+    // For SQLite boolean columns are stored as integers (1/0)
+    const activeVal = pool ? true : 1;
+    return db.select().from(brands).where(eq(brands.isActive, activeVal)).orderBy(brands.sortOrder, brands.name);
   }
 
   async getBrand(id: string): Promise<Brand | undefined> {
@@ -100,12 +155,23 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  async updateBrand(id: string, data: Partial<InsertBrand>): Promise<Brand | undefined> {
+    const [updated] = await db.update(brands).set({ ...data }).where(eq(brands.id, id)).returning();
+    return updated;
+  }
+
+  async deleteBrand(id: string): Promise<boolean> {
+    await db.delete(brands).where(eq(brands.id, id));
+    return true;
+  }
+
   // ==================== MODELS ====================
   async getModels(brandId?: string): Promise<Model[]> {
+    const activeVal = pool ? true : 1;
     if (brandId) {
-      return db.select().from(models).where(and(eq(models.brandId, brandId), eq(models.isActive, true))).orderBy(models.sortOrder, models.name);
+      return db.select().from(models).where(and(eq(models.brandId, brandId), eq(models.isActive, activeVal))).orderBy(models.sortOrder, models.name);
     }
-    return db.select().from(models).where(eq(models.isActive, true)).orderBy(models.sortOrder, models.name);
+    return db.select().from(models).where(eq(models.isActive, activeVal)).orderBy(models.sortOrder, models.name);
   }
 
   async getModel(id: string): Promise<Model | undefined> {
@@ -117,13 +183,24 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db.insert(models).values(model).returning();
     return created;
   }
+  
+  async updateModel(id: string, data: Partial<InsertModel>): Promise<Model | undefined> {
+    const [updated] = await db.update(models).set({ ...data }).where(eq(models.id, id)).returning();
+    return updated;
+  }
+
+  async deleteModel(id: string): Promise<boolean> {
+    await db.delete(models).where(eq(models.id, id));
+    return true;
+  }
 
   // ==================== STORAGE OPTIONS ====================
   async getStorageOptions(modelId?: string): Promise<StorageOption[]> {
+    const activeVal = pool ? true : 1;
     if (modelId) {
-      return db.select().from(storageOptions).where(and(eq(storageOptions.modelId, modelId), eq(storageOptions.isActive, true))).orderBy(storageOptions.sortOrder, storageOptions.size);
+      return db.select().from(storageOptions).where(and(eq(storageOptions.modelId, modelId), eq(storageOptions.isActive, activeVal))).orderBy(storageOptions.sortOrder, storageOptions.size);
     }
-    return db.select().from(storageOptions).where(eq(storageOptions.isActive, true)).orderBy(storageOptions.sortOrder, storageOptions.size);
+    return db.select().from(storageOptions).where(eq(storageOptions.isActive, activeVal)).orderBy(storageOptions.sortOrder, storageOptions.size);
   }
 
   async getStorageOption(id: string): Promise<StorageOption | undefined> {
@@ -134,6 +211,16 @@ export class DatabaseStorage implements IStorage {
   async createStorageOption(option: InsertStorageOption): Promise<StorageOption> {
     const [created] = await db.insert(storageOptions).values(option).returning();
     return created;
+  }
+
+  async updateStorageOption(id: string, data: Partial<InsertStorageOption>): Promise<StorageOption | undefined> {
+    const [updated] = await db.update(storageOptions).set({ ...data }).where(eq(storageOptions.id, id)).returning();
+    return updated;
+  }
+
+  async deleteStorageOption(id: string): Promise<boolean> {
+    await db.delete(storageOptions).where(eq(storageOptions.id, id));
+    return true;
   }
 
   // ==================== DEVICE BASE VALUES ====================
@@ -159,6 +246,28 @@ export class DatabaseStorage implements IStorage {
     }
     const [value] = await db.select().from(deviceBaseValues).where(and(...conditions));
     return value;
+  }
+
+  async findDeviceBaseValueAnyStatus(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined> {
+    const conditions = [
+      eq(deviceBaseValues.brand, brand),
+      eq(deviceBaseValues.model, model),
+      eq(deviceBaseValues.storage, storage),
+    ];
+    if (shopId) {
+      conditions.push(eq(deviceBaseValues.shopId, shopId));
+    }
+    const [value] = await db.select().from(deviceBaseValues).where(and(...conditions));
+    return value;
+  }
+
+  async upsertDeviceBaseValue(value: InsertDeviceBaseValue): Promise<DeviceBaseValue> {
+    const existing = await this.findDeviceBaseValueAnyStatus(value.brand, value.model, value.storage, value.shopId || undefined);
+    if (existing) {
+      const updated = await this.updateDeviceBaseValue(existing.id, value);
+      return updated ?? existing;
+    }
+    return this.createDeviceBaseValue(value);
   }
 
   async createDeviceBaseValue(value: InsertDeviceBaseValue): Promise<DeviceBaseValue> {
@@ -286,6 +395,117 @@ export class DatabaseStorage implements IStorage {
   async createScoringRule(rule: InsertScoringRule): Promise<ScoringRule> {
     const [created] = await db.insert(scoringRules).values(rule).returning();
     return created;
+  }
+
+  // ==================== ACTIVITY LOGS ====================
+  async createActivityLog(log: InsertActivityLog): Promise<ActivityLog> {
+    const [created] = await db.insert(activityLogs).values(log).returning();
+    return created;
+  }
+
+  async getActivityLogs(limit: number = 200): Promise<ActivityLog[]> {
+    return db.select().from(activityLogs)
+      .orderBy(desc(activityLogs.createdAt))
+      .limit(limit);
+  }
+
+  // ==================== LEADS ====================
+  async getLeads(shopId?: string): Promise<import("@shared/schema").Lead[]> {
+    if (shopId) {
+      return db.select().from(leads).where(eq(leads.shopId, shopId)).orderBy(desc(leads.createdAt));
+    }
+    return db.select().from(leads).orderBy(desc(leads.createdAt));
+  }
+
+  async getLead(id: string): Promise<import("@shared/schema").Lead | undefined> {
+    const [l] = await db.select().from(leads).where(eq(leads.id, id));
+    return l;
+  }
+
+  async createLead(lead: import("@shared/schema").InsertLead): Promise<import("@shared/schema").Lead> {
+    const [created] = await db.insert(leads).values(lead).returning();
+    return created;
+  }
+
+  async updateLead(id: string, data: Partial<import("@shared/schema").InsertLead>): Promise<import("@shared/schema").Lead | undefined> {
+    const [updated] = await db.update(leads).set({ ...data, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
+    return updated;
+  }
+
+  async addLeadFollowUp(leadId: string, followUp: { by?: string; byName?: string; note?: string; result?: string; at?: Date; nextFollowUpAt?: Date | null }): Promise<import("@shared/schema").Lead | undefined> {
+    const existing = await this.getLead(leadId);
+    if (!existing) return undefined;
+    const history = Array.isArray(existing.followUpHistory) ? [...existing.followUpHistory] : [];
+    const entry = {
+      by: followUp.by || null,
+      byName: followUp.byName || null,
+      note: followUp.note || null,
+      result: followUp.result || null,
+      at: (followUp.at || new Date()).toISOString(),
+    } as any;
+    history.push(entry);
+    const updates: any = { followUpHistory: history, updatedAt: new Date() };
+    if (followUp.nextFollowUpAt) updates.nextFollowUpAt = followUp.nextFollowUpAt;
+    const [updated] = await db.update(leads).set(updates).where(eq(leads.id, leadId)).returning();
+    return updated;
+  }
+
+  // ==================== LEAD AUDIT LOGS ====================
+  async createLeadAuditLog(log: import("@shared/schema").InsertLeadAuditLog): Promise<import("@shared/schema").LeadAuditLog> {
+    const [created] = await db.insert(leadAuditLogs).values(log).returning();
+    return created;
+  }
+
+  async getLeadAuditLogs(leadId: string): Promise<import("@shared/schema").LeadAuditLog[]> {
+    return db.select().from(leadAuditLogs).where(eq(leadAuditLogs.leadId, leadId)).orderBy(desc(leadAuditLogs.timestamp));
+  }
+
+  // ==================== PRODUCTS ====================
+  async getProducts(shopId?: string): Promise<import("@shared/schema").Product[]> {
+    if (shopId) {
+      return db.select().from(products).where(eq(products.shopId, shopId)).orderBy(products.name);
+    }
+    return db.select().from(products).orderBy(products.name);
+  }
+
+  async getProduct(id: string): Promise<import("@shared/schema").Product | undefined> {
+    const [p] = await db.select().from(products).where(eq(products.id, id));
+    return p;
+  }
+
+  async createProduct(product: import("@shared/schema").InsertProduct): Promise<import("@shared/schema").Product> {
+    const [created] = await db.insert(products).values(product).returning();
+    return created;
+  }
+
+  async updateProduct(id: string, data: Partial<import("@shared/schema").InsertProduct>): Promise<import("@shared/schema").Product | undefined> {
+    const [updated] = await db.update(products).set({ ...data, updatedAt: new Date() }).where(eq(products.id, id)).returning();
+    return updated;
+  }
+
+  async deleteProduct(id: string): Promise<boolean> {
+    await db.delete(products).where(eq(products.id, id));
+    return true;
+  }
+
+  // ==================== SHOPS ====================
+  async getShop(id: string): Promise<import("@shared/schema").Shop | undefined> {
+    const [shop] = await db.select().from(shops).where(eq(shops.id, id));
+    return shop;
+  }
+
+  async getShops(): Promise<import("@shared/schema").Shop[]> {
+    return db.select().from(shops).orderBy(shops.name);
+  }
+
+  async createShop(shop: import("@shared/schema").InsertShop): Promise<import("@shared/schema").Shop> {
+    const [created] = await db.insert(shops).values(shop).returning();
+    return created;
+  }
+
+  async updateShop(id: string, data: Partial<import("@shared/schema").InsertShop>): Promise<import("@shared/schema").Shop | undefined> {
+    const [updated] = await db.update(shops).set({ ...data, updatedAt: new Date() }).where(eq(shops.id, id)).returning();
+    return updated;
   }
 }
 

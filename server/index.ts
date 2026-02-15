@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import path from "path";
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,6 +22,8 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+// Serve uploaded assets
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -88,11 +91,11 @@ app.use((req, res, next) => {
   httpServer.listen(
     {
       port,
-      host: "0.0.0.0",
-      reusePort: true,
+      host: "127.0.0.1",
+      // reusePort can be unsupported on some local setups; omit for safety
     },
     () => {
-      log(`serving on port ${port}`);
+      log(`serving on http://127.0.0.1:${port}`);
     },
   );
 })();

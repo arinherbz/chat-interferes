@@ -92,6 +92,21 @@ export default function POSPage() {
   const cartTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
 
   const handleCheckout = () => {
+    // Prevent negative stock: block checkout if any product lacks stock
+    const insufficient = cart.filter(item => {
+      if (!item.productId) return false;
+      const product = products.find(p => p.id === item.productId);
+      return product ? product.stock < item.quantity : false;
+    });
+    if (insufficient.length > 0) {
+      toast({
+        title: "Insufficient stock",
+        description: `Not enough stock for: ${insufficient.map(i => i.name).join(", ")}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const saleNumber = `S${Date.now().toString(36).toUpperCase()}`;
     
     recordSale({
@@ -128,7 +143,7 @@ export default function POSPage() {
     setCheckoutOpen(false);
     toast({
       title: "Sale Completed",
-      description: `Receipt generated for ${cartTotal.toLocaleString()} UGX`,
+      description: `Receipt generated for UGX ${cartTotal.toLocaleString()}`,
     });
   };
 

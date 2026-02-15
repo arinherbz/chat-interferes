@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useData, User, Role } from "@/lib/data-context";
+import { useData, type User, type Role } from "@/lib/data-context";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,14 +12,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
-import { Plus, User as UserIcon, Shield, Trash2, Edit2, Key } from "lucide-react";
+import { Plus, User as UserIcon, Shield, Edit2, Power } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const userSchema = z.object({
   name: z.string().min(1, "Name required"),
   email: z.string().email("Invalid email"),
-  role: z.enum(["Owner", "Supervisor", "Staff"]),
+  role: z.enum(["Owner", "Manager", "Sales"]),
   shopId: z.string().min(1, "Shop required"),
+  pin: z.string().min(4, "PIN must be 4-12 digits").max(12).optional(),
 });
 
 export default function StaffPage() {
@@ -28,33 +29,43 @@ export default function StaffPage() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof userSchema>>({
     resolver: zodResolver(userSchema),
     defaultValues: {
       name: "",
       email: "",
-      role: "Staff",
+      role: "Sales",
       shopId: activeShopId,
+      pin: "",
     }
   });
 
-  const onSubmit = (values: z.infer<typeof userSchema>) => {
-    if (editingUser) {
-      updateUser(editingUser.id, values);
-      toast({ title: "Staff Updated", description: `${values.name} has been updated.` });
-    } else {
-      addUser(values);
-      toast({ title: "Staff Added", description: `${values.name} has been added.` });
+  const onSubmit = async (values: z.infer<typeof userSchema>) => {
+    setSubmitting(true);
+    try {
+      if (editingUser) {
+        await updateUser(editingUser.id, values);
+        toast({ title: "Staff Updated", description: `${values.name} has been updated.` });
+      } else {
+        await addUser(values);
+        toast({ title: "Staff Added", description: `${values.name} has been added.` });
+      }
+      setOpen(false);
+      setEditingUser(null);
+      form.reset({
+        name: "",
+        email: "",
+        role: "Sales",
+        shopId: activeShopId,
+        pin: "",
+      });
+    } catch (err: any) {
+      toast({ title: "Action failed", description: err?.message || "Could not update staff", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
     }
-    setOpen(false);
-    setEditingUser(null);
-    form.reset({
-      name: "",
-      email: "",
-      role: "Staff",
-      shopId: activeShopId,
-    });
   };
 
   const handleEdit = (user: User) => {
@@ -62,16 +73,17 @@ export default function StaffPage() {
     form.reset({
       name: user.name,
       email: user.email,
-      role: user.role,
+      role: user.role as Role,
       shopId: user.shopId,
+      pin: "",
     });
     setOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to remove this staff member?")) {
-      deleteUser(id);
-      toast({ title: "Staff Removed", variant: "destructive" });
+  const handleDelete = async (id: string, name: string) => {
+    if (confirm("Disable this staff account? They will not be able to sign in.")) {
+      await deleteUser(id);
+      toast({ title: "Staff Disabled", description: `${name} can no longer log in.` });
     }
   };
 
@@ -80,8 +92,9 @@ export default function StaffPage() {
     form.reset({
       name: "",
       email: "",
-      role: "Staff",
+      role: "Sales",
       shopId: activeShopId,
+      pin: "",
     });
     setOpen(true);
   };
@@ -159,8 +172,8 @@ export default function StaffPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="Staff">Staff</SelectItem>
-                            <SelectItem value="Supervisor">Supervisor</SelectItem>
+                            <SelectItem value="Sales">Sales Staff</SelectItem>
+                            <SelectItem value="Manager">Manager</SelectItem>
                             <SelectItem value="Owner">Owner</SelectItem>
                           </SelectContent>
                         </Select>
@@ -193,16 +206,30 @@ export default function StaffPage() {
                   />
                 </div>
 
+                <FormField
+                  control={form.control}
+                  name="pin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Login PIN (4-12 digits)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Set/Reset staff PIN" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="bg-slate-50 p-4 rounded-lg text-xs text-slate-500 space-y-2">
                   <div className="font-medium text-slate-700 mb-1">Role Permissions:</div>
                   <div className="grid grid-cols-1 gap-1">
                     <div className="flex items-start gap-2">
-                      <Badge variant="outline" className="text-[10px] h-4 px-1">Staff</Badge>
-                      <span>Submit sales, repairs, and daily closures. Cannot edit/delete confirmed records.</span>
+                      <Badge variant="outline" className="text-[10px] h-4 px-1">Sales</Badge>
+                      <span>Submit sales, repairs, trade-ins, and daily closures. Cannot see owner reports.</span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <Badge variant="outline" className="text-[10px] h-4 px-1 bg-blue-50 text-blue-700 border-blue-200">Supervisor</Badge>
-                      <span>Review closures and repairs. Can override some staff entries.</span>
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 bg-blue-50 text-blue-700 border-blue-200">Manager</Badge>
+                      <span>Review closures and repairs. Can view most reports but cannot delete financial records.</span>
                     </div>
                     <div className="flex items-start gap-2">
                       <Badge variant="outline" className="text-[10px] h-4 px-1 bg-purple-50 text-purple-700 border-purple-200">Owner</Badge>
@@ -212,8 +239,8 @@ export default function StaffPage() {
                 </div>
 
                 <DialogFooter>
-                  <Button type="submit" className="w-full">
-                    {editingUser ? "Update Staff" : "Create Account"}
+                  <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting ? "Saving..." : editingUser ? "Update Staff" : "Create Account"}
                   </Button>
                 </DialogFooter>
               </form>
@@ -226,7 +253,7 @@ export default function StaffPage() {
         <CardHeader>
           <CardTitle>Team Members</CardTitle>
           <CardDescription>
-            {users.length} active users in your organization.
+            {users.length} users in your organization.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -236,6 +263,7 @@ export default function StaffPage() {
                 <TableHead>User</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Shop</TableHead>
+                <TableHead>Last Seen</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -259,7 +287,7 @@ export default function StaffPage() {
                       variant="outline" 
                       className={
                         user.role === "Owner" ? "bg-purple-50 text-purple-700 border-purple-200" :
-                        user.role === "Supervisor" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                        user.role === "Manager" ? "bg-blue-50 text-blue-700 border-blue-200" :
                         "bg-slate-50 text-slate-700 border-slate-200"
                       }
                     >
@@ -272,9 +300,12 @@ export default function StaffPage() {
                     </span>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1 text-green-600 text-xs font-medium">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-600" />
-                      Active
+                    <span className="text-xs text-slate-500">{user.lastActiveAt ? new Date(user.lastActiveAt).toLocaleString() : "—"}</span>
+                  </TableCell>
+                  <TableCell>
+                    <div className={`flex items-center gap-1 text-xs font-medium ${user.status === "disabled" ? "text-red-600" : "text-green-600"}`}>
+                      <div className={`w-1.5 h-1.5 rounded-full ${user.status === "disabled" ? "bg-red-600" : "bg-green-600"}`} />
+                      {user.status === "disabled" ? "Disabled" : "Active"}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -285,10 +316,10 @@ export default function StaffPage() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => handleDelete(user.id)}
-                        disabled={user.role === "Owner" && users.filter(u => u.role === "Owner").length === 1}
+                        onClick={() => handleDelete(user.id, user.name)}
+                        disabled={(user.role === "Owner" && users.filter(u => u.role === "Owner").length === 1) || user.status === "disabled"}
                       >
-                        <Trash2 className="w-4 h-4 text-slate-400 hover:text-red-500" />
+                        <Power className="w-4 h-4 text-slate-400 hover:text-red-500" />
                       </Button>
                     </div>
                   </TableCell>

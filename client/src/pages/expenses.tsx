@@ -23,7 +23,7 @@ const expenseSchema = z.object({
 });
 
 export default function ExpensesPage() {
-  const { expenses, recordExpense } = useData();
+  const { expenses, recordExpense, currentUser } = useData();
   const [open, setOpen] = useState(false);
 
   const form = useForm<z.infer<typeof expenseSchema>>({
@@ -40,7 +40,7 @@ export default function ExpensesPage() {
   const onSubmit = (values: z.infer<typeof expenseSchema>) => {
     recordExpense({
       ...values,
-      recordedBy: "Owner", // Should come from auth context
+      recordedBy: currentUser?.name || "Owner",
     });
     setOpen(false);
     form.reset();

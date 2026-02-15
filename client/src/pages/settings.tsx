@@ -103,14 +103,14 @@ export default function SettingsPage() {
                 <div className="flex items-start gap-4">
                   <Shield className="w-5 h-5 text-slate-400 mt-1" />
                   <div>
-                    <h4 className="font-medium">Supervisor</h4>
+                    <h4 className="font-medium">Manager</h4>
                     <p className="text-sm text-slate-500">Can manage closures, view most reports, and edit sales/repairs.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
                   <Shield className="w-5 h-5 text-slate-200 mt-1" />
                   <div>
-                    <h4 className="font-medium">Staff</h4>
+                    <h4 className="font-medium">Sales Staff</h4>
                     <p className="text-sm text-slate-500">Can process sales, repairs, and submit daily closures.</p>
                   </div>
                 </div>

@@ -17,19 +17,16 @@ import {
   AreaChart,
   Area
 } from "recharts";
-import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench, ShoppingCart, Users, AlertTriangle, Store, Download, Wallet } from "lucide-react";
+import { AlertCircle, CheckCircle, TrendingUp, DollarSign, FileText, ArrowUpRight, ArrowDownRight, Wrench, ShoppingCart, Users, AlertTriangle, Store, Download, Wallet, Trophy, Clock3, Truck } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
-  const { closures, customers, products, shops, activeShopId, setActiveShopId, expenses, repairs } = useData();
+  const { closures, customers, products, shops, activeShopId, setActiveShopId, expenses, repairs, sales } = useData();
   const { toast } = useToast();
 
   const handleExport = () => {
-    toast({
-      title: "Exporting Report...",
-      description: "Your PDF report is being generated and will download shortly.",
-    });
+    window.print();
   };
 
   // --- KPI CALCULATIONS ---
@@ -54,6 +51,24 @@ export default function Dashboard() {
   // 4. Alerts
   const lowStockProducts = products.filter(p => p.stock <= p.minStock);
   const pendingRepairs = repairs.filter(r => r.status === "Pending" || r.status === "In Progress").length;
+
+  const salesByStaff = sales.reduce((acc, sale) => {
+    const owner = sale.soldBy || "Unassigned";
+    const existing = acc[owner] || { amount: 0, count: 0 };
+    existing.amount += sale.totalAmount;
+    existing.count += 1;
+    acc[owner] = existing;
+    return acc;
+  }, {} as Record<string, { amount: number; count: number }>);
+
+  const staffRanking = Object.entries(salesByStaff)
+    .map(([name, stats]) => ({ name, ...stats }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 4);
+
+  const followUpsOverdue = repairs.filter(r => (r.status === "Pending" || r.status === "In Progress") && (new Date().getTime() - new Date(r.createdAt).getTime()) > 1000 * 60 * 60 * 24 * 2).length;
+  const deliveriesPending = repairs.filter(r => r.status === "Completed").length;
+  const failedDeliveries = closures.filter(c => c.status === "flagged").length;
   
   // Chart data preparation
   const chartData = [...closures].reverse().map(c => ({
@@ -177,6 +192,77 @@ export default function Dashboard() {
             <p className="text-xs text-green-600 flex items-center mt-1">
               <ArrowUpRight className="w-3 h-3 mr-1" /> +4 new this week
             </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Sales per Staff</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-slate-400" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {staffRanking.map((staff) => (
+              <div key={staff.name} className="flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-800">{staff.name}</span>
+                <span className="text-slate-500">{staff.count} sale(s) · {staff.amount.toLocaleString()} UGX</span>
+              </div>
+            ))}
+            {staffRanking.length === 0 && (
+              <p className="text-sm text-slate-500">No sales recorded yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Productivity Ranking</CardTitle>
+            <Trophy className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {staffRanking.map((staff, index) => (
+                <div key={staff.name} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="w-6 h-6 flex items-center justify-center">{index + 1}</Badge>
+                    <span className="font-medium text-slate-800">{staff.name}</span>
+                  </div>
+                  <span className="text-slate-500">{staff.amount.toLocaleString()} UGX</span>
+                </div>
+              ))}
+              {staffRanking.length === 0 && <p className="text-sm text-slate-500">No activity yet.</p>}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Follow-ups Overdue</CardTitle>
+            <Clock3 className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${followUpsOverdue > 0 ? "text-red-600" : "text-green-600"}`}>
+              {followUpsOverdue}
+            </div>
+            <p className="text-xs text-slate-500">Repairs waiting over 48 hours.</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Deliveries</CardTitle>
+            <Truck className="h-4 w-4 text-slate-400" />
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <div className="flex items-center justify-between text-sm text-slate-700">
+              <span>Pending handover</span>
+              <span className="font-semibold">{deliveriesPending}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm text-slate-700">
+              <span>Failed / flagged</span>
+              <span className={`font-semibold ${failedDeliveries > 0 ? "text-red-600" : "text-green-600"}`}>{failedDeliveries}</span>
+            </div>
           </CardContent>
         </Card>
       </div>
