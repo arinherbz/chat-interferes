@@ -14,11 +14,11 @@ RUN npm ci
 # Copy application code
 COPY . .
 
-# Build the project
+# Build the project (creates dist/ folder)
 RUN npm run build
 
 # Expose ports
-EXPOSE 5000 5001
+EXPOSE 5000
 
-# Start both backend and frontend
-CMD ["sh", "-c", "npm run dev & npm run dev:client"]
+# Start production server
+CMD ["npm", "start"]
