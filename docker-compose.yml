@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: techpos-app
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - VITE_API_URL=http://localhost:5000
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+  # Optional: Add PostgreSQL for production-grade database
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: techpos-db
+  #   environment:
+  #     POSTGRES_DB: techpos
+  #     POSTGRES_USER: techpos
+  #     POSTGRES_PASSWORD: secure-password-here
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+# volumes:
+#   postgres_data:
