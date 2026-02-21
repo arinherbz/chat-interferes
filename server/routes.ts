@@ -87,7 +87,13 @@ export async function registerRoutes(
 
   // Choose session store: Postgres-backed when `pool` is available, otherwise in-memory store for local dev
   const sessionStore = pool
-    ? new PgSession({ pool, tableName: "user_sessions", createTableIfMissing: true })
+    ? new PgSession({
+        pool,
+        tableName: "user_sessions",
+        // In production builds, connect-pg-simple may not be able to read its bundled table.sql.
+        // We create the table via migrations/psql and disable auto-create to avoid runtime errors.
+        createTableIfMissing: false,
+      })
     : new session.MemoryStore();
 
   app.use(
