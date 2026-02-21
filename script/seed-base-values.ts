@@ -1,38 +1,22 @@
-import "dotenv/config";
-import { sql } from "drizzle-orm";
-import { db } from "../server/db";
-import { deviceBaseValues } from "@shared/schema";
+import { storage } from "../server/storage";
 import { DEFAULT_BASE_VALUES } from "../server/trade-in-scoring";
 
 async function main() {
-  const [{ count: beforeCount }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(deviceBaseValues);
+  const existing = await storage.getDeviceBaseValues();
+  if (existing.length > 0) {
+    console.log(`Base values already seeded (${existing.length})`);
+    return;
+  }
 
-  await db
-    .insert(deviceBaseValues)
-    .values(
-      DEFAULT_BASE_VALUES.map((v) => ({
-        ...v,
-        isActive: true,
-      })),
-    )
-    .onConflictDoNothing({
-      target: [deviceBaseValues.brand, deviceBaseValues.model, deviceBaseValues.storage],
-    });
+  for (const v of DEFAULT_BASE_VALUES) {
+    await storage.upsertDeviceBaseValue({ ...v, isActive: true, shopId: null });
+  }
 
-  const [{ count: afterCount }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(deviceBaseValues);
-
-  console.log(
-    `Seed complete. Existing: ${beforeCount}, now: ${afterCount}, added: ${
-      (afterCount as number) - (beforeCount as number)
-    }.`,
-  );
+  const after = await storage.getDeviceBaseValues();
+  console.log(`Seeded base values (${after.length})`);
 }
 
-main().catch((err) => {
-  console.error("Seed failed", err);
+main().catch((error) => {
+  console.error("Seed failed:", error);
   process.exit(1);
 });

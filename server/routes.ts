@@ -212,6 +212,70 @@ export async function registerRoutes(
     }
   };
 
+  const seedDefaultUsers = async () => {
+    const existingUsers = await storage.listUsers();
+    let ownerSeeded = false;
+    let staffSeeded = false;
+
+    const owner = existingUsers.find(u => u.role === "Owner");
+    if (!owner) {
+      const created = await storage.createUser({
+        username: "owner",
+        password: hashSecret("0000"),
+        name: "Shop Owner",
+        email: "owner@ariostore.local",
+        role: "Owner",
+        status: "active",
+        shopId: null,
+      });
+      ownerSeeded = true;
+      try {
+        await storage.createActivityLog({
+          action: "seed",
+          entity: "user",
+          entityId: created.id,
+          userId: created.id,
+          userName: created.name || "Owner",
+          role: created.role,
+          details: "Default owner account created (username: owner, PIN: 0000). Please change immediately.",
+          metadata: {},
+        });
+      } catch (err) {
+        console.warn("Activity log table not ready during seed. Proceeding.");
+      }
+    }
+
+    const staffUser = existingUsers.find(u => u.username === "staff");
+    if (!staffUser) {
+      const staff = await storage.createUser({
+        username: "staff",
+        password: hashSecret("1111"),
+        name: "Default Staff",
+        email: "staff@ariostore.local",
+        role: "Sales",
+        status: "active",
+        shopId: null,
+      });
+      staffSeeded = true;
+      try {
+        await storage.createActivityLog({
+          action: "seed",
+          entity: "user",
+          entityId: staff.id,
+          userId: staff.id,
+          userName: staff.name || "Staff",
+          role: staff.role,
+          details: "Default staff account created (username: staff, PIN: 1111). Please change immediately.",
+          metadata: {},
+        });
+      } catch (err) {
+        console.warn("Activity log table not ready during staff seed. Proceeding.");
+      }
+    }
+
+    return { ownerSeeded, staffSeeded };
+  };
+
   await seedOwnerAccount();
 
   // Attach the current user to the request for downstream handlers
@@ -682,6 +746,27 @@ export async function registerRoutes(
     }
   });
 
+  // Seed base values (Owner/Manager)
+  app.post("/api/trade-in/base-values/seed", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    try {
+      const shopId = req.query.shopId as string | undefined;
+      const existing = await storage.getDeviceBaseValues(shopId);
+      if (existing.length > 0) {
+        return res.json({ message: "Base values already seeded", count: existing.length });
+      }
+
+      for (const v of DEFAULT_BASE_VALUES) {
+        await storage.upsertDeviceBaseValue({ ...v, isActive: true, shopId: shopId || null });
+      }
+
+      const after = await storage.getDeviceBaseValues(shopId);
+      res.json({ message: "Base values seeded", count: after.length });
+    } catch (error) {
+      console.error("Error seeding base values:", error);
+      res.status(500).json({ error: "Failed to seed base values" });
+    }
+  });
+
   // Upsert base value (Owner/Manager) without touching existing records unless matching brand/model/storage
   app.post("/api/trade-in/base-values/manage", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
     try {
@@ -938,6 +1023,17 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error seeding brands:", error);
       res.status(500).json({ error: "Failed to seed brands" });
+    }
+  });
+
+  // Seed default owner/staff users (Owner only)
+  app.post("/api/seed-users", requireRole(["Owner"]), async (_req: Request, res: Response) => {
+    try {
+      const result = await seedDefaultUsers();
+      res.json({ message: "Users seeded", ...result });
+    } catch (error) {
+      console.error("Error seeding users:", error);
+      res.status(500).json({ error: "Failed to seed users" });
     }
   });
 
