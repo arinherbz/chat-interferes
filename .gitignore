@@ -11,3 +11,5 @@ storage.db*
 uploads/
 .vscode/settings.json.data/
 chat-interferes/
+.data/
+chat-interferes/
