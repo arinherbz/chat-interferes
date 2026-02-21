@@ -92,6 +92,11 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private normalizeBoolean(value: boolean | undefined): boolean | number | undefined {
+    if (value === undefined) return value;
+    return pool ? value : value ? 1 : 0;
+  }
+
   // ==================== USERS ====================
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -151,12 +156,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createBrand(brand: InsertBrand): Promise<Brand> {
-    const [created] = await db.insert(brands).values(brand).returning();
+    const values = { ...brand, isActive: this.normalizeBoolean(brand.isActive) } as InsertBrand;
+    const [created] = await db.insert(brands).values(values).returning();
     return created;
   }
 
   async updateBrand(id: string, data: Partial<InsertBrand>): Promise<Brand | undefined> {
-    const [updated] = await db.update(brands).set({ ...data }).where(eq(brands.id, id)).returning();
+    const values = { ...data, isActive: this.normalizeBoolean(data.isActive) } as Partial<InsertBrand>;
+    const [updated] = await db.update(brands).set(values).where(eq(brands.id, id)).returning();
     return updated;
   }
 
@@ -180,12 +187,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createModel(model: InsertModel): Promise<Model> {
-    const [created] = await db.insert(models).values(model).returning();
+    const values = { ...model, isActive: this.normalizeBoolean(model.isActive) } as InsertModel;
+    const [created] = await db.insert(models).values(values).returning();
     return created;
   }
   
   async updateModel(id: string, data: Partial<InsertModel>): Promise<Model | undefined> {
-    const [updated] = await db.update(models).set({ ...data }).where(eq(models.id, id)).returning();
+    const values = { ...data, isActive: this.normalizeBoolean(data.isActive) } as Partial<InsertModel>;
+    const [updated] = await db.update(models).set(values).where(eq(models.id, id)).returning();
     return updated;
   }
 
@@ -209,12 +218,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createStorageOption(option: InsertStorageOption): Promise<StorageOption> {
-    const [created] = await db.insert(storageOptions).values(option).returning();
+    const values = { ...option, isActive: this.normalizeBoolean(option.isActive) } as InsertStorageOption;
+    const [created] = await db.insert(storageOptions).values(values).returning();
     return created;
   }
 
   async updateStorageOption(id: string, data: Partial<InsertStorageOption>): Promise<StorageOption | undefined> {
-    const [updated] = await db.update(storageOptions).set({ ...data }).where(eq(storageOptions.id, id)).returning();
+    const values = { ...data, isActive: this.normalizeBoolean(data.isActive) } as Partial<InsertStorageOption>;
+    const [updated] = await db.update(storageOptions).set(values).where(eq(storageOptions.id, id)).returning();
     return updated;
   }
 
@@ -235,11 +246,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDeviceBaseValue(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined> {
+    const activeVal = pool ? true : 1;
     const conditions = [
       eq(deviceBaseValues.brand, brand),
       eq(deviceBaseValues.model, model),
       eq(deviceBaseValues.storage, storage),
-      eq(deviceBaseValues.isActive, true),
+      eq(deviceBaseValues.isActive, activeVal),
     ];
     if (shopId) {
       conditions.push(eq(deviceBaseValues.shopId, shopId));
@@ -271,13 +283,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDeviceBaseValue(value: InsertDeviceBaseValue): Promise<DeviceBaseValue> {
-    const [created] = await db.insert(deviceBaseValues).values(value).returning();
+    const values = { ...value, isActive: this.normalizeBoolean(value.isActive) } as InsertDeviceBaseValue;
+    const [created] = await db.insert(deviceBaseValues).values(values).returning();
     return created;
   }
 
   async updateDeviceBaseValue(id: string, value: Partial<InsertDeviceBaseValue>): Promise<DeviceBaseValue | undefined> {
+    const values = { ...value, isActive: this.normalizeBoolean(value.isActive), updatedAt: new Date() } as Partial<InsertDeviceBaseValue>;
     const [updated] = await db.update(deviceBaseValues)
-      .set({ ...value, updatedAt: new Date() })
+      .set(values)
       .where(eq(deviceBaseValues.id, id))
       .returning();
     return updated;
@@ -290,19 +304,22 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== CONDITION QUESTIONS ====================
   async getConditionQuestions(): Promise<ConditionQuestion[]> {
+    const activeVal = pool ? true : 1;
     return db.select().from(conditionQuestions)
-      .where(eq(conditionQuestions.isActive, true))
+      .where(eq(conditionQuestions.isActive, activeVal))
       .orderBy(conditionQuestions.sortOrder);
   }
 
   async createConditionQuestion(question: InsertConditionQuestion): Promise<ConditionQuestion> {
-    const [created] = await db.insert(conditionQuestions).values(question).returning();
+    const values = { ...question, isActive: this.normalizeBoolean(question.isActive) } as InsertConditionQuestion;
+    const [created] = await db.insert(conditionQuestions).values(values).returning();
     return created;
   }
 
   async updateConditionQuestion(id: string, question: Partial<InsertConditionQuestion>): Promise<ConditionQuestion | undefined> {
+    const values = { ...question, isActive: this.normalizeBoolean(question.isActive) } as Partial<InsertConditionQuestion>;
     const [updated] = await db.update(conditionQuestions)
-      .set(question)
+      .set(values)
       .where(eq(conditionQuestions.id, id))
       .returning();
     return updated;
