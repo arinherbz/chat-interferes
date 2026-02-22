@@ -83,15 +83,29 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  app.set("trust proxy", 1);
+  // Railway and similar hosts sit behind reverse proxies.
+  // Trust proxy headers so session/cookie handling works correctly.
+  app.set("trust proxy", true);
+
+  // Ensure session table exists when using Postgres-backed sessions.
+  if (pool) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        sid varchar NOT NULL COLLATE "default",
+        sess json NOT NULL,
+        expire timestamp(6) NOT NULL,
+        CONSTRAINT user_sessions_pkey PRIMARY KEY (sid)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS "IDX_user_sessions_expire" ON user_sessions (expire);`);
+  }
 
   // Choose session store: Postgres-backed when `pool` is available, otherwise in-memory store for local dev
   const sessionStore = pool
     ? new PgSession({
         pool,
         tableName: "user_sessions",
-        // In production builds, connect-pg-simple may not be able to read its bundled table.sql.
-        // We create the table via migrations/psql and disable auto-create to avoid runtime errors.
+        // We create the table ourselves above; keep auto-create off for deterministic startup.
         createTableIfMissing: false,
       })
     : new session.MemoryStore();
@@ -99,13 +113,16 @@ export async function registerRoutes(
   app.use(
     session({
       store: sessionStore,
+      proxy: true,
       secret: process.env.SESSION_SECRET || "change-me-session-secret",
       resave: false,
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
         sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
+        // Default false to avoid dropped cookies behind mis-detected proxies.
+        // Set SESSION_COOKIE_SECURE=true in env once proxy+HTTPS behavior is confirmed.
+        secure: process.env.SESSION_COOKIE_SECURE === "true",
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       },
     })
@@ -329,9 +346,18 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Account disabled" });
     }
 
+    // Regenerate + save explicitly so the cookie/session are durable across redirects/navigation.
+    await new Promise<void>((resolve, reject) => {
+      req.session.regenerate((err) => (err ? reject(err) : resolve()));
+    });
+
     req.session.userId = user.id;
     req.session.role = user.role as User["role"];
     req.session.shopId = user.shopId || null;
+
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
 
     await storage.touchUserActivity(user.id, { lastLogin: true });
     await storage.createActivityLog({
