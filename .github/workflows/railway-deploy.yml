@@ -32,10 +32,14 @@ jobs:
         run: npm test
 
       - name: Run database migration
-        if: ${{ secrets.DATABASE_URL != '' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm run db:push
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL not set; skipping migration step."
+            exit 0
+          fi
+          npm run db:push
 
       - name: Build
         run: npm run build
