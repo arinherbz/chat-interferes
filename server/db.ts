@@ -9,11 +9,18 @@ import path from "path";
 
 let _db: any;
 export let pool: pkg.Pool | undefined;
+const databaseUrl = process.env.DATABASE_URL?.trim();
+const usePostgres = !!databaseUrl && /^postgres(?:ql)?:\/\//i.test(databaseUrl);
 
-if (process.env.DATABASE_URL) {
-  pool = new Pool({ connectionString: process.env.DATABASE_URL });
+if (usePostgres) {
+  pool = new Pool({ connectionString: databaseUrl });
   _db = drizzlePostgres(pool);
 } else {
+  if (databaseUrl) {
+    console.warn(
+      `[db] Ignoring non-Postgres DATABASE_URL for local fallback: "${databaseUrl}". Using SQLite at .data/dev.sqlite`,
+    );
+  }
   // Ensure data directory exists
   const dataDir = path.resolve(process.cwd(), ".data");
   try { fs.mkdirSync(dataDir, { recursive: true }); } catch {}
