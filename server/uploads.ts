@@ -15,6 +15,7 @@ export interface UploadedFileMeta {
 }
 
 const uploadRoot = path.join(process.cwd(), "uploads");
+ensureDir(uploadRoot);
 
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) {
@@ -50,7 +51,10 @@ export const uploadMiddleware = multer({
       cb(new Error("Unsupported file type"));
     }
   },
-}).array("files", 5);
+}).fields([
+  { name: "files", maxCount: 5 },
+  { name: "file", maxCount: 1 },
+]);
 
 export function handleUpload(req: Request, res: Response) {
   uploadMiddleware(req, res, (err: any) => {
@@ -58,10 +62,11 @@ export function handleUpload(req: Request, res: Response) {
       return res.status(400).json({ message: err.message || "Upload failed" });
     }
     const now = new Date();
-    const dateFolder = now.toISOString().slice(0, 10);
-    const files = (req.files as Express.Multer.File[]) || [];
+    const grouped = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
+    const files = Object.values(grouped).flat();
     const metas: UploadedFileMeta[] = files.map((file) => {
       const id = path.parse(file.filename).name;
+      const dateFolder = path.basename(file.destination);
       return {
         id,
         url: `/uploads/${dateFolder}/${file.filename}`,

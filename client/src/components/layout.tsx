@@ -108,7 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                  <span className="text-xs bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-full">Main</span>
                )}
              </div>
-             <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">SaaS Edition</span>
+             <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Operations</span>
            </div>
         </Link>
 

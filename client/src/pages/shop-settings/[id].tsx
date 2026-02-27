@@ -60,9 +60,9 @@ export default function ShopSettingsPage() {
   };
 
   return (
-    <div className="py-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-semibold mb-2">{shop.name} — Settings</h1>
+    <div className="py-4 sm:py-6">
+      <div className="max-w-5xl mx-auto px-1 sm:px-0">
+        <h1 className="text-2xl sm:text-3xl font-semibold mb-2 break-words">{shop.name} — Settings</h1>
         <p className="text-sm text-slate-500 mb-6">Edit shop details, brand assets, and appearance.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -143,8 +143,8 @@ export default function ShopSettingsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end">
-                  <Button onClick={() => window.history.back()} variant="ghost" className="mr-2">Cancel</Button>
+                <div className="mt-4 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
+                  <Button onClick={() => window.history.back()} type="button" variant="ghost">Cancel</Button>
                   <Button onClick={save} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button>
                 </div>
               </CardContent>
