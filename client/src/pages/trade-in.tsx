@@ -643,7 +643,7 @@ export default function TradeInPage() {
                 {/* Step 1: Device Selection */}
                 {step === 1 && (
                   <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Brand</Label>
                         <SearchableSelect
@@ -683,7 +683,7 @@ export default function TradeInPage() {
                       </div>
                     )}
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Storage</Label>
                         <SearchableSelect
@@ -1034,7 +1034,7 @@ export default function TradeInPage() {
                 {/* Step 5: Customer Details */}
                 {step === 5 && (
                   <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Customer Name *</Label>
                         <Input 
@@ -1092,7 +1092,7 @@ export default function TradeInPage() {
                     {/* Final Summary */}
                     <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
                       <h4 className="font-semibold text-green-800 mb-4">Trade-In Summary</h4>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="text-slate-500">Device</p>
                           <p className="font-medium">{brand} {model} ({storage})</p>
@@ -1347,7 +1347,7 @@ export default function TradeInPage() {
           </DialogHeader>
           {selectedAssessment && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-50 rounded-lg">
                   <p className="text-sm text-slate-500">Device</p>
                   <p className="font-medium">{selectedAssessment.brand} {selectedAssessment.model}</p>

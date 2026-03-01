@@ -242,7 +242,7 @@ export default function RepairsPage() {
             </div>
             <div className="flex gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                   <Filter className="w-4 h-4 mr-2 text-slate-500" />
                   <SelectValue placeholder="Filter by Status" />
                 </SelectTrigger>
@@ -255,7 +255,7 @@ export default function RepairsPage() {
                 </SelectContent>
               </Select>
               <Select value={techFilter} onValueChange={setTechFilter}>
-                <SelectTrigger className="w-[200px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <User className="w-4 h-4 mr-2 text-slate-500" />
                   <SelectValue placeholder="Filter by Technician" />
                 </SelectTrigger>

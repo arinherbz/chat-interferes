@@ -148,7 +148,7 @@ export default function POSPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-2rem)] flex gap-4 animate-in fade-in duration-500">
+    <div className="flex min-h-[calc(100vh-2rem)] flex-col gap-4 xl:h-[calc(100vh-2rem)] xl:flex-row animate-in fade-in duration-500">
       {/* LEFT: Product Catalog */}
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex items-center gap-4">
@@ -240,7 +240,7 @@ export default function POSPage() {
       </div>
 
       {/* RIGHT: Cart */}
-      <div className="w-[400px] flex flex-col">
+      <div className="w-full xl:w-[400px] flex flex-col">
         <Card className="flex-1 flex flex-col border-l shadow-xl">
           <CardHeader className="pb-4 border-b">
             <div className="flex items-center justify-between">

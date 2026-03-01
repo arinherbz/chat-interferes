@@ -37,7 +37,7 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select value={activeShopId} onValueChange={setActiveShopId}>
-            <SelectTrigger className="w-[220px] bg-white transition-colors hover:border-slate-300">
+            <SelectTrigger className="w-full sm:w-[220px] bg-white transition-colors hover:border-slate-300">
               <Store className="mr-2 h-4 w-4 text-slate-500" />
               <SelectValue />
             </SelectTrigger>
