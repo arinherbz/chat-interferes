@@ -1,8 +1,12 @@
+import { useEffect, useState } from "react";
 import { useData } from "@/lib/data-context";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -11,6 +15,19 @@ import { Building, CreditCard, Users, Settings as SettingsIcon, Shield } from "l
 
 export default function SettingsPage() {
   const { activeShop, users } = useData();
+  const { preferences, updatePreferences } = useAuth();
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
+  const [currency, setCurrency] = useState("UGX");
+  const [timezone, setTimezone] = useState("UTC");
+  const [density, setDensity] = useState<"compact" | "comfortable">("comfortable");
+
+  useEffect(() => {
+    if (!preferences) return;
+    setTheme(preferences.theme || "system");
+    setCurrency(preferences.currency || "UGX");
+    setTimezone(preferences.timezone || "UTC");
+    setDensity(preferences.density || "comfortable");
+  }, [preferences]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -29,6 +46,67 @@ export default function SettingsPage() {
         </TabsList>
         
         <TabsContent value="general" className="mt-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Personalization</CardTitle>
+              <CardDescription>Your UI and locale defaults are persisted per user account.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-2">
+                <Label>Theme</Label>
+                <Select
+                  value={theme}
+                  onValueChange={(value: "light" | "dark" | "system") => {
+                    setTheme(value);
+                    void updatePreferences({ theme: value });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">Light</SelectItem>
+                    <SelectItem value="dark">Dark</SelectItem>
+                    <SelectItem value="system">System</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Currency</Label>
+                <Input
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                  onBlur={() => void updatePreferences({ currency })}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Timezone</Label>
+                <Input
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  onBlur={() => void updatePreferences({ timezone })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <p className="font-medium text-slate-900">Compact layout density</p>
+                  <p className="text-sm text-slate-500">Tighten spacing for high-information screens.</p>
+                </div>
+                <Switch
+                  checked={density === "compact"}
+                  onCheckedChange={(checked) => {
+                    const nextDensity: "compact" | "comfortable" = checked ? "compact" : "comfortable";
+                    setDensity(nextDensity);
+                    void updatePreferences({ density: nextDensity });
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Shop Profile</CardTitle>

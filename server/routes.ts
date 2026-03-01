@@ -78,10 +78,49 @@ const baseValueUpsertSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+const bootstrapOwnerSchema = z.object({
+  username: z.string().min(3).max(64),
+  name: z.string().min(1).max(120),
+  email: z.string().email(),
+  password: z
+    .string()
+    .min(12)
+    .regex(/[A-Z]/, "Password must include uppercase")
+    .regex(/[a-z]/, "Password must include lowercase")
+    .regex(/[0-9]/, "Password must include number")
+    .regex(/[^A-Za-z0-9]/, "Password must include symbol"),
+});
+
+const preferenceUpdateSchema = z.object({
+  theme: z.enum(["light", "dark", "system"]).optional(),
+  currency: z.string().min(3).max(8).optional(),
+  dateFormat: z.string().min(2).max(24).optional(),
+  timezone: z.string().min(2).max(80).optional(),
+  defaultBranchId: z.string().nullable().optional(),
+  sidebarCollapsed: z.boolean().optional(),
+  density: z.enum(["compact", "comfortable"]).optional(),
+  dashboardLayout: z.any().optional(),
+  accentColor: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .optional(),
+});
+
+type LoginWindow = { count: number; firstAttemptTs: number };
+const loginAttempts = new Map<string, LoginWindow>();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+
+const idempotencyCache = new Map<string, { status: number; payload: unknown; storedAt: number }>();
+const IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is required in production for persistent sessions.");
+  }
 
   // Railway and similar hosts sit behind reverse proxies.
   // Trust proxy headers so session/cookie handling works correctly.
@@ -98,6 +137,24 @@ export async function registerRoutes(
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS "IDX_user_sessions_expire" ON user_sessions (expire);`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id varchar NOT NULL UNIQUE,
+        theme text DEFAULT 'system',
+        currency text DEFAULT 'UGX',
+        date_format text DEFAULT 'PPP',
+        timezone text DEFAULT 'UTC',
+        default_branch_id varchar,
+        sidebar_collapsed boolean DEFAULT false,
+        density text DEFAULT 'comfortable',
+        dashboard_layout jsonb,
+        accent_color text,
+        created_at timestamp(6) DEFAULT now(),
+        updated_at timestamp(6) DEFAULT now()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS "IDX_user_preferences_user_id" ON user_preferences (user_id);`);
   }
 
   // Choose session store: Postgres-backed when `pool` is available, otherwise in-memory store for local dev
@@ -110,11 +167,16 @@ export async function registerRoutes(
       })
     : new session.MemoryStore();
 
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (process.env.NODE_ENV === "production" && !sessionSecret) {
+    throw new Error("SESSION_SECRET is required in production.");
+  }
+
   app.use(
     session({
       store: sessionStore,
       proxy: true,
-      secret: process.env.SESSION_SECRET || "change-me-session-secret",
+      secret: sessionSecret || "dev-only-session-secret",
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -174,6 +236,91 @@ export async function registerRoutes(
       return proceed();
     };
   };
+
+  const hasOwnerAccount = async () => {
+    const existingUsers = await storage.listUsers();
+    return existingUsers.some((u) => u.role === "Owner");
+  };
+
+  const tooManyLoginAttempts = (identity: string) => {
+    const now = Date.now();
+    const existing = loginAttempts.get(identity);
+    if (!existing) return false;
+    if (now - existing.firstAttemptTs > LOGIN_WINDOW_MS) {
+      loginAttempts.delete(identity);
+      return false;
+    }
+    return existing.count >= LOGIN_MAX_ATTEMPTS;
+  };
+
+  const trackFailedLogin = (identity: string) => {
+    const now = Date.now();
+    const existing = loginAttempts.get(identity);
+    if (!existing || now - existing.firstAttemptTs > LOGIN_WINDOW_MS) {
+      loginAttempts.set(identity, { count: 1, firstAttemptTs: now });
+      return;
+    }
+    loginAttempts.set(identity, { ...existing, count: existing.count + 1 });
+  };
+
+  const clearFailedLogins = (identity: string) => {
+    loginAttempts.delete(identity);
+  };
+
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "same-origin");
+    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+    if (process.env.NODE_ENV === "production") {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+    }
+    next();
+  });
+
+  app.use("/api", (req, res, next) => {
+    const method = req.method.toUpperCase();
+    if (!["POST", "PATCH", "PUT", "DELETE"].includes(method)) return next();
+    const origin = req.headers.origin;
+    if (!origin) return next();
+    try {
+      const originUrl = new URL(origin);
+      const host = req.get("host");
+      if (host && originUrl.host !== host) {
+        return res.status(403).json({ message: "Cross-site request blocked" });
+      }
+    } catch {
+      return res.status(403).json({ message: "Invalid origin" });
+    }
+    next();
+  });
+
+  app.use("/api", (req, res, next) => {
+    const method = req.method.toUpperCase();
+    if (!["POST", "PATCH", "PUT", "DELETE"].includes(method)) return next();
+
+    const key = req.headers["x-idempotency-key"]?.toString().trim();
+    if (!key) return next();
+
+    const cacheKey = `${method}:${req.path}:${key}`;
+    const now = Date.now();
+
+    for (const [storedKey, cached] of Array.from(idempotencyCache.entries())) {
+      if (now - cached.storedAt > IDEMPOTENCY_TTL_MS) idempotencyCache.delete(storedKey);
+    }
+
+    const cached = idempotencyCache.get(cacheKey);
+    if (cached) {
+      return res.status(cached.status).json(cached.payload);
+    }
+
+    const originalJson = res.json.bind(res);
+    res.json = ((payload: unknown) => {
+      idempotencyCache.set(cacheKey, { status: res.statusCode || 200, payload, storedAt: Date.now() });
+      return originalJson(payload);
+    }) as typeof res.json;
+    return next();
+  });
 
   const seedOwnerAccount = async () => {
     const existingOwners = await storage.listUsers();
@@ -299,7 +446,7 @@ export async function registerRoutes(
     return { ownerSeeded, staffSeeded };
   };
 
-  await seedOwnerAccount();
+  // Do not auto-seed default credentials; owners must bootstrap explicitly.
 
   // Attach the current user to the request for downstream handlers
   app.use(async (req, _res, next) => {
@@ -314,24 +461,86 @@ export async function registerRoutes(
 
   // Require auth for all API routes except auth endpoints
   app.use("/api", (req, res, next) => {
-    // Allow unauthenticated access to auth endpoints and uploads (logo/cover images)
-    if (req.path.startsWith("/auth") || req.path.startsWith("/uploads")) return next();
+    // Allow unauthenticated access only to auth bootstrap/login endpoints.
+    if (req.path.startsWith("/auth")) return next();
     return requireAuth(req, res, next);
   });
 
   // ===================== UPLOADS =====================
-  // Note: uploads are allowed without auth gate because the settings page
-  // posts multipart form data. The file URLs are public under /uploads.
-  app.post("/api/uploads", handleUpload);
+  app.post("/api/uploads", requireRole(["Owner", "Manager"]), handleUpload);
 
   // ===================== AUTH & STAFF =====================
+  app.get("/api/auth/bootstrap-status", async (_req: Request, res: Response) => {
+    const ownerExists = await hasOwnerAccount();
+    res.json({ ownerExists });
+  });
+
+  app.post("/api/auth/bootstrap-owner", async (req: Request, res: Response) => {
+    const ownerExists = await hasOwnerAccount();
+    if (ownerExists) {
+      return res.status(409).json({ message: "Owner account already exists" });
+    }
+
+    const parsed = bootstrapOwnerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid owner payload", details: parsed.error.errors });
+    }
+
+    const payload = parsed.data;
+    const existing = await storage.getUserByUsername(payload.username);
+    if (existing) {
+      return res.status(409).json({ message: "Username already exists" });
+    }
+
+    const created = await storage.createUser({
+      username: payload.username,
+      password: hashSecret(payload.password),
+      name: payload.name,
+      email: payload.email,
+      role: "Owner",
+      status: "active",
+      shopId: null,
+    });
+
+    await storage.upsertUserPreferences(created.id, {
+      timezone: "UTC",
+      theme: "system",
+      density: "comfortable",
+      currency: "UGX",
+      dateFormat: "PPP",
+      sidebarCollapsed: false,
+    });
+
+    await storage.createActivityLog({
+      action: "owner_bootstrapped",
+      entity: "auth",
+      entityId: created.id,
+      userId: created.id,
+      userName: created.name || created.username,
+      role: created.role,
+      details: "Owner account initialized through secure bootstrap flow",
+      metadata: {},
+    });
+
+    return res.status(201).json({ user: sanitizeUser(created) });
+  });
+
   app.post("/api/auth/login", async (req: Request, res: Response) => {
+    const ownerExists = await hasOwnerAccount();
+    if (!ownerExists) {
+      return res.status(428).json({ message: "Owner bootstrap required", code: "OWNER_BOOTSTRAP_REQUIRED" });
+    }
+
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
     const { username, secret } = parsed.data;
+    const identityKey = `${req.ip}:${username}`;
+    if (tooManyLoginAttempts(identityKey)) {
+      return res.status(429).json({ message: "Too many failed attempts. Try again later." });
+    }
     const user = await storage.getUserByUsername(username);
 
     const secretValid = user
@@ -339,8 +548,10 @@ export async function registerRoutes(
       : false;
 
     if (!user || !secretValid) {
+      trackFailedLogin(identityKey);
       return res.status(401).json({ message: "Invalid username or PIN" });
     }
+    clearFailedLogins(identityKey);
 
     if (user.status === "disabled") {
       return res.status(403).json({ message: "Account disabled" });
@@ -372,7 +583,8 @@ export async function registerRoutes(
       shopId: user.shopId || undefined,
     });
 
-    res.json({ user: sanitizeUser(user) });
+    const preferences = await storage.upsertUserPreferences(user.id, {});
+    res.json({ user: sanitizeUser(user), preferences });
   });
 
   app.post("/api/auth/logout", async (req: Request, res: Response) => {
@@ -401,12 +613,39 @@ export async function registerRoutes(
     if (!user) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    res.json({ user: sanitizeUser(user) });
+    const preferences = await storage.upsertUserPreferences(user.id, {});
+    res.json({ user: sanitizeUser(user), preferences });
   });
 
   app.get("/api/staff", requireRole(["Owner", "Manager"]), async (_req: Request, res: Response) => {
     const staff = await storage.listUsers();
     res.json(staff.map(u => sanitizeUser(u)));
+  });
+
+  app.get("/api/preferences", requireAuth, async (req: Request, res: Response) => {
+    const preferences = await storage.upsertUserPreferences(req.currentUser!.id, {});
+    res.json(preferences);
+  });
+
+  app.patch("/api/preferences", requireAuth, async (req: Request, res: Response) => {
+    const parsed = preferenceUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid preferences payload", details: parsed.error.errors });
+    }
+
+    const updated = await storage.upsertUserPreferences(req.currentUser!.id, parsed.data);
+    await storage.createActivityLog({
+      action: "preferences_updated",
+      entity: "user_preferences",
+      entityId: req.currentUser!.id,
+      userId: req.currentUser!.id,
+      userName: req.currentUser!.name,
+      role: req.currentUser!.role,
+      details: "Updated personalization preferences",
+      metadata: parsed.data,
+      shopId: req.currentUser?.shopId || undefined,
+    });
+    res.json(updated);
   });
 
   // Shops: get and update
@@ -569,6 +808,18 @@ export async function registerRoutes(
     const limit = Number(_req.query.limit || 200);
     const logs = await storage.getActivityLogs(limit);
     res.json(logs);
+  });
+
+  app.get("/api/system/health", requireRole(["Owner"]), async (_req: Request, res: Response) => {
+    const metrics = (_req.app.locals.apiMetrics || {}) as Record<string, unknown>;
+    const uptimeSec = Math.floor(process.uptime());
+    res.json({
+      status: "ok",
+      time: new Date().toISOString(),
+      uptimeSec,
+      memory: process.memoryUsage(),
+      metrics,
+    });
   });
 
   app.post("/api/activity", requireAuth, async (req: Request, res: Response) => {
@@ -1061,6 +1312,9 @@ export async function registerRoutes(
   // Seed default owner/staff users (Owner only)
   app.post("/api/seed-users", requireRole(["Owner"]), async (_req: Request, res: Response) => {
     try {
+      if (process.env.ENABLE_DEFAULT_USER_SEED !== "true") {
+        return res.status(403).json({ error: "Default user seeding is disabled by policy." });
+      }
       const result = await seedDefaultUsers();
       res.json({ message: "Users seeded", ...result });
     } catch (error) {
@@ -1478,7 +1732,17 @@ export async function registerRoutes(
     try {
       const shopId = req.query.shopId as string | undefined;
       const list = await storage.getProducts(shopId);
-      res.json(list);
+      const page = Math.max(Number(req.query.page || 1), 1);
+      const pageSize = Math.min(Math.max(Number(req.query.pageSize || 100), 1), 500);
+      const start = (page - 1) * pageSize;
+      const paged = list.slice(start, start + pageSize);
+      res.json({
+        data: paged,
+        page,
+        pageSize,
+        total: list.length,
+        totalPages: Math.max(Math.ceil(list.length / pageSize), 1),
+      });
     } catch (err) {
       console.error("Error fetching products:", err);
       res.status(500).json({ error: "Failed to fetch products" });
@@ -1488,6 +1752,12 @@ export async function registerRoutes(
   app.post("/api/products", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
     try {
       const payload = req.body;
+      if (Number(payload.stock) < 0 || Number(payload.minStock) < 0) {
+        return res.status(400).json({ error: "Stock values cannot be negative" });
+      }
+      if (Number(payload.price) < 0 || Number(payload.costPrice) < 0) {
+        return res.status(400).json({ error: "Price values cannot be negative" });
+      }
       const created = await storage.createProduct({ ...payload, shopId: payload.shopId || req.currentUser?.shopId || null });
       await storage.createActivityLog({ action: "product_created", entity: "product", entityId: created.id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Created product ${created.name}`, metadata: { product: created } });
       res.status(201).json(created);
@@ -1500,6 +1770,18 @@ export async function registerRoutes(
   app.patch("/api/products/:id", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      if (req.body.stock !== undefined && Number(req.body.stock) < 0) {
+        return res.status(400).json({ error: "Stock cannot be negative" });
+      }
+      if (req.body.minStock !== undefined && Number(req.body.minStock) < 0) {
+        return res.status(400).json({ error: "Minimum stock cannot be negative" });
+      }
+      if (req.body.price !== undefined && Number(req.body.price) < 0) {
+        return res.status(400).json({ error: "Price cannot be negative" });
+      }
+      if (req.body.costPrice !== undefined && Number(req.body.costPrice) < 0) {
+        return res.status(400).json({ error: "Cost price cannot be negative" });
+      }
       const updated = await storage.updateProduct(id, req.body);
       if (!updated) return res.status(404).json({ error: "Product not found" });
       await storage.createActivityLog({ action: "product_updated", entity: "product", entityId: id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Updated product ${updated.name}` });

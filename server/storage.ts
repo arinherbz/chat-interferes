@@ -1,5 +1,6 @@
 import { 
   type User, type InsertUser, users,
+  type UserPreference, type InsertUserPreference, userPreferences,
   type Brand, type InsertBrand, brands,
   type Model, type InsertModel, models,
   type StorageOption, type InsertStorageOption, storageOptions,
@@ -27,6 +28,8 @@ export interface IStorage {
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
   setUserStatus(id: string, status: "active" | "disabled"): Promise<User | undefined>;
   touchUserActivity(id: string, activity?: { lastLogin?: boolean }): Promise<void>;
+  getUserPreferences(userId: string): Promise<UserPreference | undefined>;
+  upsertUserPreferences(userId: string, data: Partial<InsertUserPreference>): Promise<UserPreference>;
   
   // Brands
   getBrands(): Promise<Brand[]>;
@@ -92,9 +95,9 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  private normalizeBoolean(value: boolean | undefined): boolean | number | undefined {
-    if (value === undefined) return value;
-    return pool ? value : value ? 1 : 0;
+  private normalizeBoolean(value: boolean | null | undefined): boolean | undefined {
+    if (value === null || value === undefined) return undefined;
+    return value;
   }
 
   // ==================== USERS ====================
@@ -143,11 +146,35 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id));
   }
 
+  async getUserPreferences(userId: string): Promise<UserPreference | undefined> {
+    const [pref] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+    return pref;
+  }
+
+  async upsertUserPreferences(userId: string, data: Partial<InsertUserPreference>): Promise<UserPreference> {
+    const existing = await this.getUserPreferences(userId);
+    if (existing) {
+      const [updated] = await db
+        .update(userPreferences)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(userPreferences.userId, userId))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db
+      .insert(userPreferences)
+      .values({
+        userId,
+        ...data,
+      })
+      .returning();
+    return created;
+  }
+
   // ==================== BRANDS ====================
   async getBrands(): Promise<Brand[]> {
-    // For SQLite boolean columns are stored as integers (1/0)
-    const activeVal = pool ? true : 1;
-    return db.select().from(brands).where(eq(brands.isActive, activeVal)).orderBy(brands.sortOrder, brands.name);
+    return db.select().from(brands).where(eq(brands.isActive, true)).orderBy(brands.sortOrder, brands.name);
   }
 
   async getBrand(id: string): Promise<Brand | undefined> {
@@ -174,11 +201,10 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== MODELS ====================
   async getModels(brandId?: string): Promise<Model[]> {
-    const activeVal = pool ? true : 1;
     if (brandId) {
-      return db.select().from(models).where(and(eq(models.brandId, brandId), eq(models.isActive, activeVal))).orderBy(models.sortOrder, models.name);
+      return db.select().from(models).where(and(eq(models.brandId, brandId), eq(models.isActive, true))).orderBy(models.sortOrder, models.name);
     }
-    return db.select().from(models).where(eq(models.isActive, activeVal)).orderBy(models.sortOrder, models.name);
+    return db.select().from(models).where(eq(models.isActive, true)).orderBy(models.sortOrder, models.name);
   }
 
   async getModel(id: string): Promise<Model | undefined> {
@@ -205,11 +231,10 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== STORAGE OPTIONS ====================
   async getStorageOptions(modelId?: string): Promise<StorageOption[]> {
-    const activeVal = pool ? true : 1;
     if (modelId) {
-      return db.select().from(storageOptions).where(and(eq(storageOptions.modelId, modelId), eq(storageOptions.isActive, activeVal))).orderBy(storageOptions.sortOrder, storageOptions.size);
+      return db.select().from(storageOptions).where(and(eq(storageOptions.modelId, modelId), eq(storageOptions.isActive, true))).orderBy(storageOptions.sortOrder, storageOptions.size);
     }
-    return db.select().from(storageOptions).where(eq(storageOptions.isActive, activeVal)).orderBy(storageOptions.sortOrder, storageOptions.size);
+    return db.select().from(storageOptions).where(eq(storageOptions.isActive, true)).orderBy(storageOptions.sortOrder, storageOptions.size);
   }
 
   async getStorageOption(id: string): Promise<StorageOption | undefined> {
@@ -246,12 +271,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDeviceBaseValue(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined> {
-    const activeVal = pool ? true : 1;
     const conditions = [
       eq(deviceBaseValues.brand, brand),
       eq(deviceBaseValues.model, model),
       eq(deviceBaseValues.storage, storage),
-      eq(deviceBaseValues.isActive, activeVal),
+      eq(deviceBaseValues.isActive, true),
     ];
     if (shopId) {
       conditions.push(eq(deviceBaseValues.shopId, shopId));
@@ -304,9 +328,8 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== CONDITION QUESTIONS ====================
   async getConditionQuestions(): Promise<ConditionQuestion[]> {
-    const activeVal = pool ? true : 1;
     return db.select().from(conditionQuestions)
-      .where(eq(conditionQuestions.isActive, activeVal))
+      .where(eq(conditionQuestions.isActive, true))
       .orderBy(conditionQuestions.sortOrder);
   }
 

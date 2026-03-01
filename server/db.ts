@@ -51,6 +51,22 @@ if (usePostgres) {
         shop_id TEXT
       );
 
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE,
+        theme TEXT DEFAULT 'system',
+        currency TEXT DEFAULT 'UGX',
+        date_format TEXT DEFAULT 'PPP',
+        timezone TEXT DEFAULT 'UTC',
+        default_branch_id TEXT,
+        sidebar_collapsed INTEGER DEFAULT 0,
+        density TEXT DEFAULT 'comfortable',
+        dashboard_layout TEXT,
+        accent_color TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS activity_logs (
         id TEXT PRIMARY KEY,
         user_id TEXT,

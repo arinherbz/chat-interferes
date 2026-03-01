@@ -43,6 +43,14 @@ app.use(express.urlencoded({ extended: false }));
 // Serve uploaded assets
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+app.locals.apiMetrics = {
+  totalRequests: 0,
+  totalApiRequests: 0,
+  totalApiErrors: 0,
+  avgApiLatencyMs: 0,
+  byPath: {} as Record<string, { count: number; errors: number; avgLatencyMs: number }>,
+};
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -55,6 +63,9 @@ export function log(message: string, source = "express") {
 }
 
 app.use((req, res, next) => {
+  const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  res.setHeader("X-Request-Id", requestId);
+
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
@@ -67,7 +78,23 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
+    const metrics = app.locals.apiMetrics;
+    metrics.totalRequests += 1;
     if (path.startsWith("/api")) {
+      metrics.totalApiRequests += 1;
+      if (res.statusCode >= 400) metrics.totalApiErrors += 1;
+
+      const nextTotal = metrics.totalApiRequests;
+      metrics.avgApiLatencyMs =
+        Math.round(((metrics.avgApiLatencyMs * (nextTotal - 1) + duration) / nextTotal) * 100) / 100;
+
+      const byPath = metrics.byPath[path] || { count: 0, errors: 0, avgLatencyMs: 0 };
+      const nextCount = byPath.count + 1;
+      byPath.count = nextCount;
+      if (res.statusCode >= 400) byPath.errors += 1;
+      byPath.avgLatencyMs = Math.round(((byPath.avgLatencyMs * (nextCount - 1) + duration) / nextCount) * 100) / 100;
+      metrics.byPath[path] = byPath;
+
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;

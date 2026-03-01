@@ -38,6 +38,32 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// ===================== USER PREFERENCES =====================
+export const userPreferences = pgTable("user_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  theme: text("theme").default("system"), // light | dark | system
+  currency: text("currency").default("UGX"),
+  dateFormat: text("date_format").default("PPP"),
+  timezone: text("timezone").default("UTC"),
+  defaultBranchId: varchar("default_branch_id"),
+  sidebarCollapsed: boolean("sidebar_collapsed").default(false),
+  density: text("density").default("comfortable"), // compact | comfortable
+  dashboardLayout: jsonb("dashboard_layout"), // widget order + visibility
+  accentColor: text("accent_color"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertUserPreferenceSchema = createInsertSchema(userPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertUserPreference = z.infer<typeof insertUserPreferenceSchema>;
+export type UserPreference = typeof userPreferences.$inferSelect;
+
 // ===================== SHOPS =====================
 export const shops = pgTable("shops", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
