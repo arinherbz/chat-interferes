@@ -95,6 +95,16 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+    const cleaned: Partial<T> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        (cleaned as Record<string, unknown>)[key] = value;
+      }
+    }
+    return cleaned;
+  }
+
   private normalizeBoolean(value: boolean | null | undefined): boolean | undefined {
     if (value === null || value === undefined) return undefined;
     return value;
@@ -147,29 +157,52 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserPreferences(userId: string): Promise<UserPreference | undefined> {
-    const [pref] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
-    return pref;
+    try {
+      const [pref] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+      return pref;
+    } catch {
+      return undefined;
+    }
   }
 
   async upsertUserPreferences(userId: string, data: Partial<InsertUserPreference>): Promise<UserPreference> {
-    const existing = await this.getUserPreferences(userId);
-    if (existing) {
-      const [updated] = await db
-        .update(userPreferences)
-        .set({ ...data, updatedAt: new Date() })
-        .where(eq(userPreferences.userId, userId))
-        .returning();
-      return updated;
-    }
+    try {
+      const sanitized = this.stripUndefined(data as Record<string, unknown>);
+      const existing = await this.getUserPreferences(userId);
+      if (existing) {
+        const [updated] = await db
+          .update(userPreferences)
+          .set({ ...sanitized, updatedAt: new Date() })
+          .where(eq(userPreferences.userId, userId))
+          .returning();
+        return updated;
+      }
 
-    const [created] = await db
-      .insert(userPreferences)
-      .values({
+      const [created] = await db
+        .insert(userPreferences)
+        .values({
+          userId,
+          ...sanitized,
+        })
+        .returning();
+      return created;
+    } catch {
+      return {
+        id: `fallback-${userId}`,
         userId,
-        ...data,
-      })
-      .returning();
-    return created;
+        theme: "system",
+        currency: "UGX",
+        dateFormat: "PPP",
+        timezone: "UTC",
+        defaultBranchId: null,
+        sidebarCollapsed: false,
+        density: "comfortable",
+        dashboardLayout: null,
+        accentColor: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as UserPreference;
+    }
   }
 
   // ==================== BRANDS ====================

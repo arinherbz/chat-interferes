@@ -20,12 +20,12 @@ type Props = {
 
 export function FinancialChart({ isLoading, hasChartData, data }: Props) {
   return (
-    <Card className="card-lift border-slate-200 xl:col-span-2">
-      <CardHeader>
-        <CardTitle>Financial Performance</CardTitle>
+    <Card className="card-lift border-slate-200 bg-white xl:col-span-2">
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-xs font-medium uppercase tracking-wide text-slate-500">Financial Performance</CardTitle>
         <CardDescription>Revenue vs Net Profit (last 7 days)</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0">
         {isLoading ? (
           <div className="space-y-3">
             <Skeleton className="h-[280px] w-full rounded-lg" />
@@ -66,7 +66,7 @@ export function FinancialChart({ isLoading, hasChartData, data }: Props) {
                   type="monotone"
                   dataKey="profit"
                   name="Net Profit"
-                  stroke="#0f766e"
+                  stroke="#334155"
                   strokeWidth={2.5}
                   dot={false}
                   isAnimationActive

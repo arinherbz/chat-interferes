@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Smartphone, ShieldCheck, User, LockKeyhole, Loader2 } from "lucide-react";
 import logoUrl from "@assets/generated_images/minimalist_phone_shop_logo_icon.png";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/api";
 
 export default function Login() {
   const { login } = useAuth();
@@ -14,6 +15,25 @@ export default function Login() {
   const [username, setUsername] = useState("owner");
   const [pin, setPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [ownerExists, setOwnerExists] = useState<boolean | null>(null);
+  const [bootstrap, setBootstrap] = useState({
+    username: "owner",
+    name: "Shop Owner",
+    email: "",
+    password: "",
+  });
+
+  useEffect(() => {
+    const checkBootstrap = async () => {
+      try {
+        const status = await apiRequest<{ ownerExists: boolean }>("GET", "/api/auth/bootstrap-status");
+        setOwnerExists(status.ownerExists);
+      } catch {
+        setOwnerExists(true);
+      }
+    };
+    void checkBootstrap();
+  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +42,29 @@ export default function Login() {
       await login(username.trim(), pin);
       toast({ title: "Signed in", description: "Session secured for this device." });
     } catch (err: any) {
-      toast({ title: "Login failed", description: err?.message || "Check your username or PIN", variant: "destructive" });
+      if (err?.payload?.code === "OWNER_BOOTSTRAP_REQUIRED") {
+        setOwnerExists(false);
+        toast({ title: "Owner setup required", description: "Create the first owner account to continue.", variant: "destructive" });
+      } else {
+        toast({ title: "Login failed", description: err?.message || "Check your username or PIN", variant: "destructive" });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onBootstrap = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await apiRequest("POST", "/api/auth/bootstrap-owner", bootstrap);
+      setOwnerExists(true);
+      setUsername(bootstrap.username);
+      setPin(bootstrap.password);
+      await login(bootstrap.username, bootstrap.password);
+      toast({ title: "Owner created", description: "Your first owner account is now active." });
+    } catch (err: any) {
+      toast({ title: "Owner setup failed", description: err?.message || "Please check your details.", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -46,7 +88,34 @@ export default function Login() {
           <CardDescription>Username + PIN. Sessions persist after refresh.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <form className="space-y-4" onSubmit={onSubmit}>
+          {ownerExists === false ? (
+            <form className="space-y-4" onSubmit={onBootstrap}>
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                First-run setup: create your owner account.
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="owner-username">Username</Label>
+                <Input id="owner-username" value={bootstrap.username} onChange={(e) => setBootstrap((s) => ({ ...s, username: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="owner-name">Full name</Label>
+                <Input id="owner-name" value={bootstrap.name} onChange={(e) => setBootstrap((s) => ({ ...s, name: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="owner-email">Email</Label>
+                <Input id="owner-email" type="email" value={bootstrap.email} onChange={(e) => setBootstrap((s) => ({ ...s, email: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="owner-password">Strong password</Label>
+                <Input id="owner-password" type="password" value={bootstrap.password} onChange={(e) => setBootstrap((s) => ({ ...s, password: e.target.value }))} />
+              </div>
+              <Button type="submit" className="w-full h-12 text-lg" disabled={submitting}>
+                {submitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <ShieldCheck className="w-5 h-5 mr-2" />}
+                Create Owner Account
+              </Button>
+            </form>
+          ) : (
+            <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
               <Label htmlFor="username" className="text-sm text-slate-700 flex items-center gap-2">
                 <User className="w-4 h-4 text-slate-400" />
@@ -83,8 +152,10 @@ export default function Login() {
               {submitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <ShieldCheck className="w-5 h-5 mr-2" />}
               Enter Store
             </Button>
-          </form>
+            </form>
+          )}
 
+          {ownerExists !== false && (
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-2">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-full">
@@ -97,6 +168,7 @@ export default function Login() {
               </div>
             </div>
           </div>
+          )}
         </CardContent>
       </Card>
       
