@@ -985,12 +985,12 @@ export default function TradeInPage() {
                         </div>
 
                         {/* Offer Amount */}
-                        <div className="p-8 bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl text-white text-center">
-                          <p className="text-sm uppercase tracking-wide text-slate-400 mb-2">Trade-In Value</p>
-                          <div className="text-5xl font-bold mb-2">
+                        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Trade-In Value</p>
+                          <div className="mb-2 text-5xl font-bold text-slate-900">
                             UGX {scoringResult.calculatedOffer.toLocaleString()}
                           </div>
-                          <div className="flex items-center justify-center gap-4 text-sm text-slate-400">
+                          <div className="flex items-center justify-center gap-4 text-sm text-slate-500">
                             <span>Base: UGX {scoringResult.baseValue.toLocaleString()}</span>
                             <span>|</span>
                             <span>Score: {scoringResult.conditionScore}%</span>
@@ -1202,28 +1202,28 @@ export default function TradeInPage() {
               </Card>
 
               {/* Policy Reminder */}
-              <Card className="bg-slate-900 text-white border-none">
+              <Card className="border-slate-200 bg-white shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2 text-sm">
+                  <CardTitle className="flex items-center gap-2 text-sm text-slate-900">
                     <AlertCircle className="w-4 h-4" />
                     Auto-Rejection Rules
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="text-sm text-slate-300 space-y-2">
+                <CardContent className="space-y-2 text-sm text-slate-600">
                   <p className="flex items-center gap-2">
-                    <XCircle className="w-4 h-4 text-red-400" />
+                    <XCircle className="w-4 h-4 text-red-500" />
                     iCloud / Google lock enabled
                   </p>
                   <p className="flex items-center gap-2">
-                    <XCircle className="w-4 h-4 text-red-400" />
+                    <XCircle className="w-4 h-4 text-red-500" />
                     Invalid IMEI number
                   </p>
                   <p className="flex items-center gap-2">
-                    <XCircle className="w-4 h-4 text-red-400" />
+                    <XCircle className="w-4 h-4 text-red-500" />
                     Duplicate IMEI (already traded)
                   </p>
                   <p className="flex items-center gap-2">
-                    <XCircle className="w-4 h-4 text-red-400" />
+                    <XCircle className="w-4 h-4 text-red-500" />
                     Condition score below 30%
                   </p>
                 </CardContent>

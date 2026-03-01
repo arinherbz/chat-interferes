@@ -73,7 +73,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className={cn(
           "group flex items-center gap-3 rounded-md px-3 py-2 transition-all duration-200 cursor-pointer",
           active 
-            ? "bg-primary text-primary-foreground font-medium shadow-sm" 
+            ? "bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/20" 
             : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
         )}
         title={sidebarCollapsed ? label : undefined}
@@ -113,7 +113,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar Navigation */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen flex flex-col",
+        "fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 shadow-sm transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen flex flex-col",
         sidebarCollapsed ? "md:w-[84px]" : "md:w-72",
         !sidebarCollapsed && "w-72",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
