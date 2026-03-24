@@ -71,14 +71,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return (
       <Link href={href}>
         <div className={cn(
-          "group flex items-center gap-3 rounded-md px-3 py-2 transition-all duration-200 cursor-pointer",
+          "group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 cursor-pointer",
           active 
-            ? "bg-accent text-primary font-semibold shadow-sm ring-1 ring-primary/15" 
-            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+            ? "bg-accent text-primary font-semibold border border-primary/10 shadow-sm" 
+            : "text-slate-600 hover:bg-secondary hover:text-foreground"
         )}
         title={sidebarCollapsed ? label : undefined}
         aria-current={active ? "page" : undefined}>
-          <Icon className={cn("h-5 w-5", active ? "" : "group-hover:scale-105")} />
+          <Icon className={cn("h-5 w-5 shrink-0", active ? "" : "group-hover:scale-105")} />
           {!sidebarCollapsed && <span>{label}</span>}
         </div>
       </Link>
@@ -88,7 +88,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className="md:hidden border-b border-white/70 bg-white/80 backdrop-blur-xl p-4 flex items-center justify-between sticky top-0 z-50">
+      <div className="md:hidden border-b bg-white p-4 flex items-center justify-between sticky top-0 z-50">
         <Link href={`/shop-settings/${activeShop?.id || "shop1"}`}> 
           <div className="flex items-center gap-2 font-bold text-foreground" aria-label="Edit shop settings">
             <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
@@ -113,12 +113,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar Navigation */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 border-r border-white/70 bg-white/78 backdrop-blur-2xl shadow-[0_18px_45px_rgba(15,23,42,0.08)] transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen flex flex-col",
+        "fixed inset-y-0 left-0 z-40 border-r bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen flex flex-col",
         sidebarCollapsed ? "md:w-[84px]" : "md:w-72",
         !sidebarCollapsed && "w-72",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="hidden md:flex items-center justify-between border-b border-white/70 px-4 py-4">
+        <div className="hidden md:flex items-center justify-between border-b px-4 py-5">
           <Link href={`/shop-settings/${activeShop?.id || "shop1"}`} className="flex items-center gap-3 min-w-0" aria-label="Edit shop settings">
            <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
            {!sidebarCollapsed && (
@@ -150,8 +150,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
 
-          <div className={cn("flex-1 overflow-y-auto py-6 space-y-1", sidebarCollapsed ? "px-2" : "px-4")}>
-          {!sidebarCollapsed && <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">Main</div>}
+          <div className={cn("flex-1 overflow-y-auto py-6 space-y-1.5", sidebarCollapsed ? "px-2" : "px-4")}>
+          {!sidebarCollapsed && <div className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Main</div>}
           
           {canSeeDashboard && (
             <NavLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
@@ -163,7 +163,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
              <NavLink href="/closures" icon={FileText} label="Closures" />
           )}
           
-          {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">Management</div>}
+          {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Management</div>}
           
           <NavLink href="/trade-in" icon={RefreshCw} label="Trade-In / Buyback" />
           <NavLink href="/leads" icon={MessageSquare} label="Leads & Follow-ups" />
@@ -174,7 +174,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           
           {canSeeAdmin && (
             <>
-              {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">Admin</div>}
+              {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Admin</div>}
               <NavLink href="/expenses" icon={CreditCard} label="Expenses" />
               <NavLink href="/audit-logs" icon={ShieldAlert} label="Audit Logs" />
               {canSeeBaseValues && <NavLink href="/base-values" icon={UserCog} label="Base Values" />}
@@ -183,7 +183,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </>
           )}
 
-          <div className="mt-auto pt-8 border-t border-white/70">
+          <div className="mt-auto pt-8 border-t">
              <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground font-bold">
                 {user.name.charAt(0)}
@@ -210,8 +210,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-7xl mx-auto">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 xl:p-8">
+          <div className="mx-auto max-w-[1640px]">
             {children}
           </div>
         </div>
@@ -220,7 +220,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          className="fixed inset-0 bg-slate-900/20 z-30 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
