@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { subDays, subHours } from "date-fns";
+import { subDays } from "date-fns";
 import { useAuth } from "./auth-context";
 import { apiRequest } from "./api";
 
@@ -61,19 +61,6 @@ export interface Device {
   addedAt: string;
   warrantyPeriod?: number; // months
   warrantyExpiresAt?: string;
-}
-
-export interface TradeIn {
-  id: string;
-  deviceId: string; // The ID generated in inventory
-  brand: string;
-  model: string;
-  imei: string;
-  condition: string;
-  offerPrice: number;
-  customerId: string;
-  status: "Pending" | "Approved" | "Rejected";
-  createdAt: string;
 }
 
 export interface Customer {
@@ -221,7 +208,6 @@ interface DataContextType {
   sales: Sale[];
   expenses: Expense[];
   repairs: Repair[];
-  tradeIns: TradeIn[];
   closures: DailyClosure[];
   leads: Lead[];
   auditLogs: AuditLog[];
@@ -231,22 +217,21 @@ interface DataContextType {
   setActiveShopId: (id: string) => void;
   activeShopId: string;
   updateShop: (id: string, updates: Partial<Shop>) => void;
-  addProduct: (data: Omit<Product, "id">) => void;
-  updateProduct: (id: string, data: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
-  addDevice: (data: Omit<Device, "id" | "status" | "addedAt">) => void;
-  addCustomer: (data: Omit<Customer, "id" | "joinedAt" | "totalPurchases">) => void;
-  recordSale: (data: Omit<Sale, "id" | "saleNumber" | "createdAt">) => void;
-  recordExpense: (data: Omit<Expense, "id">) => void;
-  addRepair: (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => void;
-  recordTradeIn: (data: Omit<TradeIn, "id" | "createdAt" | "status">) => void;
-  updateRepairStatus: (id: string, status: RepairStatus) => void;
-  updateClosure: (id: string, data: Partial<DailyClosure>) => void;
-  addClosure: (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId" | "cashExpected">) => void;
-  addLead: (data: Omit<Lead, "id" | "createdAt" | "followUpHistory" | "updatedAt">) => void;
-  updateLead: (id: string, data: Partial<Lead>) => void;
+  addProduct: (data: Omit<Product, "id">) => Promise<void>;
+  updateProduct: (id: string, data: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  addDevice: (data: Omit<Device, "id" | "status" | "addedAt">) => Promise<void>;
+  addCustomer: (data: Omit<Customer, "id" | "joinedAt" | "totalPurchases">) => Promise<void>;
+  recordSale: (data: Omit<Sale, "id" | "saleNumber" | "createdAt">) => Promise<Sale>;
+  recordExpense: (data: Omit<Expense, "id">) => Promise<void>;
+  addRepair: (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => Promise<void>;
+  updateRepairStatus: (id: string, status: RepairStatus) => Promise<void>;
+  updateClosure: (id: string, data: Partial<DailyClosure>) => Promise<void>;
+  addClosure: (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId" | "cashExpected">) => Promise<void>;
+  addLead: (data: Omit<Lead, "id" | "createdAt" | "followUpHistory" | "updatedAt">) => Promise<void>;
+  updateLead: (id: string, data: Partial<Lead>) => Promise<void>;
   deleteLead: (id: string) => void;
-  addLeadFollowUp: (id: string, follow: Omit<LeadFollowUp, "at"> & { at?: string }) => void;
+  addLeadFollowUp: (id: string, follow: Omit<LeadFollowUp, "at"> & { at?: string }) => Promise<void>;
   
   // User Management
   addUser: (data: Omit<User, "id"> & { pin?: string }) => Promise<void>;
@@ -288,85 +273,8 @@ const MOCK_SHOPS: Shop[] = [
   },
 ];
 
-const MOCK_USERS: User[] = [
-  { id: "u1", name: "Alex Owner", email: "owner@techpos.com", role: "Owner", shopId: "shop1" },
-  { id: "u2", name: "Sarah Staff", email: "sarah@techpos.com", role: "Sales", shopId: "shop1" },
-  { id: "u3", name: "Mike Manager", email: "mike@techpos.com", role: "Manager", shopId: "shop1" },
-];
-
-const MOCK_PRODUCTS: Product[] = [
-  { id: "p1", name: "iPhone 13 Pro Max", category: "iPhone", price: 3500000, costPrice: 3200000, stock: 5, minStock: 2 },
-  { id: "p2", name: "Samsung Galaxy S22", category: "Samsung", price: 2800000, costPrice: 2500000, stock: 3, minStock: 2 },
-  { id: "p3", name: "Tempered Glass Screen", category: "Accessories", price: 15000, costPrice: 5000, stock: 100, minStock: 20 },
-  { id: "p4", name: "iPhone 14 Case", category: "Accessories", price: 25000, costPrice: 10000, stock: 50, minStock: 10 },
-  { id: "p5", name: "USB-C Charger", category: "Accessories", price: 35000, costPrice: 15000, stock: 30, minStock: 5 },
-];
-
-const MOCK_DEVICES: Device[] = [
-  { id: "d1", brand: "Apple", model: "iPhone 11", imei: "356998000001", color: "Black", storage: "64GB", condition: "Used", status: "In Stock", price: 1200000, cost: 900000, addedAt: subDays(new Date(), 5).toISOString() },
-  { id: "d2", brand: "Samsung", model: "A12", imei: "356998000002", color: "Blue", storage: "32GB", condition: "New", status: "In Stock", price: 600000, cost: 450000, addedAt: subDays(new Date(), 2).toISOString() },
-];
-
-const MOCK_CUSTOMERS: Customer[] = [
-  { id: "c1", name: "John Doe", phone: "+256 771 234 567", email: "john@example.com", joinedAt: subDays(new Date(), 30).toISOString(), totalPurchases: 2 },
-];
-
-const MOCK_SALES: Sale[] = [
-  { 
-    id: "s1", saleNumber: "INV-1001", customerName: "John Doe", totalAmount: 3030000, paymentMethod: "Cash", status: "Completed", soldBy: "Sarah Staff", createdAt: subHours(new Date(), 4).toISOString(),
-    items: [
-      { id: "si1", name: "Samsung Galaxy S22", quantity: 1, unitPrice: 2800000, totalPrice: 2800000 },
-      { id: "si2", name: "USB-C Charger", quantity: 1, unitPrice: 35000, totalPrice: 35000 },
-    ]
-  }
-];
-
-const MOCK_EXPENSES: Expense[] = [
-  { id: "e1", category: "Supplies", description: "Cleaning materials", amount: 50000, date: subDays(new Date(), 1).toISOString(), recordedBy: "Mike Manager" }
-];
-
-const MOCK_REPAIRS: Repair[] = [
-  { id: "r1", repairNumber: "REP-5001", deviceBrand: "Apple", deviceModel: "iPhone X", imei: "990011...", issueDescription: "Cracked Screen", repairType: "Screen Replacement", price: 150000, notes: "Waiting for part", status: "Pending", createdAt: subDays(new Date(), 1).toISOString(), customerName: "Alice" }
-];
-
-const MOCK_LOGS: AuditLog[] = [
-  { id: "l1", action: "LOGIN", entity: "Auth", details: "User Sarah Staff logged in", user: "Sarah Staff", timestamp: subHours(new Date(), 5).toISOString() },
-  { id: "l2", action: "SALE_CREATE", entity: "Sale", details: "Created sale INV-1001", user: "Sarah Staff", timestamp: subHours(new Date(), 4).toISOString() },
-];
-
-const MOCK_NOTIFICATIONS: Notification[] = [
-  { id: "n1", title: "Low Stock Alert", message: "iPhone 13 Pro Max is running low (5 left)", type: "warning", read: false, timestamp: new Date().toISOString() }
-];
-
 const STORAGE_KEYS = {
-  products: "ariostore_products",
-  devices: "ariostore_devices",
-  customers: "ariostore_customers",
-  sales: "ariostore_sales",
-  expenses: "ariostore_expenses",
-  repairs: "ariostore_repairs",
-  tradeIns: "ariostore_tradeins",
-  closures: "ariostore_closures",
-  auditLogs: "ariostore_audit_logs",
-  leads: "ariostore_leads",
 };
-
-function loadPersisted<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function persist<T>(key: string, value: T) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // ignore storage quota issues
-  }
-}
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user: authUser } = useAuth();
@@ -379,29 +287,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return MOCK_SHOPS;
     }
   });
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
-  const [products, setProducts] = useState<Product[]>(() => loadPersisted(STORAGE_KEYS.products, MOCK_PRODUCTS));
-  const [devices, setDevices] = useState<Device[]>(() => loadPersisted(STORAGE_KEYS.devices, MOCK_DEVICES));
-  const [customers, setCustomers] = useState<Customer[]>(() => loadPersisted(STORAGE_KEYS.customers, MOCK_CUSTOMERS));
-  const [sales, setSales] = useState<Sale[]>(() => loadPersisted(STORAGE_KEYS.sales, MOCK_SALES));
-  const [expenses, setExpenses] = useState<Expense[]>(() => loadPersisted(STORAGE_KEYS.expenses, MOCK_EXPENSES));
-  const [repairs, setRepairs] = useState<Repair[]>(() => loadPersisted(STORAGE_KEYS.repairs, MOCK_REPAIRS));
-  const [tradeIns, setTradeIns] = useState<TradeIn[]>(() => loadPersisted(STORAGE_KEYS.tradeIns, []));
-  const [closures, setClosures] = useState<DailyClosure[]>(() => loadPersisted(STORAGE_KEYS.closures, []));
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadPersisted(STORAGE_KEYS.auditLogs, MOCK_LOGS));
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
-  const [leads, setLeads] = useState<Lead[]>(() => loadPersisted(STORAGE_KEYS.leads, []));
-
-  useEffect(() => persist(STORAGE_KEYS.products, products), [products]);
-  useEffect(() => persist(STORAGE_KEYS.devices, devices), [devices]);
-  useEffect(() => persist(STORAGE_KEYS.customers, customers), [customers]);
-  useEffect(() => persist(STORAGE_KEYS.sales, sales), [sales]);
-  useEffect(() => persist(STORAGE_KEYS.expenses, expenses), [expenses]);
-  useEffect(() => persist(STORAGE_KEYS.repairs, repairs), [repairs]);
-  useEffect(() => persist(STORAGE_KEYS.tradeIns, tradeIns), [tradeIns]);
-  useEffect(() => persist(STORAGE_KEYS.closures, closures), [closures]);
-  useEffect(() => persist(STORAGE_KEYS.auditLogs, auditLogs), [auditLogs]);
-  useEffect(() => persist(STORAGE_KEYS.leads, leads), [leads]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [repairs, setRepairs] = useState<Repair[]>([]);
+  const [closures, setClosures] = useState<DailyClosure[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
 
   useEffect(() => {
     if (authUser?.shopId) {
@@ -417,18 +313,240 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [shops]);
 
+  useEffect(() => {
+    const loadShops = async () => {
+      if (!authUser) return;
+
+      try {
+        const serverShops = await apiRequest<Shop[]>("GET", "/api/shops", undefined, { skipCache: true });
+        if (serverShops.length === 0) return;
+
+        setShops(serverShops);
+        setActiveShopId((currentId) => {
+          if (authUser.shopId && serverShops.some((shop) => shop.id === authUser.shopId)) {
+            return authUser.shopId;
+          }
+          if (serverShops.some((shop) => shop.id === currentId)) {
+            return currentId;
+          }
+          return serverShops[0].id;
+        });
+      } catch {
+        // Keep the last known shop list if the API is unavailable.
+      }
+    };
+
+    void loadShops();
+  }, [authUser]);
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      if (!authUser) {
+        setProducts([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const result = await apiRequest<{ data: Product[] }>(
+          "GET",
+          `/api/products${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setProducts(result.data || []);
+      } catch {
+        // Keep the currently loaded local state instead of silently replacing it with mock data.
+      }
+    };
+
+    void loadProducts();
+  }, [authUser, activeShopId]);
+
+  useEffect(() => {
+    const loadDevices = async () => {
+      if (!authUser) {
+        setDevices([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const list = await apiRequest<Device[]>(
+          "GET",
+          `/api/devices${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setDevices(list);
+      } catch {
+        // Keep current local state when device API is unavailable.
+      }
+    };
+
+    void loadDevices();
+  }, [authUser, activeShopId]);
+
+  useEffect(() => {
+    const loadCustomers = async () => {
+      if (!authUser) {
+        setCustomers([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const list = await apiRequest<Customer[]>(
+          "GET",
+          `/api/customers${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setCustomers(list);
+      } catch {
+        // Keep current local state when customer API is unavailable.
+      }
+    };
+
+    void loadCustomers();
+  }, [authUser, activeShopId]);
+
+  useEffect(() => {
+    const loadSales = async () => {
+      if (!authUser) {
+        setSales([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const list = await apiRequest<Sale[]>(
+          "GET",
+          `/api/sales${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setSales(list);
+      } catch {
+        // Keep current local state when sales API is unavailable.
+      }
+    };
+
+    void loadSales();
+  }, [authUser, activeShopId]);
+
+  useEffect(() => {
+    const loadRepairs = async () => {
+      if (!authUser) {
+        setRepairs([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const list = await apiRequest<Repair[]>(
+          "GET",
+          `/api/repairs${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setRepairs(list);
+      } catch {
+        // Keep current local state when repair API is unavailable.
+      }
+    };
+
+    void loadRepairs();
+  }, [authUser, activeShopId]);
+
+  useEffect(() => {
+    const loadExpenses = async () => {
+      if (!authUser) {
+        setExpenses([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const list = await apiRequest<Expense[]>(
+          "GET",
+          `/api/expenses${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setExpenses(list.map((expense) => ({
+          ...expense,
+          date: expense.date ? new Date(expense.date).toISOString() : new Date().toISOString(),
+        })));
+      } catch {
+        // Keep current local state when expense API is unavailable.
+      }
+    };
+
+    void loadExpenses();
+  }, [authUser, activeShopId]);
+
+  useEffect(() => {
+    const loadClosures = async () => {
+      if (!authUser) {
+        setClosures([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const list = await apiRequest<DailyClosure[]>(
+          "GET",
+          `/api/closures${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setClosures(list);
+      } catch {
+        // Keep current local state when closure API is unavailable.
+      }
+    };
+
+    void loadClosures();
+  }, [authUser, activeShopId]);
+
+  useEffect(() => {
+    const loadLeads = async () => {
+      if (!authUser) {
+        setLeads([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const list = await apiRequest<Lead[]>(
+          "GET",
+          `/api/leads${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setLeads(list);
+      } catch {
+        // Keep current local state when lead API is unavailable.
+      }
+    };
+
+    void loadLeads();
+  }, [authUser, activeShopId]);
+
   const updateShop = async (id: string, updates: Partial<Shop>) => {
-    try {
-      const updated = await apiRequest<Shop>("PATCH", `/api/shops/${id}`, updates);
-      setShops(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
-      if (id === activeShopId) setActiveShopId(id);
-      return updated;
-    } catch {
-      // fallback to local update if API unavailable
-      setShops(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-      if (id === activeShopId) setActiveShopId(id);
-      return shops.find(s => s.id === id) || null;
-    }
+    const updated = await apiRequest<Shop>("PATCH", `/api/shops/${id}`, updates);
+    setShops(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
+    if (id === activeShopId) setActiveShopId(id);
+    return updated;
   };
 
   useEffect(() => {
@@ -443,7 +561,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           name: authUser.name,
           email: authUser.email || "",
           role: authUser.role as Role,
-          shopId: authUser.shopId || "shop1",
+          shopId: authUser.shopId || activeShopId,
           status: authUser.status === "disabled" ? "disabled" : "active",
           lastActiveAt: authUser.lastActiveAt,
         }]);
@@ -453,7 +571,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const staff = await apiRequest<User[]>("GET", "/api/staff");
         setUsers(staff.map(s => ({ ...s, email: s.email || "" })));
       } catch {
-        setUsers(MOCK_USERS);
+        setUsers([]);
       }
     };
     loadStaff();
@@ -510,26 +628,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }).catch(() => {});
   };
 
-  const addLead = (data: Omit<Lead, "id" | "createdAt" | "followUpHistory" | "updatedAt">) => {
-    const now = new Date().toISOString();
-    const lead: Lead = {
+  const addLead = async (data: Omit<Lead, "id" | "createdAt" | "followUpHistory" | "updatedAt">) => {
+    const created = await apiRequest<Lead>("POST", "/api/leads", {
       ...data,
-      id: `lead-${Date.now()}`,
-      createdAt: now,
-      updatedAt: now,
-      followUpHistory: [],
       shopId: data.shopId || activeShopId,
-      createdBy: currentUser?.id,
-      createdByName: currentUser?.name,
-    };
-    setLeads(prev => [lead, ...prev]);
-    logAction("CREATE", "Lead", `Added lead ${data.customerName}`);
+    });
+    setLeads((prev) => [created, ...prev]);
+    logAction("CREATE", "Lead", `Added lead ${created.customerName}`, created.id);
   };
 
-  const updateLead = (id: string, data: Partial<Lead>) => {
-    const now = new Date().toISOString();
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, ...data, updatedAt: now } : l));
-    logAction("UPDATE", "Lead", `Updated lead ${id}`);
+  const updateLead = async (id: string, data: Partial<Lead>) => {
+    const updated = await apiRequest<Lead>("PATCH", `/api/leads/${id}`, data);
+    setLeads((prev) => prev.map((lead) => (lead.id === id ? updated : lead)));
+    logAction("UPDATE", "Lead", `Updated lead ${id}`, id);
   };
 
   const deleteLead = (id: string) => {
@@ -537,128 +648,124 @@ export function DataProvider({ children }: { children: ReactNode }) {
     logAction("DELETE", "Lead", `Removed lead ${id}`);
   };
 
-  const addLeadFollowUp = (id: string, follow: Omit<LeadFollowUp, "at"> & { at?: string }) => {
-    const now = new Date().toISOString();
-    setLeads(prev => prev.map(l => {
-      if (l.id !== id) return l;
-      const entry: LeadFollowUp = {
-        by: follow.by || currentUser?.name || "Staff",
-        byId: follow.byId || currentUser?.id,
-        at: follow.at || now,
-        note: follow.note,
-        result: follow.result,
-      };
-      const history = [...(l.followUpHistory || []), entry];
-      const next = follow.result === "won" || follow.result === "lost" ? undefined : follow.at;
-      const status = follow.result === "won" ? "won" : follow.result === "lost" ? "lost" : "in_progress";
-      return { ...l, followUpHistory: history, nextFollowUpAt: next, status, updatedAt: now };
-    }));
-    logAction("UPDATE", "Lead", `Follow-up on lead ${id}`);
+  const addLeadFollowUp = async (id: string, follow: Omit<LeadFollowUp, "at"> & { at?: string }) => {
+    const updated = await apiRequest<Lead>("POST", `/api/leads/${id}/follow-ups`, {
+      note: follow.note,
+      result: follow.result,
+    });
+    setLeads((prev) => prev.map((lead) => (lead.id === id ? updated : lead)));
+    logAction("UPDATE", "Lead", `Follow-up on lead ${id}`, id);
   };
 
-  const addProduct = (data: Omit<Product, "id">) => {
-    const newProduct = { ...data, id: `p-${Date.now()}` };
-    setProducts([...products, newProduct]);
-    logAction("CREATE", "Product", `Added product ${data.name}`);
+  const addProduct = async (data: Omit<Product, "id">) => {
+    const created = await apiRequest<Product>("POST", "/api/products", {
+      ...data,
+      shopId: activeShopId,
+    });
+    setProducts(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    logAction("CREATE", "Product", `Added product ${created.name}`, created.id);
   };
 
-  const updateProduct = (id: string, data: Partial<Product>) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+  const updateProduct = async (id: string, data: Partial<Product>) => {
+    const updated = await apiRequest<Product>("PATCH", `/api/products/${id}`, data);
+    setProducts(prev => prev.map(p => p.id === id ? updated : p));
+    logAction("UPDATE", "Product", `Updated product ${updated.name}`, id);
+  };
+
+  const deleteProduct = async (id: string) => {
     const name = products.find(p => p.id === id)?.name || id;
-    logAction("UPDATE", "Product", `Updated product ${name}`);
-  };
-
-  const deleteProduct = (id: string) => {
-    const name = products.find(p => p.id === id)?.name || id;
+    await apiRequest("DELETE", `/api/products/${id}`);
     setProducts(prev => prev.filter(p => p.id !== id));
     logAction("DELETE", "Product", `Removed product ${name}`);
   };
 
-  const addDevice = (data: Omit<Device, "id" | "status" | "addedAt">) => {
-    setDevices([...devices, { ...data, id: `d-${Date.now()}`, status: "In Stock", addedAt: new Date().toISOString() }]);
-    logAction("CREATE", "Device", `Added device ${data.brand} ${data.model}`);
-  };
-
-  const addCustomer = (data: Omit<Customer, "id" | "joinedAt" | "totalPurchases">) => {
-    setCustomers([...customers, { ...data, id: `c-${Date.now()}`, joinedAt: new Date().toISOString(), totalPurchases: 0 }]);
-    logAction("CREATE", "Customer", `Registered customer ${data.name}`);
-  };
-
-  const recordSale = (data: Omit<Sale, "id" | "saleNumber" | "createdAt">) => {
-    const saleNumber = `INV-${1000 + sales.length + 1}`;
-    setSales([{ ...data, id: `s-${Date.now()}`, saleNumber, soldBy: data.soldBy || currentUser?.name || "Staff", createdAt: new Date().toISOString() }, ...sales]);
-    
-    // Deduct stock
-    const updatedProducts = [...products];
-    const updatedDevices = [...devices];
-    
-    data.items.forEach(item => {
-      if (item.productId) {
-        const pIdx = updatedProducts.findIndex(p => p.id === item.productId);
-        if (pIdx >= 0) updatedProducts[pIdx].stock -= item.quantity;
-      }
-      if (item.deviceId) {
-        const dIdx = updatedDevices.findIndex(d => d.id === item.deviceId);
-        if (dIdx >= 0) updatedDevices[dIdx].status = "Sold";
-      }
-    });
-    
-    setProducts(updatedProducts);
-    setDevices(updatedDevices);
-    logAction("CREATE", "Sale", `Recorded sale ${saleNumber}`);
-  };
-
-  const recordExpense = (data: Omit<Expense, "id">) => {
-    setExpenses([{ ...data, id: `e-${Date.now()}`, recordedBy: currentUser?.name || data.recordedBy }, ...expenses]);
-    logAction("CREATE", "Expense", `Recorded expense ${data.category} - ${data.amount}`);
-  };
-
-  const recordTradeIn = (data: Omit<TradeIn, "id" | "createdAt" | "status">) => {
-    const tradeInId = `tr-${Date.now()}`;
-    const newTradeIn: TradeIn = {
+  const addDevice = async (data: Omit<Device, "id" | "status" | "addedAt">) => {
+    const created = await apiRequest<Device>("POST", "/api/devices", {
       ...data,
-      id: tradeInId,
-      status: "Approved",
-      createdAt: new Date().toISOString()
-    };
-    setTradeIns([newTradeIn, ...tradeIns]);
-    
-    // Automatically add to inventory as "Used"
-    addDevice({
-      brand: data.brand,
-      model: data.model,
-      imei: data.imei,
-      color: "Unknown", // Simplified
-      storage: "Unknown", // Simplified
-      condition: "Used",
-      price: Math.ceil(data.offerPrice * 1.3), // 30% markup default
-      cost: data.offerPrice
+      shopId: activeShopId,
+    });
+    setDevices(prev => [created, ...prev]);
+    logAction("CREATE", "Device", `Added device ${created.brand} ${created.model}`, created.id);
+  };
+
+  const addCustomer = async (data: Omit<Customer, "id" | "joinedAt" | "totalPurchases">) => {
+    const created = await apiRequest<Customer>("POST", "/api/customers", {
+      ...data,
+      shopId: activeShopId,
+    });
+    setCustomers(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    logAction("CREATE", "Customer", `Registered customer ${created.name}`, created.id);
+  };
+
+  const recordSale = async (data: Omit<Sale, "id" | "saleNumber" | "createdAt">) => {
+    const created = await apiRequest<Sale>("POST", "/api/sales", {
+      ...data,
+      soldBy: data.soldBy || currentUser?.name || "Staff",
+      shopId: activeShopId,
     });
 
-    // Record as expense (payout)
-    recordExpense({
-      category: "Inventory Purchase",
-      description: `Trade-in Payout: ${data.brand} ${data.model} (${data.imei})`,
-      amount: data.offerPrice,
-      date: new Date().toISOString(),
-      recordedBy: currentUser?.name || "Staff"
+    setSales(prev => [created, ...prev]);
+
+    setProducts(prev =>
+      prev.map((product) => {
+        const item = data.items.find((entry) => entry.productId === product.id);
+        if (!item) return product;
+        return { ...product, stock: Math.max(0, product.stock - item.quantity) };
+      }),
+    );
+
+    if (data.customerId) {
+      setCustomers(prev =>
+        prev.map((customer) =>
+          customer.id === data.customerId
+            ? { ...customer, totalPurchases: customer.totalPurchases + 1 }
+            : customer,
+        ),
+      );
+    }
+
+    setDevices(prev =>
+      prev.map((device) => {
+        const item = data.items.find((entry) => entry.deviceId === device.id);
+        if (!item) return device;
+        return { ...device, status: "Sold" };
+      }),
+    );
+
+    logAction("CREATE", "Sale", `Recorded sale ${created.saleNumber}`, created.id);
+    return created;
+  };
+
+  const recordExpense = async (data: Omit<Expense, "id">) => {
+    const created = await apiRequest<Expense>("POST", "/api/expenses", {
+      ...data,
+      recordedBy: currentUser?.name || data.recordedBy,
+      shopId: activeShopId,
     });
-
-    logAction("CREATE", "TradeIn", `Processed trade-in for ${data.brand} ${data.model}`);
+    const normalized: Expense = {
+      ...created,
+      date: created.date ? new Date(created.date).toISOString() : new Date().toISOString(),
+    } as Expense;
+    setExpenses((prev) => [normalized, ...prev]);
+    logAction("CREATE", "Expense", `Recorded expense ${normalized.category} - ${normalized.amount}`, normalized.id);
   };
 
-  const addRepair = (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => {
-    const repairNumber = `REP-${5000 + repairs.length + 1}`;
-    setRepairs([{ ...data, id: `r-${Date.now()}`, repairNumber, status: "Pending", createdAt: new Date().toISOString() }, ...repairs]);
-    logAction("CREATE", "Repair", `Started repair ${repairNumber}`);
+  const addRepair = async (data: Omit<Repair, "id" | "repairNumber" | "status" | "createdAt">) => {
+    const created = await apiRequest<Repair>("POST", "/api/repairs", {
+      ...data,
+      shopId: activeShopId,
+    });
+    setRepairs((prev) => [created, ...prev]);
+    logAction("CREATE", "Repair", `Started repair ${created.repairNumber}`, created.id);
   };
 
-  const updateRepairStatus = (id: string, status: RepairStatus) => {
-    setRepairs(repairs.map(r => r.id === id ? { ...r, status } : r));
-    logAction("UPDATE", "Repair", `Updated repair ${id} status to ${status}`);
+  const updateRepairStatus = async (id: string, status: RepairStatus) => {
+    const updated = await apiRequest<Repair>("PATCH", `/api/repairs/${id}/status`, { status });
+    setRepairs((prev) => prev.map((repair) => (repair.id === id ? updated : repair)));
+    logAction("UPDATE", "Repair", `Updated repair ${updated.repairNumber} status to ${status}`, id);
   };
 
-  const addClosure = (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId" | "cashExpected">) => {
+  const addClosure = async (data: Omit<DailyClosure, "id" | "date" | "submittedAt" | "status" | "variance" | "shopId" | "cashExpected">) => {
     // Auto-calculate expected from today's sales by payment method
     const today = new Date().toDateString();
     const todaySales = sales.filter(s => new Date(s.createdAt).toDateString() === today);
@@ -687,7 +794,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (variance !== 0) {
       const varianceType = variance > 0 ? "overage" : "shortage";
       const varianceAmount = Math.abs(variance);
-      setNotifications([
+      setNotifications((prev) => [
         {
           id: `notif-${Date.now()}`,
           title: "Cash Variance Alert",
@@ -696,64 +803,49 @@ export function DataProvider({ children }: { children: ReactNode }) {
           timestamp: new Date().toISOString(),
           read: false,
         },
-        ...notifications
+        ...prev
       ]);
     }
     
-    setClosures([{ 
+    const created = await apiRequest<DailyClosure>("POST", "/api/closures", {
       ...data, 
-      id: `cl-${Date.now()}`, 
-      date: new Date().toISOString(), 
-      submittedAt: new Date().toISOString(), 
       status, 
       variance, 
       cashExpected,
       submittedBy: data.submittedBy || currentUser?.name || "Staff",
       shopId: activeShopId 
-    }, ...closures]);
-    logAction("CREATE", "Closure", `Submitted daily closure${variance !== 0 ? ` with variance: ${variance}` : ""}`);
+    });
+    setClosures((prev) => [created, ...prev]);
+    logAction("CREATE", "Closure", `Submitted daily closure${variance !== 0 ? ` with variance: ${variance}` : ""}`, created.id);
   };
 
-  const updateClosure = (id: string, data: Partial<DailyClosure>) => {
-    const now = new Date().toISOString();
-    setClosures(prev => prev.map(c => c.id === id ? { ...c, ...data, updatedAt: now } : c));
-    logAction("UPDATE", "Closure", `Updated closure ${id}`);
+  const updateClosure = async (id: string, data: Partial<DailyClosure>) => {
+    const updated = await apiRequest<DailyClosure>("PATCH", `/api/closures/${id}`, data);
+    setClosures((prev) => prev.map((closure) => (closure.id === id ? updated : closure)));
+    logAction("UPDATE", "Closure", `Updated closure ${id}`, id);
   };
 
   const addUser = async (data: Omit<User, "id"> & { pin?: string }) => {
-    const payload = { ...data, pin: data.pin || "0000", status: data.status || "active" };
-    try {
-      const created = await apiRequest<User>("POST", "/api/staff", payload);
-      setUsers(prev => [...prev, created]);
-      logAction("CREATE", "User", `Added staff member ${created.name}`, created.id);
-    } catch {
-      // fallback to local if API fails
-      const newUser = { ...data, id: `u-${Date.now()}` };
-      setUsers([...users, newUser]);
-      logAction("CREATE", "User", `Added staff member ${data.name}`);
+    if (!data.pin?.trim()) {
+      throw new Error("A login PIN is required for new staff accounts.");
     }
+
+    const payload = { ...data, status: data.status || "active" };
+    const created = await apiRequest<User>("POST", "/api/staff", payload);
+    setUsers(prev => [...prev, created]);
+    logAction("CREATE", "User", `Added staff member ${created.name}`, created.id);
   };
 
   const updateUser = async (id: string, data: Partial<User> & { pin?: string }) => {
-    try {
-      const updated = await apiRequest<User>("PATCH", `/api/staff/${id}`, data);
-      setUsers(users.map(u => u.id === id ? { ...u, ...updated } : u));
-      logAction("UPDATE", "User", `Updated staff member ${updated.name}`, id);
-    } catch {
-      setUsers(users.map(u => u.id === id ? { ...u, ...data } : u));
-      logAction("UPDATE", "User", `Updated staff member ${id}`);
-    }
+    const updated = await apiRequest<User>("PATCH", `/api/staff/${id}`, data);
+    setUsers(users.map(u => u.id === id ? { ...u, ...updated } : u));
+    logAction("UPDATE", "User", `Updated staff member ${updated.name}`, id);
   };
 
   const deleteUser = async (id: string) => {
-    try {
-      await apiRequest("PATCH", `/api/staff/${id}/status`, { status: "disabled" });
-      setUsers(users.map(u => u.id === id ? { ...u, status: "disabled" } : u));
-      logAction("DISABLE", "User", `Disabled staff member ${id}`, id);
-    } catch {
-      setUsers(users.filter(u => u.id !== id));
-      logAction("DELETE", "User", `Removed staff member ${id}`);
-    }
+    await apiRequest("PATCH", `/api/staff/${id}/status`, { status: "disabled" });
+    setUsers(users.map(u => u.id === id ? { ...u, status: "disabled" } : u));
+    logAction("DISABLE", "User", `Disabled staff member ${id}`, id);
   };
 
   const getPermissions = (role: Role) => {
@@ -776,7 +868,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       sales,
       expenses,
       repairs,
-      tradeIns,
       closures: closures.filter(c => c.shopId === activeShopId),
       auditLogs,
       notifications,
@@ -789,7 +880,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       recordSale,
       recordExpense,
       addRepair,
-      recordTradeIn,
       updateRepairStatus,
       addClosure,
       updateClosure,

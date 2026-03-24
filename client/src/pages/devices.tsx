@@ -13,6 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Smartphone, Plus, Search, Tag, DollarSign } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 const deviceSchema = z.object({
   brand: z.string().min(1, "Brand required"),
@@ -27,8 +28,10 @@ const deviceSchema = z.object({
 
 export default function DevicesPage() {
   const { devices, addDevice } = useData();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<z.infer<typeof deviceSchema>>({
     resolver: zodResolver(deviceSchema),
@@ -44,10 +47,25 @@ export default function DevicesPage() {
     }
   });
 
-  const onSubmit = (values: z.infer<typeof deviceSchema>) => {
-    addDevice(values);
-    setOpen(false);
-    form.reset();
+  const onSubmit = async (values: z.infer<typeof deviceSchema>) => {
+    setIsSaving(true);
+    try {
+      await addDevice(values);
+      toast({
+        title: "Device added",
+        description: `${values.brand} ${values.model} is now in inventory.`,
+      });
+      setOpen(false);
+      form.reset();
+    } catch (error) {
+      toast({
+        title: "Could not add device",
+        description: error instanceof Error ? error.message : "Please review the device details and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const filteredDevices = devices.filter(d => 
@@ -211,7 +229,9 @@ export default function DevicesPage() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full">Add Device to Inventory</Button>
+                <Button type="submit" className="w-full" disabled={isSaving}>
+                  {isSaving ? "Saving device..." : "Add Device to Inventory"}
+                </Button>
               </form>
             </Form>
           </DialogContent>

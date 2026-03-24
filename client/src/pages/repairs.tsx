@@ -38,6 +38,8 @@ export default function RepairsPage() {
   const [techFilter, setTechFilter] = useState<string>("all");
   const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null);
   const [open, setOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const { toast } = useToast();
 
   const filteredRepairs = useMemo(() => repairs.filter(r => {
@@ -65,14 +67,25 @@ export default function RepairsPage() {
     }
   });
 
-  const handleStatusChange = (id: string, newStatus: RepairStatus) => {
-    updateRepairStatus(id, newStatus);
-    toast({
-      title: "Status Updated",
-      description: `Repair marked as ${newStatus}`,
-    });
-    if (selectedRepair && selectedRepair.id === id) {
-      setSelectedRepair({ ...selectedRepair, status: newStatus });
+  const handleStatusChange = async (id: string, newStatus: RepairStatus) => {
+    setIsUpdatingStatus(true);
+    try {
+      await updateRepairStatus(id, newStatus);
+      toast({
+        title: "Status updated",
+        description: `Repair marked as ${newStatus}.`,
+      });
+      if (selectedRepair && selectedRepair.id === id) {
+        setSelectedRepair({ ...selectedRepair, status: newStatus });
+      }
+    } catch (error) {
+      toast({
+        title: "Could not update repair",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -104,20 +117,29 @@ export default function RepairsPage() {
               <DialogDescription>Capture device details, assign technician, and track cost vs. price.</DialogDescription>
             </DialogHeader>
             <form
-              onSubmit={form.handleSubmit((values) => {
-                addRepair({
-                  ...values,
-                  price: Number(values.price),
-                  cost: Number(values.cost),
-                  technician: values.technician,
-                  customerName: values.customerName || "Walk-in",
-                  status: "Pending",
-                  createdAt: new Date().toISOString(),
-                  notes: values.issueDescription,
-                } as any);
-                toast({ title: "Repair created", description: "Ticket logged and assigned." });
-                form.reset();
-                setOpen(false);
+              onSubmit={form.handleSubmit(async (values) => {
+                setIsSaving(true);
+                try {
+                  await addRepair({
+                    ...values,
+                    price: Number(values.price),
+                    cost: Number(values.cost),
+                    technician: values.technician,
+                    customerName: values.customerName || "Walk-in",
+                    notes: values.issueDescription,
+                  } as any);
+                  toast({ title: "Repair created", description: "Ticket logged and assigned." });
+                  form.reset();
+                  setOpen(false);
+                } catch (error) {
+                  toast({
+                    title: "Could not create repair",
+                    description: error instanceof Error ? error.message : "Please review the ticket details and try again.",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsSaving(false);
+                }
               })}
               className="space-y-3 mt-2"
             >
@@ -170,7 +192,7 @@ export default function RepairsPage() {
               </div>
               <DialogFooter className="pt-2">
                 <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit">Save Ticket</Button>
+                <Button type="submit" disabled={isSaving}>{isSaving ? "Saving..." : "Save Ticket"}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -405,7 +427,8 @@ export default function RepairsPage() {
                     <Label className="text-xs text-slate-500 uppercase tracking-wide">Status</Label>
                     <Select 
                       defaultValue={selectedRepair?.status} 
-                      onValueChange={(val) => selectedRepair && handleStatusChange(selectedRepair.id, val as RepairStatus)}
+                      onValueChange={(val) => selectedRepair && void handleStatusChange(selectedRepair.id, val as RepairStatus)}
+                      disabled={isUpdatingStatus}
                     >
                       <SelectTrigger>
                         <SelectValue />

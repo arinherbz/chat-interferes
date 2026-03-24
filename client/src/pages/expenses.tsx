@@ -13,6 +13,7 @@ import { z } from "zod";
 import { Badge } from "@/components/ui/badge"; // Ensure Badge is imported
 import { Wallet, Search, Plus, Calendar } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 const expenseSchema = z.object({
   category: z.string().min(1, "Category required"),
@@ -24,7 +25,9 @@ const expenseSchema = z.object({
 
 export default function ExpensesPage() {
   const { expenses, recordExpense, currentUser } = useData();
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<z.infer<typeof expenseSchema>>({
     resolver: zodResolver(expenseSchema),
@@ -37,28 +40,44 @@ export default function ExpensesPage() {
     }
   });
 
-  const onSubmit = (values: z.infer<typeof expenseSchema>) => {
-    recordExpense({
-      ...values,
-      recordedBy: currentUser?.name || "Owner",
-    });
-    setOpen(false);
-    form.reset();
+  const onSubmit = async (values: z.infer<typeof expenseSchema>) => {
+    setIsSaving(true);
+    try {
+      await recordExpense({
+        ...values,
+        recordedBy: currentUser?.name || "Owner",
+      });
+      toast({
+        title: "Expense recorded",
+        description: "The expense has been saved successfully.",
+      });
+      setOpen(false);
+      form.reset();
+    } catch (error) {
+      toast({
+        title: "Could not save expense",
+        description: error instanceof Error ? error.message : "Please review the expense details and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="page-shell">
+      <div className="page-hero flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Expenses</h1>
-          <p className="text-slate-500">Track shop operational costs.</p>
+          <div className="page-kicker">Operations Finance</div>
+          <h1 className="page-title">Expenses</h1>
+          <p className="page-subtitle">Track shop spending with a cleaner ledger view and reliable server-backed records.</p>
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2" variant="destructive">
+            <Button className="gap-2">
               <Plus className="w-4 h-4" />
               Record Expense
             </Button>
@@ -161,7 +180,9 @@ export default function ExpensesPage() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full">Save Expense</Button>
+                <Button type="submit" className="w-full" disabled={isSaving}>
+                  {isSaving ? "Saving expense..." : "Save Expense"}
+                </Button>
               </form>
             </Form>
           </DialogContent>
@@ -169,19 +190,20 @@ export default function ExpensesPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card className="stat-card">
           <CardHeader className="pb-2">
              <CardTitle className="text-sm font-medium">Total Expenses (All Time)</CardTitle>
           </CardHeader>
           <CardContent>
-             <div className="text-2xl font-bold text-red-600">
+             <div className="text-2xl font-semibold text-foreground">
                {totalExpenses.toLocaleString()} UGX
              </div>
+             <p className="mt-1 text-sm text-muted-foreground">All recorded operating costs for the active branch.</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="surface-panel">
         <CardHeader>
           <CardTitle>Expense History</CardTitle>
         </CardHeader>
@@ -207,7 +229,7 @@ export default function ExpensesPage() {
                   <TableCell>{expense.description}</TableCell>
                   <TableCell className="text-xs text-slate-500">{(expense as any).paymentMethod || "Cash"}</TableCell>
                   <TableCell className="text-sm text-slate-500">{expense.recordedBy}</TableCell>
-                  <TableCell className="text-right font-medium text-red-600">
+                  <TableCell className="text-right font-medium text-foreground">
                     -{expense.amount.toLocaleString()}
                   </TableCell>
                 </TableRow>

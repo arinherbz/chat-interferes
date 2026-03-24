@@ -8,6 +8,7 @@ interface ApiError extends Error {
 const getCache = new Map<string, { data: unknown; ts: number }>();
 const inFlight = new Map<string, Promise<unknown>>();
 const GET_TTL_MS = 30_000;
+const AUTH_ME_PATH = "/api/auth/me";
 
 type ApiRequestOptions = {
   cacheTtlMs?: number;
@@ -23,8 +24,9 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const requestKey = `${method}:${path}:${JSON.stringify(body ?? null)}`;
   const now = Date.now();
+  const shouldCacheGet = method === "GET" && !options.skipCache && path !== AUTH_ME_PATH;
 
-  if (method === "GET" && !options.skipCache) {
+  if (shouldCacheGet) {
     const cached = getCache.get(requestKey);
     const ttl = options.cacheTtlMs ?? GET_TTL_MS;
     if (cached && now - cached.ts <= ttl) {
@@ -53,14 +55,15 @@ export async function apiRequest<T = any>(
     .catch(() => undefined);
 
   if (!res.ok) {
-    const error: ApiError = new Error((data as any)?.message || "Request failed");
+    const message = (data as any)?.message || (data as any)?.error || "Request failed";
+    const error: ApiError = new Error(message);
     error.status = res.status;
     error.payload = data;
     throw error;
   }
 
     const parsed = (data as T) ?? ({} as T);
-    if (method === "GET" && !options.skipCache) {
+    if (shouldCacheGet) {
       getCache.set(requestKey, { data: parsed, ts: Date.now() });
     } else {
       // write-through invalidation for matching GET endpoint
@@ -77,5 +80,23 @@ export async function apiRequest<T = any>(
     return await run;
   } finally {
     inFlight.delete(requestKey);
+  }
+}
+
+export function clearApiCache(match?: string | RegExp) {
+  if (!match) {
+    getCache.clear();
+    inFlight.clear();
+    return;
+  }
+
+  for (const key of Array.from(getCache.keys())) {
+    const matches = typeof match === "string" ? key.includes(match) : match.test(key);
+    if (matches) getCache.delete(key);
+  }
+
+  for (const key of Array.from(inFlight.keys())) {
+    const matches = typeof match === "string" ? key.includes(match) : match.test(key);
+    if (matches) inFlight.delete(key);
   }
 }

@@ -45,6 +45,10 @@ export default function Login() {
       if (err?.payload?.code === "OWNER_BOOTSTRAP_REQUIRED") {
         setOwnerExists(false);
         toast({ title: "Owner setup required", description: "Create the first owner account to continue.", variant: "destructive" });
+      } else if (err?.status === 401) {
+        toast({ title: "Login failed", description: "Incorrect username or password.", variant: "destructive" });
+      } else if (err?.status === 403) {
+        toast({ title: "Access blocked", description: err?.message || "Your account is disabled. Contact an administrator.", variant: "destructive" });
       } else {
         toast({ title: "Login failed", description: err?.message || "Check your username or PIN", variant: "destructive" });
       }
@@ -156,18 +160,18 @@ export default function Login() {
           )}
 
           {ownerExists !== false && (
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-full">
-                <Smartphone className="w-5 h-5 text-primary" />
-              </div>
-              <div className="text-sm text-slate-600 text-left">
-                <div className="font-semibold text-slate-800">Default owner login</div>
-                <div>username: <span className="font-mono">owner</span> · PIN: <span className="font-mono">0000</span></div>
-                <div className="text-xs text-amber-600 mt-1">Change this in Staff as soon as you sign in.</div>
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-full">
+                  <Smartphone className="w-5 h-5 text-primary" />
+                </div>
+                <div className="text-sm text-slate-600 text-left">
+                  <div className="font-semibold text-slate-800">Secure staff access</div>
+                  <div>Use the username and password set by your administrator.</div>
+                  <div className="text-xs text-slate-500 mt-1">If you cannot sign in, ask an owner or manager to reset your credentials.</div>
+                </div>
               </div>
             </div>
-          </div>
           )}
         </CardContent>
       </Card>

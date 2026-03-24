@@ -36,11 +36,24 @@ export default function CustomersPage() {
       email: "",
     }
   });
+  const [saving, setSaving] = useState(false);
 
-  const onSubmit = (values: z.infer<typeof customerSchema>) => {
-    addCustomer(values);
-    setOpen(false);
-    form.reset();
+  const onSubmit = async (values: z.infer<typeof customerSchema>) => {
+    setSaving(true);
+    try {
+      await addCustomer(values);
+      setOpen(false);
+      form.reset();
+      toast({ title: "Customer added", description: `${values.name} is now available in customer records.` });
+    } catch (err: any) {
+      toast({
+        title: "Could not add customer",
+        description: err?.message || "Please review the customer details and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -64,11 +77,12 @@ export default function CustomersPage() {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="page-shell">
+      <div className="page-hero flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Customer Management</h1>
-          <p className="text-slate-500">Track customers and their device history.</p>
+          <div className="page-kicker">Relationships</div>
+          <h1 className="page-title">Customer Management</h1>
+          <p className="page-subtitle">Keep contact records, visit history, and follow-up actions in one lightweight customer ledger.</p>
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
@@ -126,7 +140,9 @@ export default function CustomersPage() {
                   )}
                 />
 
-                <Button type="submit" className="w-full">Save Customer</Button>
+                <Button type="submit" className="w-full" disabled={saving}>
+                  {saving ? "Saving..." : "Save Customer"}
+                </Button>
               </form>
             </Form>
           </DialogContent>
@@ -137,12 +153,12 @@ export default function CustomersPage() {
               <DialogTitle>Send Message</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSendMessage} className="space-y-4 pt-2">
-              <div className="p-3 bg-slate-50 rounded-md text-sm">
+              <div className="surface-muted p-3 text-sm">
                 <span className="font-medium">To:</span> {selectedCustomer?.name} ({selectedCustomer?.phone})
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Message Type</label>
-                <select className="w-full h-10 px-3 rounded-md border border-slate-200 text-sm">
+                <select className="w-full h-10 px-3 rounded-xl border border-border/70 bg-white/90 text-sm shadow-sm outline-none">
                   <option>SMS</option>
                   <option>Email</option>
                   <option>WhatsApp</option>
@@ -161,7 +177,7 @@ export default function CustomersPage() {
         </Dialog>
       </div>
 
-      <Card>
+      <Card className="surface-panel">
         <CardHeader className="pb-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />

@@ -15,6 +15,12 @@ import {
   type ActivityLog, type InsertActivityLog, activityLogs,
   type Shop, type InsertShop, shops,
   type Product, type InsertProduct, products,
+  type Device, type InsertDevice, devices,
+  type Customer, type InsertCustomer, customers,
+  type Sale, type InsertSale, sales,
+  type Repair, type InsertRepair, repairs,
+  type Expense, type InsertExpense, expenses,
+  type Closure, type InsertClosure, closures,
 } from "@shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, sql as sqlFn } from "drizzle-orm";
@@ -92,6 +98,35 @@ export interface IStorage {
   getShops(): Promise<import("@shared/schema").Shop[]>;
   createShop(shop: import("@shared/schema").InsertShop): Promise<import("@shared/schema").Shop>;
   updateShop(id: string, data: Partial<import("@shared/schema").InsertShop>): Promise<import("@shared/schema").Shop | undefined>;
+
+  // Customers
+  getCustomers(shopId?: string): Promise<Customer[]>;
+  createCustomer(customer: InsertCustomer): Promise<Customer>;
+  incrementCustomerPurchases(id: string): Promise<void>;
+
+  // Devices
+  getDevices(shopId?: string): Promise<Device[]>;
+  getDevice(id: string): Promise<Device | undefined>;
+  createDevice(device: InsertDevice): Promise<Device>;
+  updateDevice(id: string, data: Partial<InsertDevice>): Promise<Device | undefined>;
+
+  // Sales
+  getSales(shopId?: string): Promise<Sale[]>;
+  createSale(sale: InsertSale): Promise<Sale>;
+
+  // Repairs
+  getRepairs(shopId?: string): Promise<Repair[]>;
+  createRepair(repair: InsertRepair & { repairNumber: string }): Promise<Repair>;
+  updateRepair(id: string, data: Partial<InsertRepair>): Promise<Repair | undefined>;
+
+  // Expenses
+  getExpenses(shopId?: string): Promise<Expense[]>;
+  createExpense(expense: InsertExpense): Promise<Expense>;
+
+  // Closures
+  getClosures(shopId?: string): Promise<Closure[]>;
+  createClosure(closure: InsertClosure): Promise<Closure>;
+  updateClosure(id: string, data: Partial<InsertClosure>): Promise<Closure | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -304,17 +339,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDeviceBaseValue(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined> {
-    const conditions = [
-      eq(deviceBaseValues.brand, brand),
-      eq(deviceBaseValues.model, model),
-      eq(deviceBaseValues.storage, storage),
-      eq(deviceBaseValues.isActive, true),
-    ];
-    if (shopId) {
-      conditions.push(eq(deviceBaseValues.shopId, shopId));
-    }
-    const [value] = await db.select().from(deviceBaseValues).where(and(...conditions));
-    return value;
+    const values = await this.getDeviceBaseValues(shopId);
+    return values.find((value) =>
+      value.brand === brand &&
+      value.model === model &&
+      value.storage === storage &&
+      value.isActive !== false,
+    );
   }
 
   async findDeviceBaseValueAnyStatus(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined> {
@@ -559,6 +590,114 @@ export class DatabaseStorage implements IStorage {
   async deleteProduct(id: string): Promise<boolean> {
     await db.delete(products).where(eq(products.id, id));
     return true;
+  }
+
+  // ==================== DEVICES ====================
+  async getDevices(shopId?: string): Promise<Device[]> {
+    if (shopId) {
+      return db.select().from(devices).where(eq(devices.shopId, shopId)).orderBy(desc(devices.addedAt));
+    }
+    return db.select().from(devices).orderBy(desc(devices.addedAt));
+  }
+
+  async getDevice(id: string): Promise<Device | undefined> {
+    const [device] = await db.select().from(devices).where(eq(devices.id, id));
+    return device;
+  }
+
+  async createDevice(device: InsertDevice): Promise<Device> {
+    const [created] = await db.insert(devices).values(device).returning();
+    return created;
+  }
+
+  async updateDevice(id: string, data: Partial<InsertDevice>): Promise<Device | undefined> {
+    const [updated] = await db.update(devices).set({ ...data, updatedAt: new Date() }).where(eq(devices.id, id)).returning();
+    return updated;
+  }
+
+  // ==================== CUSTOMERS ====================
+  async getCustomers(shopId?: string): Promise<Customer[]> {
+    if (shopId) {
+      return db.select().from(customers).where(eq(customers.shopId, shopId)).orderBy(customers.name);
+    }
+    return db.select().from(customers).orderBy(customers.name);
+  }
+
+  async createCustomer(customer: InsertCustomer): Promise<Customer> {
+    const [created] = await db.insert(customers).values(customer).returning();
+    return created;
+  }
+
+  async incrementCustomerPurchases(id: string): Promise<void> {
+    await db
+      .update(customers)
+      .set({
+        totalPurchases: sqlFn`${customers.totalPurchases} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(customers.id, id));
+  }
+
+  // ==================== SALES ====================
+  async getSales(shopId?: string): Promise<Sale[]> {
+    if (shopId) {
+      return db.select().from(sales).where(eq(sales.shopId, shopId)).orderBy(desc(sales.createdAt));
+    }
+    return db.select().from(sales).orderBy(desc(sales.createdAt));
+  }
+
+  async createSale(sale: InsertSale): Promise<Sale> {
+    const [created] = await db.insert(sales).values(sale).returning();
+    return created;
+  }
+
+  // ==================== REPAIRS ====================
+  async getRepairs(shopId?: string): Promise<Repair[]> {
+    if (shopId) {
+      return db.select().from(repairs).where(eq(repairs.shopId, shopId)).orderBy(desc(repairs.createdAt));
+    }
+    return db.select().from(repairs).orderBy(desc(repairs.createdAt));
+  }
+
+  async createRepair(repair: InsertRepair & { repairNumber: string }): Promise<Repair> {
+    const [created] = await db.insert(repairs).values(repair).returning();
+    return created;
+  }
+
+  async updateRepair(id: string, data: Partial<InsertRepair>): Promise<Repair | undefined> {
+    const [updated] = await db.update(repairs).set({ ...data, updatedAt: new Date() }).where(eq(repairs.id, id)).returning();
+    return updated;
+  }
+
+  // ==================== EXPENSES ====================
+  async getExpenses(shopId?: string): Promise<Expense[]> {
+    if (shopId) {
+      return db.select().from(expenses).where(eq(expenses.shopId, shopId)).orderBy(desc(expenses.date));
+    }
+    return db.select().from(expenses).orderBy(desc(expenses.date));
+  }
+
+  async createExpense(expense: InsertExpense): Promise<Expense> {
+    const [created] = await db.insert(expenses).values(expense).returning();
+    return created;
+  }
+
+  // ==================== CLOSURES ====================
+  async getClosures(shopId?: string): Promise<Closure[]> {
+    if (shopId) {
+      return db.select().from(closures).where(eq(closures.shopId, shopId)).orderBy(desc(closures.date));
+    }
+    return db.select().from(closures).orderBy(desc(closures.date));
+  }
+
+  async createClosure(closure: InsertClosure): Promise<Closure> {
+    const [created] = await db.insert(closures).values(closure).returning();
+    return created;
+  }
+
+  async updateClosure(id: string, data: Partial<InsertClosure>): Promise<Closure | undefined> {
+    const [updated] = await db.update(closures).set({ ...data, updatedAt: new Date() }).where(eq(closures.id, id)).returning();
+    return updated;
   }
 
   // ==================== SHOPS ====================

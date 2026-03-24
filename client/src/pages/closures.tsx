@@ -11,18 +11,19 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ClosuresPage() {
-  const { closures, activeShop } = useData();
+  const { closures, activeShop, updateClosure } = useData();
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedClosure, setSelectedClosure] = useState<any>(null);
   const [open, setOpen] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
 
   // Filter closures for active shop
   const shopClosures = closures.filter(c => c.shopId === activeShop.id);
 
   if ((user?.role as string) !== "Owner" && (user?.role as string) !== "Manager") {
     return (
-      <div className="flex flex-col items-center justify-center h-[50vh] text-center">
+      <div className="surface-panel flex flex-col items-center justify-center h-[50vh] text-center">
         <AlertTriangle className="w-12 h-12 text-slate-300 mb-4" />
         <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
         <p className="text-slate-500 max-w-sm mt-2">Only owners and managers can review daily closures.</p>
@@ -30,20 +31,35 @@ export default function ClosuresPage() {
     );
   }
 
-  const handleApprove = () => {
-    // In a real app, we'd update status here
-    toast({ title: "Closure Approved", description: "The daily report has been verified." });
-    setOpen(false);
+  const handleApprove = async () => {
+    if (!selectedClosure) return;
+
+    setIsApproving(true);
+    try {
+      await updateClosure(selectedClosure.id, { status: "confirmed" });
+      toast({ title: "Closure approved", description: "The daily report has been verified." });
+      setOpen(false);
+      setSelectedClosure(null);
+    } catch (error) {
+      toast({
+        title: "Could not approve closure",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsApproving(false);
+    }
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Daily Closures</h1>
-        <p className="text-slate-500">Review and approve daily financial reports.</p>
+    <div className="page-shell">
+      <div className="page-hero">
+        <div className="page-kicker">Branch Controls</div>
+        <h1 className="page-title">Daily Closures</h1>
+        <p className="page-subtitle">Review balances, proof uploads, and branch variances in a calmer audit-friendly layout.</p>
       </div>
 
-      <Card>
+      <Card className="surface-panel">
         <CardHeader>
           <CardTitle>History</CardTitle>
           <CardDescription>Past 30 days of closures.</CardDescription>
@@ -84,9 +100,9 @@ export default function ClosuresPage() {
                       <Badge 
                         variant="outline" 
                         className={
-                          closure.status === "confirmed" ? "bg-green-50 text-green-700 border-green-200" :
-                          closure.status === "flagged" ? "bg-red-50 text-red-700 border-red-200" :
-                          "bg-yellow-50 text-yellow-700 border-yellow-200"
+                          closure.status === "confirmed" ? "tone-success" :
+                          closure.status === "flagged" ? "tone-danger" :
+                          "tone-warning"
                         }
                       >
                         {closure.status}
@@ -114,21 +130,21 @@ export default function ClosuresPage() {
           {selectedClosure && (
             <div className="space-y-6 py-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-slate-50 rounded-lg">
+                <div className="surface-muted p-4">
                   <div className="text-xs text-slate-500 uppercase">Cash Counted</div>
                   <div className="text-xl font-bold">{selectedClosure.cashCounted.toLocaleString()}</div>
                 </div>
-                <div className="p-4 bg-yellow-50 rounded-lg">
-                  <div className="text-xs text-yellow-700 uppercase">MTN Money</div>
-                  <div className="text-xl font-bold text-yellow-900">{selectedClosure.mtnAmount.toLocaleString()}</div>
+                <div className="tone-warning rounded-lg p-4">
+                  <div className="text-xs uppercase">MTN Money</div>
+                  <div className="text-xl font-bold">{selectedClosure.mtnAmount.toLocaleString()}</div>
                 </div>
-                <div className="p-4 bg-red-50 rounded-lg">
-                  <div className="text-xs text-red-700 uppercase">Airtel Money</div>
-                  <div className="text-xl font-bold text-red-900">{selectedClosure.airtelAmount.toLocaleString()}</div>
+                <div className="tone-danger rounded-lg p-4">
+                  <div className="text-xs uppercase">Airtel Money</div>
+                  <div className="text-xl font-bold">{selectedClosure.airtelAmount.toLocaleString()}</div>
                 </div>
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="text-xs text-blue-700 uppercase">Card / POS</div>
-                  <div className="text-xl font-bold text-blue-900">{selectedClosure.cardAmount.toLocaleString()}</div>
+                <div className="tone-info rounded-lg p-4">
+                  <div className="text-xs uppercase">Card / POS</div>
+                  <div className="text-xl font-bold">{selectedClosure.cardAmount.toLocaleString()}</div>
                 </div>
               </div>
 
@@ -162,7 +178,7 @@ export default function ClosuresPage() {
               </div>
 
               {selectedClosure.variance !== 0 && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                <div className="tone-danger rounded-lg p-4 flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-medium text-red-900">Variance Detected</h4>
@@ -177,9 +193,9 @@ export default function ClosuresPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
-            <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={() => void handleApprove()} disabled={isApproving}>
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Approve Closure
+              {isApproving ? "Approving..." : "Approve Closure"}
             </Button>
           </DialogFooter>
         </DialogContent>

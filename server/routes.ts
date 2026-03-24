@@ -36,6 +36,7 @@ declare module "express-serve-static-core" {
 
 const PgSession = connectPgSimple(session);
 const hashIterations = 120000;
+const sessionCookieName = "connect.sid";
 
 function hashSecret(secret: string) {
   const salt = randomBytes(16).toString("hex");
@@ -52,6 +53,15 @@ function verifySecret(secret: string, stored: string | null): boolean {
   } catch {
     return false;
   }
+}
+
+function getSessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.SESSION_COOKIE_SECURE === "true",
+    path: "/",
+  };
 }
 
 const loginSchema = z.object({
@@ -104,6 +114,103 @@ const preferenceUpdateSchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
+});
+
+const customerCreateSchema = z.object({
+  name: z.string().min(1, "Customer name is required"),
+  phone: z.string().min(1, "Phone number is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  shopId: z.string().optional(),
+});
+
+const deviceCreateSchema = z.object({
+  brand: z.string().min(1, "Brand is required"),
+  model: z.string().min(1, "Model is required"),
+  imei: z.string().min(10, "IMEI is required"),
+  color: z.string().min(1, "Color is required"),
+  storage: z.string().min(1, "Storage is required"),
+  condition: z.enum(["New", "Used", "Refurbished"]),
+  status: z.enum(["In Stock", "Sold", "Repaired"]).optional(),
+  price: z.number().nonnegative(),
+  cost: z.number().nonnegative(),
+  warrantyPeriod: z.number().int().nonnegative().optional(),
+  warrantyExpiresAt: z.string().datetime().optional().or(z.literal("")),
+  shopId: z.string().optional(),
+});
+
+const saleCreateSchema = z.object({
+  customerId: z.string().optional(),
+  customerName: z.string().optional(),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      productId: z.string().optional(),
+      deviceId: z.string().optional(),
+      name: z.string().min(1),
+      quantity: z.number().int().positive(),
+      unitPrice: z.number().nonnegative(),
+      totalPrice: z.number().nonnegative(),
+    })
+  ).min(1, "At least one sale item is required"),
+  totalAmount: z.number().nonnegative(),
+  paymentMethod: z.enum(["Cash", "MTN", "Airtel", "Card"]),
+  status: z.enum(["Completed", "Refunded"]).default("Completed"),
+  soldBy: z.string().min(1),
+  shopId: z.string().optional(),
+});
+
+const repairCreateSchema = z.object({
+  deviceBrand: z.string().min(1, "Device brand is required"),
+  deviceModel: z.string().min(1, "Device model is required"),
+  imei: z.string().min(3, "IMEI or serial is required"),
+  issueDescription: z.string().min(3, "Issue description is required"),
+  repairType: z.string().min(1, "Repair type is required"),
+  price: z.number().nonnegative(),
+  cost: z.number().nonnegative().default(0),
+  notes: z.string().optional(),
+  customerName: z.string().optional(),
+  technician: z.string().optional(),
+  status: z.enum(["Pending", "In Progress", "Completed", "Delivered"]).optional(),
+  shopId: z.string().optional(),
+});
+
+const repairStatusUpdateSchema = z.object({
+  status: z.enum(["Pending", "In Progress", "Completed", "Delivered"]),
+});
+
+const expenseCreateSchema = z.object({
+  category: z.string().min(1, "Category is required"),
+  description: z.string().min(1, "Description is required"),
+  amount: z.number().positive(),
+  paymentMethod: z.enum(["Cash", "MTN", "Airtel", "Card"]).optional(),
+  date: z.string().datetime().optional().or(z.literal("")),
+  recordedBy: z.string().min(1).optional(),
+  shopId: z.string().optional(),
+});
+
+const closurePayloadSchema = z.object({
+  cashExpected: z.number().nonnegative(),
+  cashCounted: z.number().nonnegative(),
+  mtnAmount: z.number().nonnegative(),
+  airtelAmount: z.number().nonnegative(),
+  cardAmount: z.number().nonnegative(),
+  expensesTotal: z.number().nonnegative(),
+  variance: z.number(),
+  submittedBy: z.string().min(1),
+  status: z.enum(["pending", "confirmed", "flagged"]),
+  proofs: z.object({
+    cashDrawer: z.string().optional(),
+    mtn: z.string().optional(),
+    airtel: z.string().optional(),
+    card: z.string().optional(),
+  }).optional(),
+  shopId: z.string().optional(),
+  sales: z.array(z.any()).optional(),
+  repairs: z.array(z.any()).optional(),
+});
+
+const closureStatusUpdateSchema = z.object({
+  status: z.enum(["pending", "confirmed", "flagged"]),
 });
 
 type LoginWindow = { count: number; firstAttemptTs: number };
@@ -196,6 +303,25 @@ export async function registerRoutes(
     return safe;
   };
 
+  const destroySession = async (req: Request, res: Response) => {
+    await new Promise<void>((resolve) => {
+      if (!req.session) return resolve();
+      req.session.destroy(() => resolve());
+    });
+    res.clearCookie(sessionCookieName, getSessionCookieOptions());
+  };
+
+  const sendError = (
+    res: Response,
+    status: number,
+    message: string,
+    details?: unknown,
+  ) => {
+    const payload: Record<string, unknown> = { message };
+    if (details !== undefined) payload.details = details;
+    return res.status(status).json(payload);
+  };
+
   const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     if (!req.session?.userId) {
       return res.status(401).json({ message: "Not authenticated" });
@@ -204,13 +330,15 @@ export async function registerRoutes(
     if (!req.currentUser) {
       const user = await storage.getUser(req.session.userId);
       if (!user) {
+        await destroySession(req, res);
         return res.status(401).json({ message: "Session expired" });
       }
       req.currentUser = user;
     }
 
     if (req.currentUser.status === "disabled") {
-      return res.status(403).json({ message: "Account disabled" });
+      await destroySession(req, res);
+      return res.status(403).json({ message: "Your account has been disabled. Contact an administrator." });
     }
 
     await storage.touchUserActivity(req.currentUser.id);
@@ -322,132 +450,6 @@ export async function registerRoutes(
     return next();
   });
 
-  const seedOwnerAccount = async () => {
-    const existingOwners = await storage.listUsers();
-    const owner = existingOwners.find(u => u.role === "Owner");
-    if (!owner) {
-      const created = await storage.createUser({
-        username: "owner",
-        password: hashSecret("0000"),
-        name: "Shop Owner",
-        email: "owner@ariostore.local",
-        role: "Owner",
-        status: "active",
-        shopId: null,
-      });
-      try {
-        await storage.createActivityLog({
-          action: "seed",
-          entity: "user",
-          entityId: created.id,
-          userId: created.id,
-          userName: created.name || "Owner",
-          role: created.role,
-          details: "Default owner account created (username: owner, PIN: 0000). Please change immediately.",
-          metadata: {},
-        });
-      } catch (err) {
-        console.warn("Activity log table not ready during seed. Proceeding.");
-      }
-      console.log("Seeded default owner account (owner / 0000). Change the PIN in staff settings.");
-    }
-
-    // Seed a default staff login for convenience (username: staff, PIN: 1111)
-    const staffUser = existingOwners.find(u => u.username === "staff");
-    if (!staffUser) {
-      const staff = await storage.createUser({
-        username: "staff",
-        password: hashSecret("1111"),
-        name: "Default Staff",
-        email: "staff@ariostore.local",
-        role: "Sales",
-        status: "active",
-        shopId: null,
-      });
-      try {
-        await storage.createActivityLog({
-          action: "seed",
-          entity: "user",
-          entityId: staff.id,
-          userId: staff.id,
-          userName: staff.name || "Staff",
-          role: staff.role,
-          details: "Default staff account created (username: staff, PIN: 1111). Please change immediately.",
-          metadata: {},
-        });
-      } catch (err) {
-        console.warn("Activity log table not ready during staff seed. Proceeding.");
-      }
-      console.log("Seeded default staff account (staff / 1111). Change the PIN in staff settings.");
-    }
-  };
-
-  const seedDefaultUsers = async () => {
-    const existingUsers = await storage.listUsers();
-    let ownerSeeded = false;
-    let staffSeeded = false;
-
-    const owner = existingUsers.find(u => u.role === "Owner");
-    if (!owner) {
-      const created = await storage.createUser({
-        username: "owner",
-        password: hashSecret("0000"),
-        name: "Shop Owner",
-        email: "owner@ariostore.local",
-        role: "Owner",
-        status: "active",
-        shopId: null,
-      });
-      ownerSeeded = true;
-      try {
-        await storage.createActivityLog({
-          action: "seed",
-          entity: "user",
-          entityId: created.id,
-          userId: created.id,
-          userName: created.name || "Owner",
-          role: created.role,
-          details: "Default owner account created (username: owner, PIN: 0000). Please change immediately.",
-          metadata: {},
-        });
-      } catch (err) {
-        console.warn("Activity log table not ready during seed. Proceeding.");
-      }
-    }
-
-    const staffUser = existingUsers.find(u => u.username === "staff");
-    if (!staffUser) {
-      const staff = await storage.createUser({
-        username: "staff",
-        password: hashSecret("1111"),
-        name: "Default Staff",
-        email: "staff@ariostore.local",
-        role: "Sales",
-        status: "active",
-        shopId: null,
-      });
-      staffSeeded = true;
-      try {
-        await storage.createActivityLog({
-          action: "seed",
-          entity: "user",
-          entityId: staff.id,
-          userId: staff.id,
-          userName: staff.name || "Staff",
-          role: staff.role,
-          details: "Default staff account created (username: staff, PIN: 1111). Please change immediately.",
-          metadata: {},
-        });
-      } catch (err) {
-        console.warn("Activity log table not ready during staff seed. Proceeding.");
-      }
-    }
-
-    return { ownerSeeded, staffSeeded };
-  };
-
-  // Do not auto-seed default credentials; owners must bootstrap explicitly.
-
   // Attach the current user to the request for downstream handlers
   app.use(async (req, _res, next) => {
     if (req.session?.userId) {
@@ -542,19 +544,30 @@ export async function registerRoutes(
       return res.status(429).json({ message: "Too many failed attempts. Try again later." });
     }
     const user = await storage.getUserByUsername(username);
-
-    const secretValid = user
-      ? verifySecret(secret, user.password) || (!!user.pin && user.pin === secret)
-      : false;
+    const passwordValid = user ? verifySecret(secret, user.password) : false;
+    const legacyPinValid = !!user?.pin && user.pin === secret;
+    const secretValid = passwordValid || legacyPinValid;
 
     if (!user || !secretValid) {
       trackFailedLogin(identityKey);
-      return res.status(401).json({ message: "Invalid username or PIN" });
+      return res.status(401).json({ message: "Incorrect username or password." });
     }
     clearFailedLogins(identityKey);
 
     if (user.status === "disabled") {
-      return res.status(403).json({ message: "Account disabled" });
+      await destroySession(req, res);
+      return res.status(403).json({ message: "Your account has been disabled. Contact an administrator." });
+    }
+
+    let authenticatedUser = user;
+    if (legacyPinValid) {
+      const migratedUser = await storage.updateUser(user.id, {
+        password: hashSecret(secret),
+        pin: null,
+      });
+      if (migratedUser) {
+        authenticatedUser = migratedUser;
+      }
     }
 
     // Regenerate + save explicitly so the cookie/session are durable across redirects/navigation.
@@ -562,34 +575,33 @@ export async function registerRoutes(
       req.session.regenerate((err) => (err ? reject(err) : resolve()));
     });
 
-    req.session.userId = user.id;
-    req.session.role = user.role as User["role"];
-    req.session.shopId = user.shopId || null;
+    req.session.userId = authenticatedUser.id;
+    req.session.role = authenticatedUser.role as User["role"];
+    req.session.shopId = authenticatedUser.shopId || null;
 
     await new Promise<void>((resolve, reject) => {
       req.session.save((err) => (err ? reject(err) : resolve()));
     });
 
-    await storage.touchUserActivity(user.id, { lastLogin: true });
+    await storage.touchUserActivity(authenticatedUser.id, { lastLogin: true });
     await storage.createActivityLog({
       action: "login",
       entity: "auth",
-      entityId: user.id,
-      userId: user.id,
-      userName: user.name || user.username,
-      role: user.role,
+      entityId: authenticatedUser.id,
+      userId: authenticatedUser.id,
+      userName: authenticatedUser.name || authenticatedUser.username,
+      role: authenticatedUser.role,
       details: "User logged in",
-      metadata: { shopId: user.shopId },
-      shopId: user.shopId || undefined,
+      metadata: { shopId: authenticatedUser.shopId, migratedLegacyPin: legacyPinValid || undefined },
+      shopId: authenticatedUser.shopId || undefined,
     });
 
-    const preferences = await storage.upsertUserPreferences(user.id, {});
-    res.json({ user: sanitizeUser(user), preferences });
+    const preferences = await storage.upsertUserPreferences(authenticatedUser.id, {});
+    res.json({ user: sanitizeUser(authenticatedUser), preferences });
   });
 
   app.post("/api/auth/logout", async (req: Request, res: Response) => {
     const userId = req.session?.userId;
-    req.session?.destroy(() => {});
     if (userId) {
       await storage.createActivityLog({
         action: "logout",
@@ -602,17 +614,12 @@ export async function registerRoutes(
         metadata: {},
       });
     }
+    await destroySession(req, res);
     res.json({ success: true });
   });
 
-  app.get("/api/auth/me", async (req: Request, res: Response) => {
-    if (!req.session?.userId) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    const user = req.currentUser || await storage.getUser(req.session.userId);
-    if (!user) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
+  app.get("/api/auth/me", requireAuth, async (req: Request, res: Response) => {
+    const user = req.currentUser!;
     const preferences = await storage.upsertUserPreferences(user.id, {});
     res.json({ user: sanitizeUser(user), preferences });
   });
@@ -620,6 +627,388 @@ export async function registerRoutes(
   app.get("/api/staff", requireRole(["Owner", "Manager"]), async (_req: Request, res: Response) => {
     const staff = await storage.listUsers();
     res.json(staff.map(u => sanitizeUser(u)));
+  });
+
+  app.get("/api/customers", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const list = await storage.getCustomers(shopId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      res.status(500).json({ message: "Failed to fetch customers" });
+    }
+  });
+
+  app.get("/api/devices", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const list = await storage.getDevices(shopId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching devices:", error);
+      res.status(500).json({ message: "Failed to fetch devices" });
+    }
+  });
+
+  app.post("/api/devices", requireAuth, async (req: Request, res: Response) => {
+    const parsed = deviceCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid device payload", details: parsed.error.errors });
+    }
+
+    try {
+      const payload = parsed.data;
+      const created = await storage.createDevice({
+        ...payload,
+        status: payload.status || "In Stock",
+        warrantyExpiresAt: payload.warrantyExpiresAt ? new Date(payload.warrantyExpiresAt) : null,
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      });
+      await storage.createActivityLog({
+        action: "device_created",
+        entity: "device",
+        entityId: created.id,
+        userId: req.currentUser?.id,
+        userName: req.currentUser?.name,
+        role: req.currentUser?.role,
+        details: `Created device ${created.brand} ${created.model}`,
+        metadata: { imei: created.imei },
+        shopId: created.shopId || undefined,
+      });
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Error creating device:", error);
+      const duplicate = typeof error?.message === "string" && error.message.toLowerCase().includes("unique");
+      res.status(duplicate ? 409 : 500).json({
+        message: duplicate ? "A device with this IMEI already exists." : "Failed to create device",
+      });
+    }
+  });
+
+  app.post("/api/customers", requireAuth, async (req: Request, res: Response) => {
+    const parsed = customerCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid customer payload", details: parsed.error.errors });
+    }
+
+    try {
+      const payload = parsed.data;
+      const created = await storage.createCustomer({
+        ...payload,
+        email: payload.email || null,
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      });
+      await storage.createActivityLog({
+        action: "customer_created",
+        entity: "customer",
+        entityId: created.id,
+        userId: req.currentUser?.id,
+        userName: req.currentUser?.name,
+        role: req.currentUser?.role,
+        details: `Created customer ${created.name}`,
+        metadata: { customerId: created.id },
+        shopId: created.shopId || undefined,
+      });
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating customer:", error);
+      res.status(500).json({ message: "Failed to create customer" });
+    }
+  });
+
+  app.get("/api/sales", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const list = await storage.getSales(shopId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching sales:", error);
+      res.status(500).json({ message: "Failed to fetch sales" });
+    }
+  });
+
+  app.post("/api/sales", requireAuth, async (req: Request, res: Response) => {
+    const parsed = saleCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid sale payload", details: parsed.error.errors });
+    }
+
+    try {
+      const payload = parsed.data;
+
+      for (const item of payload.items) {
+        if (!item.productId) continue;
+        const product = await storage.getProduct(item.productId);
+        if (!product) {
+          return res.status(404).json({ message: `Product not found for item ${item.name}` });
+        }
+        if (product.stock < item.quantity) {
+          return res.status(400).json({ message: `Not enough stock for ${product.name}` });
+        }
+      }
+
+      for (const item of payload.items) {
+        if (!item.deviceId) continue;
+        const device = await storage.getDevice(item.deviceId);
+        if (!device) {
+          return res.status(404).json({ message: `Device not found for item ${item.name}` });
+        }
+        if (device.status !== "In Stock") {
+          return res.status(400).json({ message: `${device.brand} ${device.model} is not available for sale` });
+        }
+      }
+
+      const saleNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+      const created = await storage.createSale({
+        saleNumber,
+        customerId: payload.customerId || null,
+        customerName: payload.customerName || "Walk-in Customer",
+        items: payload.items,
+        totalAmount: payload.totalAmount,
+        paymentMethod: payload.paymentMethod,
+        status: payload.status,
+        soldBy: payload.soldBy,
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      });
+
+      for (const item of payload.items) {
+        if (!item.productId) continue;
+        const product = await storage.getProduct(item.productId);
+        if (!product) continue;
+        await storage.updateProduct(product.id, {
+          stock: Math.max(0, product.stock - item.quantity),
+        });
+      }
+
+      for (const item of payload.items) {
+        if (!item.deviceId) continue;
+        await storage.updateDevice(item.deviceId, { status: "Sold" });
+      }
+
+      if (payload.customerId) {
+        await storage.incrementCustomerPurchases(payload.customerId);
+      }
+
+      await storage.createActivityLog({
+        action: "sale_created",
+        entity: "sale",
+        entityId: created.id,
+        userId: req.currentUser?.id,
+        userName: req.currentUser?.name,
+        role: req.currentUser?.role,
+        details: `Created sale ${created.saleNumber}`,
+        metadata: { totalAmount: created.totalAmount, items: payload.items.length },
+        shopId: created.shopId || undefined,
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating sale:", error);
+      res.status(500).json({ message: "Failed to create sale" });
+    }
+  });
+
+  app.get("/api/repairs", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const list = await storage.getRepairs(shopId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching repairs:", error);
+      res.status(500).json({ message: "Failed to fetch repairs" });
+    }
+  });
+
+  app.post("/api/repairs", requireAuth, async (req: Request, res: Response) => {
+    const parsed = repairCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid repair payload", details: parsed.error.errors });
+    }
+
+    try {
+      const payload = parsed.data;
+      const repairNumber = `REP-${Date.now().toString(36).toUpperCase()}`;
+      const created = await storage.createRepair({
+        ...payload,
+        notes: payload.notes || payload.issueDescription,
+        customerName: payload.customerName || "Walk-in",
+        technician: payload.technician || req.currentUser?.name || "Unassigned",
+        status: payload.status || "Pending",
+        repairNumber,
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      });
+
+      await storage.createActivityLog({
+        action: "repair_created",
+        entity: "repair",
+        entityId: created.id,
+        userId: req.currentUser?.id,
+        userName: req.currentUser?.name,
+        role: req.currentUser?.role,
+        details: `Created repair ${created.repairNumber}`,
+        metadata: { repairType: created.repairType, imei: created.imei },
+        shopId: created.shopId || undefined,
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating repair:", error);
+      res.status(500).json({ message: "Failed to create repair" });
+    }
+  });
+
+  app.patch("/api/repairs/:id/status", requireAuth, async (req: Request, res: Response) => {
+    const parsed = repairStatusUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid repair status payload", details: parsed.error.errors });
+    }
+
+    try {
+      const updated = await storage.updateRepair(req.params.id, { status: parsed.data.status });
+      if (!updated) {
+        return res.status(404).json({ message: "Repair not found" });
+      }
+
+      await storage.createActivityLog({
+        action: "repair_status_updated",
+        entity: "repair",
+        entityId: updated.id,
+        userId: req.currentUser?.id,
+        userName: req.currentUser?.name,
+        role: req.currentUser?.role,
+        details: `Updated repair ${updated.repairNumber} to ${updated.status}`,
+        metadata: { status: updated.status },
+        shopId: updated.shopId || undefined,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating repair status:", error);
+      res.status(500).json({ message: "Failed to update repair status" });
+    }
+  });
+
+  app.get("/api/expenses", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const list = await storage.getExpenses(shopId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching expenses:", error);
+      res.status(500).json({ message: "Failed to fetch expenses" });
+    }
+  });
+
+  app.post("/api/expenses", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    const parsed = expenseCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid expense payload", details: parsed.error.errors });
+    }
+
+    try {
+      const payload = parsed.data;
+      const created = await storage.createExpense({
+        category: payload.category,
+        description: payload.description,
+        amount: payload.amount,
+        paymentMethod: payload.paymentMethod || "Cash",
+        date: payload.date ? new Date(payload.date) : new Date(),
+        recordedBy: payload.recordedBy || req.currentUser?.name || "Staff",
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      });
+
+      await storage.createActivityLog({
+        action: "expense_created",
+        entity: "expense",
+        entityId: created.id,
+        userId: req.currentUser?.id,
+        userName: req.currentUser?.name,
+        role: req.currentUser?.role,
+        details: `Recorded expense ${created.category}`,
+        metadata: { amount: created.amount },
+        shopId: created.shopId || undefined,
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating expense:", error);
+      res.status(500).json({ message: "Failed to record expense" });
+    }
+  });
+
+  app.get("/api/closures", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const list = await storage.getClosures(shopId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching closures:", error);
+      res.status(500).json({ message: "Failed to fetch closures" });
+    }
+  });
+
+  app.post("/api/closures", requireAuth, async (req: Request, res: Response) => {
+    const parsed = closurePayloadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid closure payload", details: parsed.error.errors });
+    }
+
+    try {
+      const payload = parsed.data;
+      const created = await storage.createClosure({
+        ...payload,
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      });
+
+      await storage.createActivityLog({
+        action: "closure_created",
+        entity: "closure",
+        entityId: created.id,
+        userId: req.currentUser?.id,
+        userName: req.currentUser?.name,
+        role: req.currentUser?.role,
+        details: `Submitted daily closure with status ${created.status}`,
+        metadata: { variance: created.variance },
+        shopId: created.shopId || undefined,
+      });
+
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating closure:", error);
+      res.status(500).json({ message: "Failed to submit closure" });
+    }
+  });
+
+  app.patch("/api/closures/:id", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    const fullPayload = closurePayloadSchema.partial().safeParse(req.body);
+    if (!fullPayload.success) {
+      return res.status(400).json({ message: "Invalid closure update payload", details: fullPayload.error.errors });
+    }
+
+    try {
+      const updated = await storage.updateClosure(req.params.id, fullPayload.data);
+      if (!updated) {
+        return res.status(404).json({ message: "Closure not found" });
+      }
+
+      await storage.createActivityLog({
+        action: "closure_updated",
+        entity: "closure",
+        entityId: updated.id,
+        userId: req.currentUser?.id,
+        userName: req.currentUser?.name,
+        role: req.currentUser?.role,
+        details: `Updated daily closure ${updated.id}`,
+        metadata: { status: updated.status },
+        shopId: updated.shopId || undefined,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating closure:", error);
+      res.status(500).json({ message: "Failed to update closure" });
+    }
   });
 
   app.get("/api/preferences", requireAuth, async (req: Request, res: Response) => {
@@ -667,6 +1056,16 @@ export async function registerRoutes(
     isMain: z.boolean().optional(),
     currency: z.string().optional(),
     subscriptionPlan: z.string().optional(),
+  });
+
+  app.get("/api/shops", async (_req: Request, res: Response) => {
+    try {
+      const list = await storage.getShops();
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching shops:", error);
+      res.status(500).json({ message: "Failed to fetch shops" });
+    }
   });
 
   app.get("/api/shops/:id", async (req: Request, res: Response) => {
@@ -854,6 +1253,23 @@ export async function registerRoutes(
     shopId: z.string().optional(),
   });
 
+  const updateLeadSchema = z.object({
+    customerName: z.string().min(1).optional(),
+    customerPhone: z.string().min(6).optional(),
+    customerEmail: z.string().optional().or(z.literal("")),
+    source: z.string().optional(),
+    notes: z.string().optional(),
+    assignedTo: z.string().optional().or(z.null()),
+    priority: z.enum(["low", "normal", "high"]).optional(),
+    status: z.enum(["new", "contacted", "in_progress", "won", "lost"]).optional(),
+    nextFollowUpAt: z.string().optional().or(z.null()),
+    shopId: z.string().optional().or(z.null()),
+  });
+
+  const assignLeadSchema = z.object({
+    assignedTo: z.string().min(1, "assignedTo is required"),
+  });
+
   app.get("/api/leads", requireAuth, async (req: Request, res: Response) => {
     try {
       const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
@@ -861,7 +1277,7 @@ export async function registerRoutes(
       res.json(list);
     } catch (err) {
       console.error("Error fetching leads:", err);
-      res.status(500).json({ error: "Failed to fetch leads" });
+      sendError(res, 500, "Failed to fetch leads");
     }
   });
 
@@ -901,7 +1317,7 @@ export async function registerRoutes(
       res.status(201).json(created);
     } catch (err) {
       console.error("Error creating lead:", err);
-      res.status(500).json({ error: "Failed to create lead" });
+      sendError(res, 500, "Failed to create lead");
     }
   });
 
@@ -909,43 +1325,52 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const lead = await storage.getLead(id);
-      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      if (!lead) return sendError(res, 404, "Lead not found");
       res.json(lead);
     } catch (err) {
       console.error("Error fetching lead:", err);
-      res.status(500).json({ error: "Failed to fetch lead" });
+      sendError(res, 500, "Failed to fetch lead");
     }
   });
 
   app.patch("/api/leads/:id", requireAuth, async (req: Request, res: Response) => {
+    const parsed = updateLeadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid payload", details: parsed.error.errors });
+    }
+
     try {
       const { id } = req.params;
-      const updates = req.body as any;
+      const updates = parsed.data as any;
       if (updates.nextFollowUpAt) updates.nextFollowUpAt = new Date(updates.nextFollowUpAt);
       const updated = await storage.updateLead(id, updates);
-      if (!updated) return res.status(404).json({ error: "Lead not found" });
+      if (!updated) return sendError(res, 404, "Lead not found");
 
       await storage.createLeadAuditLog({ leadId: id, action: 'updated', userId: req.currentUser?.id, userName: req.currentUser?.name, details: 'Lead updated', metadata: updates });
       res.json(updated);
     } catch (err) {
       console.error("Error updating lead:", err);
-      res.status(500).json({ error: "Failed to update lead" });
+      sendError(res, 500, "Failed to update lead");
     }
   });
 
   app.post("/api/leads/:id/assign", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    const parsed = assignLeadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid payload", details: parsed.error.errors });
+    }
+
     try {
       const { id } = req.params;
-      const assignedTo = req.body.assignedTo as string | undefined;
-      if (!assignedTo) return res.status(400).json({ error: "assignedTo is required" });
+      const { assignedTo } = parsed.data;
       const updated = await storage.updateLead(id, { assignedTo });
-      if (!updated) return res.status(404).json({ error: "Lead not found" });
+      if (!updated) return sendError(res, 404, "Lead not found");
 
       await storage.createLeadAuditLog({ leadId: id, action: 'assigned', userId: req.currentUser?.id, userName: req.currentUser?.name, details: `Assigned to ${assignedTo}`, metadata: { assignedTo } });
       res.json(updated);
     } catch (err) {
       console.error("Error assigning lead:", err);
-      res.status(500).json({ error: "Failed to assign lead" });
+      sendError(res, 500, "Failed to assign lead");
     }
   });
 
@@ -964,13 +1389,13 @@ export async function registerRoutes(
         result: payload.result,
         nextFollowUpAt: payload.nextFollowUpAt ? new Date(payload.nextFollowUpAt) : undefined,
       });
-      if (!updated) return res.status(404).json({ error: "Lead not found" });
+      if (!updated) return sendError(res, 404, "Lead not found");
 
       await storage.createLeadAuditLog({ leadId: id, action: 'follow_up', userId: req.currentUser?.id, userName: req.currentUser?.name, details: `Follow-up: ${payload.note || ''}`, metadata: payload });
       res.json(updated);
     } catch (err) {
       console.error("Error adding follow-up:", err);
-      res.status(500).json({ error: "Failed to add follow-up" });
+      sendError(res, 500, "Failed to add follow-up");
     }
   });
 
@@ -981,7 +1406,7 @@ export async function registerRoutes(
       res.json(logs);
     } catch (err) {
       console.error("Error fetching lead audit logs:", err);
-      res.status(500).json({ error: "Failed to fetch audit logs" });
+      sendError(res, 500, "Failed to fetch audit logs");
     }
   });
 
@@ -1004,7 +1429,7 @@ export async function registerRoutes(
       res.json(questions);
     } catch (error) {
       console.error("Error fetching questions:", error);
-      res.status(500).json({ error: "Failed to fetch questions" });
+      sendError(res, 500, "Failed to fetch questions");
     }
   });
 
@@ -1025,7 +1450,7 @@ export async function registerRoutes(
       res.json(values);
     } catch (error) {
       console.error("Error fetching base values:", error);
-      res.status(500).json({ error: "Failed to fetch base values" });
+      sendError(res, 500, "Failed to fetch base values");
     }
   });
 
@@ -1046,7 +1471,7 @@ export async function registerRoutes(
       res.json({ message: "Base values seeded", count: after.length });
     } catch (error) {
       console.error("Error seeding base values:", error);
-      res.status(500).json({ error: "Failed to seed base values" });
+      sendError(res, 500, "Failed to seed base values");
     }
   });
 
@@ -1069,7 +1494,7 @@ export async function registerRoutes(
       res.json(upserted);
     } catch (error) {
       console.error("Error upserting base value:", error);
-      res.status(500).json({ error: "Failed to upsert base value" });
+      sendError(res, 500, "Failed to upsert base value");
     }
   });
 
@@ -1079,7 +1504,7 @@ export async function registerRoutes(
       const { brand, model, storage: storageSize, shopId } = req.query;
       
       if (!brand || !model || !storageSize) {
-        return res.status(400).json({ error: "Brand, model, and storage are required" });
+        return sendError(res, 400, "Brand, model, and storage are required");
       }
       
       const value = await storage.getDeviceBaseValue(
@@ -1090,13 +1515,13 @@ export async function registerRoutes(
       );
       
       if (!value) {
-        return res.status(404).json({ error: "No base value found for this device" });
+        return sendError(res, 404, "No base value found for this device");
       }
       
       res.json(value);
     } catch (error) {
       console.error("Error fetching base value:", error);
-      res.status(500).json({ error: "Failed to fetch base value" });
+      sendError(res, 500, "Failed to fetch base value");
     }
   });
 
@@ -1118,7 +1543,7 @@ export async function registerRoutes(
       res.json(brands.map((name, index) => ({ id: String(index + 1), name })));
     } catch (error) {
       console.error("Error fetching brands:", error);
-      res.status(500).json({ error: "Failed to fetch brands" });
+      sendError(res, 500, "Failed to fetch brands");
     }
   });
 
@@ -1137,7 +1562,7 @@ export async function registerRoutes(
       
       // Fallback: derive from base values by brand name
       if (!brand) {
-        return res.status(400).json({ error: "Brand or brand_id is required" });
+        return sendError(res, 400, "Brand or brand_id is required");
       }
       
       const shopId = req.query.shopId as string | undefined;
@@ -1146,7 +1571,7 @@ export async function registerRoutes(
       res.json(models.map((name, index) => ({ id: String(index + 1), name })));
     } catch (error) {
       console.error("Error fetching models:", error);
-      res.status(500).json({ error: "Failed to fetch models" });
+      sendError(res, 500, "Failed to fetch models");
     }
   });
 
@@ -1180,7 +1605,7 @@ export async function registerRoutes(
       res.json(storages.map((size, index) => ({ id: String(index + 1), size })));
     } catch (error) {
       console.error("Error fetching storages:", error);
-      res.status(500).json({ error: "Failed to fetch storages" });
+      sendError(res, 500, "Failed to fetch storages");
     }
   });
 
@@ -1305,21 +1730,7 @@ export async function registerRoutes(
       res.json({ message: "Brands, models, and storage options seeded successfully" });
     } catch (error) {
       console.error("Error seeding brands:", error);
-      res.status(500).json({ error: "Failed to seed brands" });
-    }
-  });
-
-  // Seed default owner/staff users (Owner only)
-  app.post("/api/seed-users", requireRole(["Owner"]), async (_req: Request, res: Response) => {
-    try {
-      if (process.env.ENABLE_DEFAULT_USER_SEED !== "true") {
-        return res.status(403).json({ error: "Default user seeding is disabled by policy." });
-      }
-      const result = await seedDefaultUsers();
-      res.json({ message: "Users seeded", ...result });
-    } catch (error) {
-      console.error("Error seeding users:", error);
-      res.status(500).json({ error: "Failed to seed users" });
+      sendError(res, 500, "Failed to seed brands");
     }
   });
 
@@ -1334,7 +1745,7 @@ export async function registerRoutes(
       res.status(201).json(created);
     } catch (err) {
       console.error('Error creating brand:', err);
-      res.status(500).json({ error: 'Failed to create brand' });
+      sendError(res, 500, "Failed to create brand");
     }
   });
 
@@ -1344,12 +1755,12 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const updated = await storage.updateBrand(id, parsed.data as any);
-      if (!updated) return res.status(404).json({ error: 'Brand not found' });
+      if (!updated) return sendError(res, 404, "Brand not found");
       await storage.createActivityLog({ action: 'brand_updated', entity: 'brand', entityId: id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Updated brand ${updated.name}` });
       res.json(updated);
     } catch (err) {
       console.error('Error updating brand:', err);
-      res.status(500).json({ error: 'Failed to update brand' });
+      sendError(res, 500, "Failed to update brand");
     }
   });
 
@@ -1361,7 +1772,7 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (err) {
       console.error('Error deleting brand:', err);
-      res.status(500).json({ error: 'Failed to delete brand' });
+      sendError(res, 500, "Failed to delete brand");
     }
   });
 
@@ -1376,7 +1787,7 @@ export async function registerRoutes(
       res.status(201).json(created);
     } catch (err) {
       console.error('Error creating model:', err);
-      res.status(500).json({ error: 'Failed to create model' });
+      sendError(res, 500, "Failed to create model");
     }
   });
 
@@ -1386,12 +1797,12 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const updated = await storage.updateModel(id, parsed.data as any);
-      if (!updated) return res.status(404).json({ error: 'Model not found' });
+      if (!updated) return sendError(res, 404, "Model not found");
       await storage.createActivityLog({ action: 'model_updated', entity: 'model', entityId: id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Updated model ${updated.name}` });
       res.json(updated);
     } catch (err) {
       console.error('Error updating model:', err);
-      res.status(500).json({ error: 'Failed to update model' });
+      sendError(res, 500, "Failed to update model");
     }
   });
 
@@ -1403,7 +1814,7 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (err) {
       console.error('Error deleting model:', err);
-      res.status(500).json({ error: 'Failed to delete model' });
+      sendError(res, 500, "Failed to delete model");
     }
   });
 
@@ -1418,7 +1829,7 @@ export async function registerRoutes(
       res.status(201).json(created);
     } catch (err) {
       console.error('Error creating storage option:', err);
-      res.status(500).json({ error: 'Failed to create storage option' });
+      sendError(res, 500, "Failed to create storage option");
     }
   });
 
@@ -1428,12 +1839,12 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const updated = await storage.updateStorageOption(id, parsed.data as any);
-      if (!updated) return res.status(404).json({ error: 'Storage option not found' });
+      if (!updated) return sendError(res, 404, "Storage option not found");
       await storage.createActivityLog({ action: 'storage_option_updated', entity: 'storage_option', entityId: id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Updated storage option ${updated.size}` });
       res.json(updated);
     } catch (err) {
       console.error('Error updating storage option:', err);
-      res.status(500).json({ error: 'Failed to update storage option' });
+      sendError(res, 500, "Failed to update storage option");
     }
   });
 
@@ -1445,7 +1856,7 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (err) {
       console.error('Error deleting storage option:', err);
-      res.status(500).json({ error: 'Failed to delete storage option' });
+      sendError(res, 500, "Failed to delete storage option");
     }
   });
 
@@ -1455,7 +1866,7 @@ export async function registerRoutes(
       const { brand, model, storage: storageSize, baseValue, shopId } = req.body;
       
       if (!brand || !model || !storageSize || baseValue === undefined) {
-        return res.status(400).json({ error: "All fields are required" });
+        return sendError(res, 400, "All fields are required");
       }
       
       const created = await storage.createDeviceBaseValue({
@@ -1470,7 +1881,7 @@ export async function registerRoutes(
       res.json(created);
     } catch (error) {
       console.error("Error creating base value:", error);
-      res.status(500).json({ error: "Failed to create base value" });
+      sendError(res, 500, "Failed to create base value");
     }
   });
 
@@ -1481,13 +1892,13 @@ export async function registerRoutes(
       
       const updated = await storage.updateDeviceBaseValue(id, updates);
       if (!updated) {
-        return res.status(404).json({ error: "Base value not found" });
+        return sendError(res, 404, "Base value not found");
       }
       
       res.json(updated);
     } catch (error) {
       console.error("Error updating base value:", error);
-      res.status(500).json({ error: "Failed to update base value" });
+      sendError(res, 500, "Failed to update base value");
     }
   });
 
@@ -1501,7 +1912,7 @@ export async function registerRoutes(
       if (!validation.valid) {
         return res.json({ 
           valid: false, 
-          error: validation.error,
+          message: validation.error,
           blocked: false,
           duplicate: false,
         });
@@ -1512,7 +1923,7 @@ export async function registerRoutes(
       if (blocked) {
         return res.json({ 
           valid: false, 
-          error: `IMEI blocked: ${blocked.reason}`,
+          message: `IMEI blocked: ${blocked.reason}`,
           blocked: true,
           blockReason: blocked.reason,
           duplicate: false,
@@ -1525,7 +1936,7 @@ export async function registerRoutes(
       
       res.json({ 
         valid: !isDuplicate,
-        error: isDuplicate ? "This device has already been traded in" : undefined,
+        message: isDuplicate ? "This device has already been traded in" : undefined,
         blocked: false,
         duplicate: isDuplicate,
         existingTradeIn: isDuplicate ? {
@@ -1536,7 +1947,7 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Error validating IMEI:", error);
-      res.status(500).json({ error: "Failed to validate IMEI" });
+      sendError(res, 500, "Failed to validate IMEI");
     }
   });
 
@@ -1548,7 +1959,7 @@ export async function registerRoutes(
       // Get base value
       const baseValueRecord = await storage.getDeviceBaseValue(brand, model, storageSize);
       if (!baseValueRecord) {
-        return res.status(404).json({ error: "No base value found for this device configuration" });
+        return sendError(res, 404, "No base value found for this device configuration");
       }
       
       // Get questions for scoring
@@ -1582,7 +1993,7 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Error calculating offer:", error);
-      res.status(500).json({ error: "Failed to calculate offer" });
+      sendError(res, 500, "Failed to calculate offer");
     }
   });
 
@@ -1591,7 +2002,7 @@ export async function registerRoutes(
     try {
       const parsed = tradeInWizardSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ error: "Invalid input", details: parsed.error.errors });
+        return sendError(res, 400, "Invalid input", parsed.error.errors);
       }
       
       const data = parsed.data;
@@ -1600,13 +2011,13 @@ export async function registerRoutes(
       // Validate IMEI
       const imeiValidation = validateIMEI(data.imei);
       if (!imeiValidation.valid) {
-        return res.status(400).json({ error: imeiValidation.error });
+        return sendError(res, 400, imeiValidation.error || "Invalid IMEI");
       }
       
       // Check if blocked
       const blocked = await storage.getBlockedImei(data.imei);
       if (blocked) {
-        return res.status(400).json({ error: `IMEI blocked: ${blocked.reason}` });
+        return sendError(res, 400, `IMEI blocked: ${blocked.reason}`);
       }
       
       // Check duplicate
@@ -1622,7 +2033,7 @@ export async function registerRoutes(
           notes: `Duplicate attempt. Original trade-in: ${existing.tradeInNumber}`,
         });
         return res.status(400).json({ 
-          error: "Duplicate IMEI - this device has already been traded in",
+          message: "Duplicate IMEI - this device has already been traded in",
           existingTradeIn: existing.tradeInNumber,
         });
       }
@@ -1630,7 +2041,7 @@ export async function registerRoutes(
       // Get base value
       const baseValueRecord = await storage.getDeviceBaseValue(data.brand, data.model, data.storage || "Unknown");
       if (!baseValueRecord) {
-        return res.status(400).json({ error: "No base value found for this device. Please contact manager." });
+        return sendError(res, 400, "No base value found for this device. Please contact manager.");
       }
       
       // Get questions and calculate score
@@ -1711,7 +2122,7 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Error submitting trade-in:", error);
-      res.status(500).json({ error: "Failed to submit trade-in" });
+      sendError(res, 500, "Failed to submit trade-in");
     }
   });
 
@@ -1723,7 +2134,7 @@ export async function registerRoutes(
       res.json(assessments);
     } catch (error) {
       console.error("Error fetching assessments:", error);
-      res.status(500).json({ error: "Failed to fetch assessments" });
+      sendError(res, 500, "Failed to fetch assessments");
     }
   });
 
@@ -1745,7 +2156,7 @@ export async function registerRoutes(
       });
     } catch (err) {
       console.error("Error fetching products:", err);
-      res.status(500).json({ error: "Failed to fetch products" });
+      sendError(res, 500, "Failed to fetch products");
     }
   });
 
@@ -1753,17 +2164,17 @@ export async function registerRoutes(
     try {
       const payload = req.body;
       if (Number(payload.stock) < 0 || Number(payload.minStock) < 0) {
-        return res.status(400).json({ error: "Stock values cannot be negative" });
+        return sendError(res, 400, "Stock values cannot be negative");
       }
       if (Number(payload.price) < 0 || Number(payload.costPrice) < 0) {
-        return res.status(400).json({ error: "Price values cannot be negative" });
+        return sendError(res, 400, "Price values cannot be negative");
       }
       const created = await storage.createProduct({ ...payload, shopId: payload.shopId || req.currentUser?.shopId || null });
       await storage.createActivityLog({ action: "product_created", entity: "product", entityId: created.id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Created product ${created.name}`, metadata: { product: created } });
       res.status(201).json(created);
     } catch (err) {
       console.error("Error creating product:", err);
-      res.status(500).json({ error: "Failed to create product" });
+      sendError(res, 500, "Failed to create product");
     }
   });
 
@@ -1771,24 +2182,24 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       if (req.body.stock !== undefined && Number(req.body.stock) < 0) {
-        return res.status(400).json({ error: "Stock cannot be negative" });
+        return sendError(res, 400, "Stock cannot be negative");
       }
       if (req.body.minStock !== undefined && Number(req.body.minStock) < 0) {
-        return res.status(400).json({ error: "Minimum stock cannot be negative" });
+        return sendError(res, 400, "Minimum stock cannot be negative");
       }
       if (req.body.price !== undefined && Number(req.body.price) < 0) {
-        return res.status(400).json({ error: "Price cannot be negative" });
+        return sendError(res, 400, "Price cannot be negative");
       }
       if (req.body.costPrice !== undefined && Number(req.body.costPrice) < 0) {
-        return res.status(400).json({ error: "Cost price cannot be negative" });
+        return sendError(res, 400, "Cost price cannot be negative");
       }
       const updated = await storage.updateProduct(id, req.body);
-      if (!updated) return res.status(404).json({ error: "Product not found" });
+      if (!updated) return sendError(res, 404, "Product not found");
       await storage.createActivityLog({ action: "product_updated", entity: "product", entityId: id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Updated product ${updated.name}` });
       res.json(updated);
     } catch (err) {
       console.error("Error updating product:", err);
-      res.status(500).json({ error: "Failed to update product" });
+      sendError(res, 500, "Failed to update product");
     }
   });
 
@@ -1800,7 +2211,7 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (err) {
       console.error("Error deleting product:", err);
-      res.status(500).json({ error: "Failed to delete product" });
+      sendError(res, 500, "Failed to delete product");
     }
   });
 
@@ -1811,7 +2222,7 @@ export async function registerRoutes(
       const assessment = await storage.getTradeInAssessment(id);
       
       if (!assessment) {
-        return res.status(404).json({ error: "Assessment not found" });
+        return sendError(res, 404, "Assessment not found");
       }
       
       // Get audit logs for this assessment
@@ -1820,7 +2231,7 @@ export async function registerRoutes(
       res.json({ assessment, auditLogs });
     } catch (error) {
       console.error("Error fetching assessment:", error);
-      res.status(500).json({ error: "Failed to fetch assessment" });
+      sendError(res, 500, "Failed to fetch assessment");
     }
   });
 
@@ -1831,14 +2242,14 @@ export async function registerRoutes(
       const parsed = tradeInReviewSchema.safeParse(req.body);
       
       if (!parsed.success) {
-        return res.status(400).json({ error: "Invalid input", details: parsed.error.errors });
+        return sendError(res, 400, "Invalid input", parsed.error.errors);
       }
       
       const { decision, finalOffer, reviewNotes, rejectionReasons } = parsed.data;
       
       const existing = await storage.getTradeInAssessment(id);
       if (!existing) {
-        return res.status(404).json({ error: "Assessment not found" });
+        return sendError(res, 404, "Assessment not found");
       }
       
       const previousState = { ...existing };
@@ -1868,7 +2279,7 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       console.error("Error reviewing trade-in:", error);
-      res.status(500).json({ error: "Failed to review trade-in" });
+      sendError(res, 500, "Failed to review trade-in");
     }
   });
 
@@ -1881,11 +2292,11 @@ export async function registerRoutes(
       
       const existing = await storage.getTradeInAssessment(id);
       if (!existing) {
-        return res.status(404).json({ error: "Assessment not found" });
+        return sendError(res, 404, "Assessment not found");
       }
       
       if (existing.status !== "approved") {
-        return res.status(400).json({ error: "Trade-in must be approved before completing payout" });
+        return sendError(res, 400, "Trade-in must be approved before completing payout");
       }
       
       const previousState = { ...existing };
@@ -1911,7 +2322,7 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       console.error("Error completing payout:", error);
-      res.status(500).json({ error: "Failed to complete payout" });
+      sendError(res, 500, "Failed to complete payout");
     }
   });
 
@@ -1924,7 +2335,7 @@ export async function registerRoutes(
       res.json(logs);
     } catch (error) {
       console.error("Error fetching audit logs:", error);
-      res.status(500).json({ error: "Failed to fetch audit logs" });
+      sendError(res, 500, "Failed to fetch audit logs");
     }
   });
 

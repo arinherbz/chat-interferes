@@ -126,7 +126,7 @@ export default function TradeInPage() {
   const [scoringResult, setScoringResult] = useState<ScoringResult | null>(null);
   
   // UI state
-  const [imeiValidation, setImeiValidation] = useState<{ valid: boolean; error?: string; blocked?: boolean; duplicate?: boolean } | null>(null);
+  const [imeiValidation, setImeiValidation] = useState<{ valid: boolean; message?: string; error?: string; blocked?: boolean; duplicate?: boolean } | null>(null);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<TradeInAssessment | null>(null);
   
@@ -561,33 +561,34 @@ export default function TradeInPage() {
 
   const getDecisionBadge = (decision: string, status: string) => {
     if (status === "completed") {
-      return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
+      return <Badge className="tone-success">Completed</Badge>;
     }
     switch (decision) {
       case "auto_accept":
       case "accepted":
-        return <Badge className="bg-green-100 text-green-800">Approved</Badge>;
+        return <Badge className="tone-success">Approved</Badge>;
       case "auto_reject":
       case "rejected":
-        return <Badge className="bg-red-100 text-red-800">Rejected</Badge>;
+        return <Badge className="tone-danger">Rejected</Badge>;
       case "manual_review":
-        return <Badge className="bg-amber-100 text-amber-800">Pending Review</Badge>;
+        return <Badge className="tone-warning">Pending Review</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500" data-testid="page-trade-in">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="page-shell" data-testid="page-trade-in">
+      <div className="page-hero flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Trade-In Center</h1>
-          <p className="text-slate-500">Process device buybacks with Apple-style condition assessment.</p>
+          <div className="page-kicker">Buyback Workflow</div>
+          <h1 className="page-title">Trade-In Center</h1>
+          <p className="page-subtitle">Process device buybacks with a cleaner multi-step assessment flow, clearer guardrails, and calmer review states.</p>
         </div>
       </div>
 
       <Tabs defaultValue="new" className="space-y-6">
-        <TabsList>
+        <TabsList className="surface-muted p-1">
           <TabsTrigger value="new" data-testid="tab-new-tradein">New Trade-In</TabsTrigger>
           <TabsTrigger value="history" data-testid="tab-history">History ({assessments.length})</TabsTrigger>
           <TabsTrigger value="values" data-testid="tab-values">Base Values</TabsTrigger>
@@ -595,7 +596,7 @@ export default function TradeInPage() {
 
         <TabsContent value="new" className="space-y-6">
           {/* Progress Steps */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="surface-panel flex items-center justify-between mb-8 p-5">
             {WIZARD_STEPS.map((s, i) => {
               const Icon = s.icon;
               const isActive = step === s.id;
@@ -606,20 +607,20 @@ export default function TradeInPage() {
                   <div className="flex flex-col items-center">
                     <div 
                       className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                        isCompleted ? "bg-green-500 text-white" :
+                        isCompleted ? "bg-emerald-500 text-white" :
                         isActive ? "bg-primary text-white" :
-                        "bg-slate-100 text-slate-400"
+                        "bg-secondary text-muted-foreground"
                       }`}
                       data-testid={`step-indicator-${s.id}`}
                     >
                       {isCompleted ? <CheckCircle className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
                     </div>
-                    <span className={`mt-2 text-xs font-medium ${isActive ? "text-primary" : "text-slate-500"}`}>
+                    <span className={`mt-2 text-xs font-medium ${isActive ? "text-primary" : "text-muted-foreground"}`}>
                       {s.title}
                     </span>
                   </div>
                   {i < WIZARD_STEPS.length - 1 && (
-                    <div className={`w-16 h-0.5 mx-2 ${step > s.id ? "bg-green-500" : "bg-slate-200"}`} />
+                    <div className={`w-16 h-0.5 mx-2 ${step > s.id ? "bg-emerald-400" : "bg-border"}`} />
                   )}
                 </div>
               );
@@ -628,7 +629,7 @@ export default function TradeInPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Wizard Card */}
-            <Card className="lg:col-span-2 border-slate-200 shadow-md">
+            <Card className="lg:col-span-2 surface-panel">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
@@ -672,7 +673,7 @@ export default function TradeInPage() {
                     </div>
                     
                     {brandsList.length === 0 && (
-                      <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 flex items-center justify-between gap-3">
+                      <div className="tone-warning p-4 rounded-lg flex items-center justify-between gap-3">
                         <div>
                           <p className="font-semibold text-amber-800">No brands seeded</p>
                           <p className="text-sm text-amber-700">Seed the catalog to load Apple/Samsung and others.</p>
@@ -736,29 +737,29 @@ export default function TradeInPage() {
                       {imeiValidation && !imeiValidation.valid && (
                         <p className="text-sm text-red-500 flex items-center gap-1">
                           <AlertCircle className="w-4 h-4" />
-                          {imeiValidation.error}
+                          {imeiValidation.message ?? imeiValidation.error}
                         </p>
                       )}
                     </div>
 
                     {currentBaseValue && (
-                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                        <p className="text-sm text-blue-800">
+                      <div className="tone-info p-4 rounded-lg">
+                        <p className="text-sm">
                           <strong>Base Value:</strong> UGX {currentBaseValue.baseValue.toLocaleString()}
                         </p>
-                        <p className="text-xs text-blue-600 mt-1">
+                        <p className="text-xs mt-1">
                           Final offer depends on condition assessment
                         </p>
                       </div>
                     )}
 
                     {scanDetectedDevice && (
-                      <div className="p-4 bg-purple-50 rounded-lg border border-purple-200" data-testid="detected-device-autofill">
-                        <p className="text-sm text-purple-800">
+                      <div className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-4 text-indigo-700" data-testid="detected-device-autofill">
+                        <p className="text-sm">
                           <strong>Scan Detection:</strong> {scanDetectedDevice.brand}
                           {scanDetectedDevice.model && ` ${scanDetectedDevice.model}`}
                         </p>
-                        <p className="text-xs text-purple-600 mt-1">
+                        <p className="text-xs mt-1">
                           Device info auto-filled from IMEI scan
                         </p>
                       </div>
@@ -766,7 +767,7 @@ export default function TradeInPage() {
 
                     {fakeDeviceWarning?.isSuspicious && (
                       <div className={`p-4 rounded-lg border ${
-                        fakeDeviceWarning.severity === "high" ? "bg-red-50 border-red-200" :
+                        fakeDeviceWarning.severity === "high" ? "bg-rose-50 border-rose-200" :
                         fakeDeviceWarning.severity === "medium" ? "bg-amber-50 border-amber-200" :
                         "bg-yellow-50 border-yellow-200"
                       }`} data-testid="fake-device-warning">
@@ -810,7 +811,7 @@ export default function TradeInPage() {
                 {/* Step 2: Security Checks */}
                 {step === 2 && (
                   <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-                    <div className="p-6 bg-red-50 rounded-lg border border-red-200">
+                    <div className="tone-danger p-6 rounded-lg">
                       <div className="flex items-start gap-3">
                         <AlertTriangle className="w-6 h-6 text-red-600 mt-0.5" />
                         <div>
@@ -823,7 +824,7 @@ export default function TradeInPage() {
                     </div>
 
                     <div className="space-y-6">
-                      <div className="p-4 border rounded-lg">
+                      <div className="surface-muted p-4">
                         <div className="flex items-center gap-3 mb-4">
                           <Lock className="w-5 h-5 text-slate-600" />
                           <span className="font-medium">Is iCloud / Find My iPhone enabled?</span>
@@ -851,7 +852,7 @@ export default function TradeInPage() {
                       </div>
 
                       {brand !== "Apple" && (
-                        <div className="p-4 border rounded-lg">
+                      <div className="surface-muted p-4">
                           <div className="flex items-center gap-3 mb-4">
                             <Lock className="w-5 h-5 text-slate-600" />
                             <span className="font-medium">Is Google FRP (Factory Reset Protection) enabled?</span>
@@ -896,7 +897,7 @@ export default function TradeInPage() {
                             </div>
                             <div className="space-y-4 pl-7">
                               {categoryQuestions.map((q) => (
-                                <div key={q.id} className="p-4 border rounded-lg bg-slate-50">
+                                <div key={q.id} className="surface-muted p-4">
                                   <p className="font-medium text-sm mb-3">{q.question}</p>
                                   <RadioGroup 
                                     value={conditionAnswers[q.id] || ""}
@@ -934,8 +935,8 @@ export default function TradeInPage() {
                       })}
                     </ScrollArea>
                     
-                    <div className="flex items-center justify-between p-4 bg-slate-100 rounded-lg">
-                      <span className="text-sm text-slate-600">
+                    <div className="surface-muted flex items-center justify-between p-4">
+                      <span className="text-sm text-muted-foreground">
                         Questions answered: {Object.keys(conditionAnswers).length} / {questions.filter(q => q.isRequired).length}
                       </span>
                       <Progress 
@@ -957,8 +958,8 @@ export default function TradeInPage() {
                       <>
                         {/* Decision Banner */}
                         <div className={`p-6 rounded-lg border-2 ${
-                          scoringResult.decision === "auto_accept" ? "bg-green-50 border-green-300" :
-                          scoringResult.decision === "auto_reject" ? "bg-red-50 border-red-300" :
+                          scoringResult.decision === "auto_accept" ? "bg-emerald-50 border-emerald-300" :
+                          scoringResult.decision === "auto_reject" ? "bg-rose-50 border-rose-300" :
                           "bg-amber-50 border-amber-300"
                         }`}>
                           <div className="flex items-center gap-4">

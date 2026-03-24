@@ -82,8 +82,16 @@ export default function StaffPage() {
 
   const handleDelete = async (id: string, name: string) => {
     if (confirm("Disable this staff account? They will not be able to sign in.")) {
-      await deleteUser(id);
-      toast({ title: "Staff Disabled", description: `${name} can no longer log in.` });
+      try {
+        await deleteUser(id);
+        toast({ title: "Staff Disabled", description: `${name} can no longer log in.` });
+      } catch (err: any) {
+        toast({
+          title: "Could not disable staff",
+          description: err?.message || "Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -101,7 +109,7 @@ export default function StaffPage() {
 
   if ((currentUser?.role as string) !== "Owner") {
     return (
-      <div className="flex flex-col items-center justify-center h-[50vh] text-center">
+      <div className="surface-panel flex flex-col items-center justify-center h-[50vh] text-center">
         <Shield className="w-12 h-12 text-slate-300 mb-4" />
         <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
         <p className="text-slate-500 max-w-sm mt-2">Only owners can manage staff members. Please contact your administrator.</p>
@@ -110,11 +118,12 @@ export default function StaffPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="page-shell">
+      <div className="page-hero flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Staff Management</h1>
-          <p className="text-slate-500">Manage users, roles, and permissions.</p>
+          <div className="page-kicker">Access Control</div>
+          <h1 className="page-title">Staff Management</h1>
+          <p className="page-subtitle">Manage staff accounts, branch assignment, and permissions with clearer role guidance.</p>
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
@@ -220,7 +229,7 @@ export default function StaffPage() {
                   )}
                 />
 
-                <div className="bg-slate-50 p-4 rounded-lg text-xs text-slate-500 space-y-2">
+                <div className="surface-muted p-4 text-xs text-slate-500 space-y-2">
                   <div className="font-medium text-slate-700 mb-1">Role Permissions:</div>
                   <div className="grid grid-cols-1 gap-1">
                     <div className="flex items-start gap-2">
@@ -228,11 +237,11 @@ export default function StaffPage() {
                       <span>Submit sales, repairs, trade-ins, and daily closures. Cannot see owner reports.</span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <Badge variant="outline" className="text-[10px] h-4 px-1 bg-blue-50 text-blue-700 border-blue-200">Manager</Badge>
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 tone-info">Manager</Badge>
                       <span>Review closures and repairs. Can view most reports but cannot delete financial records.</span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <Badge variant="outline" className="text-[10px] h-4 px-1 bg-purple-50 text-purple-700 border-purple-200">Owner</Badge>
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 bg-indigo-50 text-indigo-700 border-indigo-200">Owner</Badge>
                       <span>Full access. Edit/Delete anything. View all financials.</span>
                     </div>
                   </div>
@@ -249,7 +258,7 @@ export default function StaffPage() {
         </Dialog>
       </div>
 
-      <Card>
+      <Card className="surface-panel">
         <CardHeader>
           <CardTitle>Team Members</CardTitle>
           <CardDescription>

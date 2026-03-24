@@ -95,8 +95,8 @@ export function FileUploader({
     <div className={cn("space-y-3", className)}>
       <div
         className={cn(
-          "border-2 border-dashed rounded-lg p-4 sm:p-5 flex flex-col gap-3 items-center text-center transition-colors",
-          isDragging ? "border-primary bg-primary/5" : "border-slate-200 bg-white"
+          "rounded-[1.5rem] border-2 border-dashed p-4 sm:p-5 flex flex-col gap-3 items-center text-center transition-colors shadow-[0_14px_34px_rgba(15,23,42,0.05)]",
+          isDragging ? "border-primary bg-primary/5" : "border-border/70 bg-white/85 backdrop-blur-sm"
         )}
         onDragOver={(e) => {
           e.preventDefault();
@@ -106,7 +106,7 @@ export function FileUploader({
         onDrop={onDrop}
       >
         <Upload className="w-6 h-6 text-primary" />
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           Drag & drop photos or receipts, or use your camera
         </p>
         <div className="flex flex-wrap gap-2 justify-center">
@@ -130,12 +130,12 @@ export function FileUploader({
           </Button>
         </div>
         {isUploading && (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
             Uploading...
           </div>
         )}
-        {error && <div className="text-sm text-red-600">{error}</div>}
+        {error && <div className="text-sm text-rose-600">{error}</div>}
         <input
           ref={inputRef}
           type="file"
@@ -145,7 +145,7 @@ export function FileUploader({
           capture="environment"
           onChange={(e) => handleFiles(e.target.files)}
         />
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           Up to {maxFiles} files. Images, PDFs, or text. Max 10MB each.
         </p>
       </div>
@@ -155,7 +155,7 @@ export function FileUploader({
           {value.map((file) => (
             <div
               key={file.id}
-              className="border rounded-lg p-3 bg-white shadow-sm flex flex-col gap-2"
+              className="surface-panel p-3 shadow-none flex flex-col gap-2"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="truncate text-sm font-medium">{file.filename}</div>
@@ -168,7 +168,7 @@ export function FileUploader({
                   <X className="w-4 h-4" />
                 </Button>
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-muted-foreground">
                 {(file.size / 1024).toFixed(1)} KB • {file.contentType}
               </div>
               <a

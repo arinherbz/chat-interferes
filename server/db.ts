@@ -105,6 +105,104 @@ if (usePostgres) {
         created_at TEXT,
         updated_at TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS devices (
+        id TEXT PRIMARY KEY,
+        brand TEXT NOT NULL,
+        model TEXT NOT NULL,
+        imei TEXT NOT NULL UNIQUE,
+        color TEXT NOT NULL,
+        storage TEXT NOT NULL,
+        condition TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'In Stock',
+        price INTEGER DEFAULT 0,
+        cost INTEGER DEFAULT 0,
+        added_at TEXT,
+        warranty_period INTEGER,
+        warranty_expires_at TEXT,
+        shop_id TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS customers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        email TEXT,
+        joined_at TEXT,
+        total_purchases INTEGER DEFAULT 0,
+        shop_id TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS sales (
+        id TEXT PRIMARY KEY,
+        sale_number TEXT NOT NULL UNIQUE,
+        customer_id TEXT,
+        customer_name TEXT,
+        items TEXT NOT NULL,
+        total_amount INTEGER DEFAULT 0,
+        payment_method TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Completed',
+        sold_by TEXT NOT NULL,
+        shop_id TEXT,
+        created_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS repairs (
+        id TEXT PRIMARY KEY,
+        repair_number TEXT NOT NULL UNIQUE,
+        device_brand TEXT NOT NULL,
+        device_model TEXT NOT NULL,
+        imei TEXT NOT NULL,
+        issue_description TEXT NOT NULL,
+        repair_type TEXT NOT NULL,
+        price INTEGER DEFAULT 0,
+        cost INTEGER DEFAULT 0,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'Pending',
+        customer_name TEXT,
+        technician TEXT,
+        shop_id TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        description TEXT NOT NULL,
+        amount INTEGER DEFAULT 0,
+        payment_method TEXT,
+        date TEXT,
+        recorded_by TEXT NOT NULL,
+        shop_id TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS closures (
+        id TEXT PRIMARY KEY,
+        date TEXT,
+        cash_expected INTEGER DEFAULT 0,
+        cash_counted INTEGER DEFAULT 0,
+        mtn_amount INTEGER DEFAULT 0,
+        airtel_amount INTEGER DEFAULT 0,
+        card_amount INTEGER DEFAULT 0,
+        expenses_total INTEGER DEFAULT 0,
+        variance INTEGER DEFAULT 0,
+        submitted_by TEXT NOT NULL,
+        submitted_at TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        proofs TEXT,
+        shop_id TEXT,
+        sales TEXT,
+        repairs TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
       
       CREATE TABLE IF NOT EXISTS shops (
         id TEXT PRIMARY KEY,

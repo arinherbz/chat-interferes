@@ -9,18 +9,19 @@ export default function AuditLogsPage() {
   const { auditLogs } = useData();
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="page-shell">
+      <div className="page-hero flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Audit Logs</h1>
-          <p className="text-slate-500">Security trail of all system actions.</p>
+          <div className="page-kicker">Security Trail</div>
+          <h1 className="page-title">Audit Logs</h1>
+          <p className="page-subtitle">Review authentication, staffing, and transaction activity in a cleaner chronological feed.</p>
         </div>
       </div>
 
-      <Card>
+      <Card className="surface-panel">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-slate-500" />
+            <Activity className="w-5 h-5 text-muted-foreground" />
             <CardTitle>System Activity</CardTitle>
           </div>
         </CardHeader>
@@ -38,7 +39,7 @@ export default function AuditLogsPage() {
             <TableBody>
               {auditLogs.map((log) => (
                 <TableRow key={log.id}>
-                  <TableCell className="font-mono text-xs text-slate-500">
+                  <TableCell className="font-mono text-xs text-muted-foreground">
                     {format(new Date(log.timestamp), 'MMM dd HH:mm:ss')}
                   </TableCell>
                   <TableCell className="font-medium">{log.user}</TableCell>
@@ -46,7 +47,7 @@ export default function AuditLogsPage() {
                     <Badge variant="outline">{log.action}</Badge>
                   </TableCell>
                   <TableCell>{log.entity}</TableCell>
-                  <TableCell className="text-sm text-slate-600">{log.details}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{log.details}</TableCell>
                 </TableRow>
               ))}
               {auditLogs.length === 0 && (

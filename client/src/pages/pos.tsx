@@ -91,7 +91,7 @@ export default function POSPage() {
 
   const cartTotal = cart.reduce((acc, i) => acc + i.totalPrice, 0);
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     // Prevent negative stock: block checkout if any product lacks stock
     const insufficient = cart.filter(item => {
       if (!item.productId) return false;
@@ -109,42 +109,50 @@ export default function POSPage() {
 
     const saleNumber = `S${Date.now().toString(36).toUpperCase()}`;
     
-    recordSale({
-      customerId: selectedCustomer?.id,
-      customerName: selectedCustomer?.name || "Walk-in Customer",
-      items: cart,
-      totalAmount: cartTotal,
-      paymentMethod: paymentMethod as any,
-      status: "Completed",
-      soldBy: currentUser?.name || "Staff",
-    });
-    
-    const receipt = generateSaleReceipt(
-      {
-        saleNumber,
+    try {
+      const recordedSale = await recordSale({
+        customerId: selectedCustomer?.id,
         customerName: selectedCustomer?.name || "Walk-in Customer",
-        items: cart.map(item => ({
-          name: item.name,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-        })),
+        items: cart,
         totalAmount: cartTotal,
-        paymentMethod,
+        paymentMethod: paymentMethod as any,
+        status: "Completed",
         soldBy: currentUser?.name || "Staff",
-        createdAt: new Date().toISOString(),
-      },
-      { name: "Phone Shop", location: "Kampala, Uganda" }
-    );
-    
-    setReceiptData(receipt);
-    setReceiptOpen(true);
-    setCart([]);
-    setCheckoutOpen(false);
-    toast({
-      title: "Sale Completed",
-      description: `Receipt generated for UGX ${cartTotal.toLocaleString()}`,
-    });
+      });
+      
+      const receipt = generateSaleReceipt(
+        {
+          saleNumber: recordedSale.saleNumber || saleNumber,
+          customerName: selectedCustomer?.name || "Walk-in Customer",
+          items: cart.map(item => ({
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+          })),
+          totalAmount: cartTotal,
+          paymentMethod,
+          soldBy: currentUser?.name || "Staff",
+          createdAt: new Date().toISOString(),
+        },
+        { name: "Phone Shop", location: "Kampala, Uganda" }
+      );
+      
+      setReceiptData(receipt);
+      setReceiptOpen(true);
+      setCart([]);
+      setCheckoutOpen(false);
+      toast({
+        title: "Sale completed",
+        description: `Receipt generated for UGX ${cartTotal.toLocaleString()}.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Checkout failed",
+        description: err?.message || "The sale could not be completed. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -154,10 +162,10 @@ export default function POSPage() {
         <div className="flex items-center gap-4">
           <div className="relative flex-1 flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search products, devices, or IMEI..." 
-                className="pl-10 h-10"
+                className="h-12 rounded-2xl border-border/80 bg-white/85 pl-10 shadow-sm backdrop-blur-sm"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleScan}
@@ -176,8 +184,8 @@ export default function POSPage() {
           onScan={handleScanResult} 
         />
 
-        <Tabs defaultValue="products" className="flex-1 flex flex-col">
-          <TabsList>
+          <Tabs defaultValue="products" className="flex-1 flex flex-col">
+          <TabsList className="h-12 rounded-2xl border border-border/70 bg-secondary/90 p-1 shadow-sm">
             <TabsTrigger value="products">Products & Accessories</TabsTrigger>
             <TabsTrigger value="devices">Phones & Devices</TabsTrigger>
           </TabsList>
@@ -188,18 +196,18 @@ export default function POSPage() {
                 {filteredProducts.map(product => (
                   <Card 
                     key={product.id} 
-                    className="cursor-pointer hover:border-primary transition-colors group"
+                    className="group cursor-pointer overflow-hidden rounded-[1.4rem] border-border/80 bg-white/92 shadow-sm hover:border-primary/25 hover:shadow-md"
                     onClick={() => addToCart("product", product)}
                   >
                     <CardContent className="p-4 flex flex-col gap-2">
-                      <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-primary">
                         <Package className="w-5 h-5" />
                       </div>
                       <div>
                         <h4 className="font-medium line-clamp-1">{product.name}</h4>
-                        <p className="text-xs text-slate-500">{product.stock} in stock</p>
+                        <p className="text-xs text-muted-foreground">{product.stock} in stock</p>
                       </div>
-                      <div className="font-bold text-primary mt-auto">
+                      <div className="mt-auto font-semibold text-foreground">
                         {product.price.toLocaleString()}
                       </div>
                     </CardContent>
@@ -215,19 +223,19 @@ export default function POSPage() {
                 {filteredDevices.map(device => (
                   <Card 
                     key={device.id} 
-                    className="cursor-pointer hover:border-primary transition-colors group"
+                    className="group cursor-pointer overflow-hidden rounded-[1.4rem] border-border/80 bg-white/92 shadow-sm hover:border-primary/25 hover:shadow-md"
                     onClick={() => addToCart("device", device)}
                   >
                     <CardContent className="p-4 flex flex-col gap-2">
-                      <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground transition-colors group-hover:bg-accent group-hover:text-primary">
                         <Smartphone className="w-5 h-5" />
                       </div>
                       <div>
                         <h4 className="font-medium line-clamp-1">{device.brand} {device.model}</h4>
-                        <p className="text-xs text-slate-500">{device.storage} • {device.color}</p>
-                        <p className="text-[10px] text-slate-400 font-mono mt-1">{device.imei}</p>
+                        <p className="text-xs text-muted-foreground">{device.storage} • {device.color}</p>
+                        <p className="mt-1 font-mono text-[10px] text-muted-foreground/80">{device.imei}</p>
                       </div>
-                      <div className="font-bold text-primary mt-auto">
+                      <div className="mt-auto font-semibold text-foreground">
                         {device.price.toLocaleString()}
                       </div>
                     </CardContent>
@@ -241,12 +249,12 @@ export default function POSPage() {
 
       {/* RIGHT: Cart */}
       <div className="w-full xl:w-[400px] flex flex-col">
-        <Card className="flex-1 flex flex-col border-l shadow-xl">
-          <CardHeader className="pb-4 border-b">
+        <Card className="flex-1 flex flex-col overflow-hidden rounded-[1.6rem] border-border/80 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.12)]">
+          <CardHeader className="border-b border-border/70 pb-4">
             <div className="flex items-center justify-between">
               <CardTitle>Current Sale</CardTitle>
               <Button variant="ghost" size="icon" onClick={() => setCart([])}>
-                <Trash2 className="w-4 h-4 text-slate-400 hover:text-red-500" />
+                <Trash2 className="w-4 h-4 text-muted-foreground hover:text-red-500" />
               </Button>
             </div>
             
@@ -256,7 +264,7 @@ export default function POSPage() {
             }}>
               <SelectTrigger className="w-full mt-2">
                 <div className="flex items-center gap-2">
-                   <User className="w-4 h-4 text-slate-500" />
+                   <User className="w-4 h-4 text-muted-foreground" />
                    <span>{selectedCustomer?.name || "Walk-in Customer"}</span>
                 </div>
               </SelectTrigger>
@@ -271,7 +279,7 @@ export default function POSPage() {
 
           <CardContent className="flex-1 p-0 overflow-auto">
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400">
+              <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                 <ShoppingCart className="w-12 h-12 mb-2 opacity-20" />
                 <p>Cart is empty</p>
               </div>
@@ -281,7 +289,7 @@ export default function POSPage() {
                   <div key={item.id} className="p-4 flex gap-3">
                     <div className="flex-1">
                       <p className="font-medium text-sm">{item.name}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         {item.quantity} x {item.unitPrice.toLocaleString()}
                       </p>
                     </div>
@@ -290,7 +298,7 @@ export default function POSPage() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-6 w-6 text-slate-400 hover:text-red-500 -mr-2"
+                        className="h-6 w-6 -mr-2 text-muted-foreground hover:text-red-500"
                         onClick={() => removeFromCart(item.id)}
                       >
                         <Trash2 className="w-3 h-3" />
@@ -302,17 +310,17 @@ export default function POSPage() {
             )}
           </CardContent>
 
-          <div className="p-4 bg-slate-50 border-t space-y-4">
+          <div className="space-y-4 border-t border-border/70 bg-secondary/55 p-4">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Subtotal</span>
+                <span className="text-muted-foreground">Subtotal</span>
                 <span>{cartTotal.toLocaleString()} UGX</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Tax (0%)</span>
+                <span className="text-muted-foreground">Tax (0%)</span>
                 <span>0 UGX</span>
               </div>
-              <div className="flex justify-between font-bold text-lg pt-2 border-t border-slate-200">
+              <div className="flex justify-between border-t border-border/80 pt-2 text-lg font-semibold">
                 <span>Total</span>
                 <span>{cartTotal.toLocaleString()} UGX</span>
               </div>
@@ -330,9 +338,9 @@ export default function POSPage() {
                 </DialogHeader>
                 
                 <div className="py-4 space-y-4">
-                  <div className="text-center p-4 bg-slate-50 rounded-lg">
-                    <p className="text-sm text-slate-500">Amount to Pay</p>
-                    <p className="text-3xl font-bold text-primary">{cartTotal.toLocaleString()} <span className="text-sm font-normal text-slate-400">UGX</span></p>
+                  <div className="rounded-2xl bg-secondary/70 p-4 text-center">
+                    <p className="text-sm text-muted-foreground">Amount to Pay</p>
+                    <p className="text-3xl font-semibold text-foreground">{cartTotal.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">UGX</span></p>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4">
@@ -340,7 +348,7 @@ export default function POSPage() {
                     <Select onValueChange={setPaymentMethod} defaultValue={paymentMethod}>
                       <SelectTrigger className="w-full h-12">
                          <div className="flex items-center gap-2">
-                           <CreditCard className="w-4 h-4 text-slate-500" />
+                           <CreditCard className="w-4 h-4 text-muted-foreground" />
                            <SelectValue placeholder="Select Payment Method" />
                          </div>
                       </SelectTrigger>

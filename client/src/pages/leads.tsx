@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { format, isBefore } from "date-fns";
 import { useData, type Lead } from "@/lib/data-context";
 import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/hooks/use-toast";
 
 type LeadStatus = "new" | "contacted" | "in_progress" | "won" | "lost";
 type LeadPriority = "low" | "normal" | "high";
@@ -16,6 +17,7 @@ type LeadPriority = "low" | "normal" | "high";
 export default function LeadsPage() {
   const { leads, addLead, updateLead, addLeadFollowUp, users, currentUser } = useData();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [form, setForm] = useState({
     customerName: "",
     customerPhone: "",
@@ -34,6 +36,8 @@ export default function LeadsPage() {
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [reminders, setReminders] = useState<{ leadId: string; due: string; name: string }[]>([]);
+  const [isSavingLead, setIsSavingLead] = useState(false);
+  const [isSavingFollowUp, setIsSavingFollowUp] = useState(false);
 
   // Filter: staff sees their own; owner/manager see all
   const filteredLeads = useMemo(() => {
@@ -51,59 +55,84 @@ export default function LeadsPage() {
     });
   }, [leads, filterStatus, filterPriority, filterOwner, filterAssignee, search, user?.role, user?.id]);
 
-  const addOrUpdateLead = () => {
+  const addOrUpdateLead = async () => {
     if (!form.customerName || !form.customerPhone) return;
-    if (editingId) {
-      updateLead(editingId, {
-        customerName: form.customerName,
-        customerPhone: form.customerPhone,
-        customerEmail: form.customerEmail || undefined,
-        source: form.source || undefined,
-        notes: form.notes || undefined,
-        assignedTo: form.assignedTo || undefined,
-        priority: form.priority,
-        nextFollowUpAt: form.nextFollowUpAt || undefined,
+    setIsSavingLead(true);
+    try {
+      if (editingId) {
+        await updateLead(editingId, {
+          customerName: form.customerName,
+          customerPhone: form.customerPhone,
+          customerEmail: form.customerEmail || undefined,
+          source: form.source || undefined,
+          notes: form.notes || undefined,
+          assignedTo: form.assignedTo || undefined,
+          priority: form.priority,
+          nextFollowUpAt: form.nextFollowUpAt || undefined,
+        });
+        toast({ title: "Lead updated", description: `${form.customerName} was updated successfully.` });
+      } else {
+        await addLead({
+          customerName: form.customerName,
+          customerPhone: form.customerPhone,
+          customerEmail: form.customerEmail || undefined,
+          source: form.source || undefined,
+          notes: form.notes || undefined,
+          assignedTo: form.assignedTo || undefined,
+          priority: form.priority,
+          status: "new",
+          nextFollowUpAt: form.nextFollowUpAt || undefined,
+          shopId: undefined,
+        });
+        toast({ title: "Lead added", description: `${form.customerName} is now in the pipeline.` });
+      }
+      setForm({ customerName: "", customerPhone: "", customerEmail: "", source: "Walk-in", priority: "normal", notes: "", assignedTo: user?.id || "", nextFollowUpAt: "" });
+      setEditingId(null);
+    } catch (error) {
+      toast({
+        title: "Could not save lead",
+        description: error instanceof Error ? error.message : "Please review the lead details and try again.",
+        variant: "destructive",
       });
-    } else {
-      addLead({
-        customerName: form.customerName,
-        customerPhone: form.customerPhone,
-        customerEmail: form.customerEmail || undefined,
-        source: form.source || undefined,
-        notes: form.notes || undefined,
-        assignedTo: form.assignedTo || undefined,
-        priority: form.priority,
-        status: "new",
-        nextFollowUpAt: form.nextFollowUpAt || undefined,
-        shopId: undefined,
-      });
+    } finally {
+      setIsSavingLead(false);
     }
-    setForm({ customerName: "", customerPhone: "", customerEmail: "", source: "Walk-in", priority: "normal", notes: "", assignedTo: user?.id || "", nextFollowUpAt: "" });
-    setEditingId(null);
   };
 
-  const addFollowUpEntry = () => {
+  const addFollowUpEntry = async () => {
     if (!followUp.leadId || !followUp.note) return;
-    addLeadFollowUp(followUp.leadId, {
-      by: user?.name || "You",
-      byId: user?.id,
-      note: followUp.note,
-      result: followUp.result || undefined,
-      at: new Date().toISOString(),
-    });
-    if (followUp.nextAt) {
-      updateLead(followUp.leadId, { nextFollowUpAt: followUp.nextAt });
+    setIsSavingFollowUp(true);
+    try {
+      await addLeadFollowUp(followUp.leadId, {
+        by: user?.name || "You",
+        byId: user?.id,
+        note: followUp.note,
+        result: followUp.result || undefined,
+        at: new Date().toISOString(),
+      });
+      if (followUp.nextAt) {
+        await updateLead(followUp.leadId, { nextFollowUpAt: followUp.nextAt });
+      }
+      setFollowUp({ leadId: "", note: "", result: "", nextAt: "" });
+      toast({ title: "Follow-up saved", description: "Lead activity was recorded successfully." });
+    } catch (error) {
+      toast({
+        title: "Could not save follow-up",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingFollowUp(false);
     }
-    setFollowUp({ leadId: "", note: "", result: "", nextAt: "" });
   };
 
   const statusBadge = (status: LeadStatus) => {
     const map: Record<LeadStatus, string> = {
-      new: "bg-blue-50 text-blue-700",
-      contacted: "bg-amber-50 text-amber-700",
-      in_progress: "bg-indigo-50 text-indigo-700",
-      won: "bg-green-50 text-green-700",
-      lost: "bg-red-50 text-red-700",
+      new: "tone-info",
+      contacted: "tone-warning",
+      in_progress: "bg-indigo-50 text-indigo-700 border border-indigo-200",
+      won: "tone-success",
+      lost: "tone-danger",
     };
     return <Badge className={map[status]}>{status.replace("_", " ")}</Badge>;
   };
@@ -117,15 +146,16 @@ export default function LeadsPage() {
   }, [leads, user?.id]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="page-shell">
+      <div className="page-hero flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Leads & Follow-ups</h1>
-          <p className="text-slate-500">Assign to staff, set reminders, and track follow-ups.</p>
+          <div className="page-kicker">Pipeline</div>
+          <h1 className="page-title">Leads & Follow-ups</h1>
+          <p className="page-subtitle">Track outreach, ownership, reminders, and outcomes in a calmer sales pipeline view.</p>
         </div>
-        <div className="text-sm text-slate-600">
+        <div className="text-sm text-muted-foreground">
           {reminders.length > 0 ? (
-            <Badge className="bg-amber-100 text-amber-800">Reminders due: {reminders.length}</Badge>
+            <Badge className="tone-warning">Reminders due: {reminders.length}</Badge>
           ) : (
             <Badge variant="outline">No due reminders</Badge>
           )}
@@ -133,7 +163,7 @@ export default function LeadsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 surface-panel">
           <CardHeader>
             <CardTitle>Leads</CardTitle>
           </CardHeader>
@@ -178,32 +208,32 @@ export default function LeadsPage() {
 
             <div className="space-y-3">
               {filteredLeads.map((lead) => (
-                <div key={lead.id} className="p-4 border rounded-lg bg-white shadow-sm">
+                <div key={lead.id} className="surface-panel p-4 shadow-none">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-900">{lead.customerName}</span>
+                        <span className="font-semibold text-foreground">{lead.customerName}</span>
                         {statusBadge(lead.status)}
                         <Badge variant="outline">{lead.priority.toUpperCase()}</Badge>
                       </div>
-                      <p className="text-sm text-slate-500">{lead.customerPhone} {lead.customerEmail && `• ${lead.customerEmail}`}</p>
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-sm text-muted-foreground">{lead.customerPhone} {lead.customerEmail && `• ${lead.customerEmail}`}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
                         Source: {lead.source || "N/A"} • Created {format(new Date(lead.createdAt), "MMM dd, yyyy")}
                         {lead.createdByName ? ` by ${lead.createdByName}` : ""}
                         {lead.assignedToName ? ` • Assigned to ${lead.assignedToName}` : ""}
                       </p>
                     </div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm text-muted-foreground">
                       Next follow-up: {lead.nextFollowUpAt ? format(new Date(lead.nextFollowUpAt), "PPp") : "Not set"}
                     </div>
                   </div>
-                  {lead.notes && <p className="text-sm text-slate-600 mt-2">Notes: {lead.notes}</p>}
+                  {lead.notes && <p className="text-sm text-muted-foreground mt-2">Notes: {lead.notes}</p>}
                   {lead.followUpHistory.length > 0 && (
-                    <div className="mt-3 text-sm text-slate-600">
+                    <div className="mt-3 text-sm text-muted-foreground">
                       <p className="font-medium mb-1">Follow-ups:</p>
                       <ul className="space-y-1">
                         {lead.followUpHistory.map((f, idx) => (
-                          <li key={idx} className="text-xs text-slate-500">
+                          <li key={idx} className="text-xs text-muted-foreground">
                             {format(new Date(f.at), "PPp")} — {f.by}: {f.note} {f.result && `(${f.result})`}
                           </li>
                         ))}
@@ -236,14 +266,14 @@ export default function LeadsPage() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => updateLead(lead.id, { status: "won", nextFollowUpAt: undefined })}
+                            onClick={() => void updateLead(lead.id, { status: "won", nextFollowUpAt: undefined })}
                           >
                             Mark Won
                           </Button>
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => updateLead(lead.id, { status: "lost", nextFollowUpAt: undefined })}
+                            onClick={() => void updateLead(lead.id, { status: "lost", nextFollowUpAt: undefined })}
                           >
                             Mark Lost
                           </Button>
@@ -253,7 +283,7 @@ export default function LeadsPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => updateLead(lead.id, { status: "in_progress" })}
+                          onClick={() => void updateLead(lead.id, { status: "in_progress" })}
                         >
                           Reopen
                         </Button>
@@ -268,7 +298,7 @@ export default function LeadsPage() {
         </Card>
 
         <div className="space-y-6">
-          <Card>
+        <Card className="surface-panel">
             <CardHeader><CardTitle>{editingId ? "Edit Lead" : "New Lead"}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-2">
@@ -315,7 +345,9 @@ export default function LeadsPage() {
                 <Label>Notes</Label>
                 <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
-              <Button onClick={addOrUpdateLead} className="w-full">Save Lead</Button>
+              <Button onClick={() => void addOrUpdateLead()} className="w-full" disabled={isSavingLead}>
+                {isSavingLead ? "Saving..." : "Save Lead"}
+              </Button>
             </CardContent>
           </Card>
 
@@ -350,7 +382,9 @@ export default function LeadsPage() {
                 <Label>Next follow-up date</Label>
                 <Input type="datetime-local" value={followUp.nextAt} onChange={(e) => setFollowUp({ ...followUp, nextAt: e.target.value })} />
               </div>
-              <Button onClick={addFollowUpEntry} className="w-full" variant="secondary">Save Follow-up</Button>
+              <Button onClick={() => void addFollowUpEntry()} className="w-full" variant="secondary" disabled={isSavingFollowUp}>
+                {isSavingFollowUp ? "Saving..." : "Save Follow-up"}
+              </Button>
             </CardContent>
           </Card>
         </div>

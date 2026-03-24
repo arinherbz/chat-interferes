@@ -178,7 +178,7 @@ export function BarcodeScanner({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex flex-col items-center justify-center min-h-[300px] bg-black/5 rounded-lg overflow-hidden relative">
+        <div className="flex flex-col items-center justify-center min-h-[300px] rounded-[1.5rem] overflow-hidden relative border border-white/70 bg-secondary/40">
           {scanResult ? (
             <div className="p-6 w-full space-y-4" data-testid="scan-result">
               <div className="text-center">
@@ -191,13 +191,13 @@ export function BarcodeScanner({
                   {scanResult.confidence < 100 && ` (${scanResult.confidence}% confidence)`}
                 </Badge>
                 
-                <p className="text-xl font-mono font-bold text-slate-800 break-all" data-testid="scanned-value">
+                <p className="text-xl font-mono font-bold text-foreground break-all" data-testid="scanned-value">
                   {scanResult.cleanedValue}
                 </p>
               </div>
 
               {showValidation && (
-                <div className={`p-3 rounded-lg ${scanResult.validation.valid ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
+                <div className={`p-3 rounded-lg ${scanResult.validation.valid ? "tone-success" : "tone-danger"}`}>
                   <div className="flex items-center gap-2">
                     {scanResult.validation.valid ? (
                       <>
@@ -215,11 +215,11 @@ export function BarcodeScanner({
               )}
 
               {scanResult.deviceInfo && scanResult.deviceInfo.brand && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg" data-testid="detected-device">
-                  <p className="text-sm text-blue-800">
+                <div className="tone-info p-3 rounded-lg" data-testid="detected-device">
+                  <p className="text-sm">
                     <strong>Detected Device:</strong> {scanResult.deviceInfo.brand}
                     {scanResult.deviceInfo.model && ` ${scanResult.deviceInfo.model}`}
-                    <span className="text-blue-600 text-xs ml-2">
+                    <span className="text-xs ml-2 opacity-80">
                       ({scanResult.deviceInfo.confidence}% confidence)
                     </span>
                   </p>
@@ -244,19 +244,19 @@ export function BarcodeScanner({
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsTTSEnabled(!isTTSEnabled)}
-                  className="bg-white/80 hover:bg-white"
+                  className="bg-white/80 hover:bg-white/95 shadow-sm"
                   data-testid="btn-toggle-tts"
                 >
                   {isTTSEnabled ? (
                     <Volume2 className="w-4 h-4 text-primary" />
                   ) : (
-                    <VolumeX className="w-4 h-4 text-slate-400" />
+                    <VolumeX className="w-4 h-4 text-muted-foreground" />
                   )}
                 </Button>
               </div>
             </>
           ) : (
-            <div className="p-6 text-center text-red-500">
+            <div className="p-6 text-center text-rose-600">
               <p>{error}</p>
               <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -266,14 +266,14 @@ export function BarcodeScanner({
           )}
           
           {!scanResult && !error && (
-            <div className="text-xs text-slate-500 mt-4 text-center px-4">
+            <div className="text-xs text-muted-foreground mt-4 text-center px-4">
               Point camera at a barcode or QR code. Ensure good lighting.
             </div>
           )}
         </div>
         
         <DialogFooter className="flex items-center justify-between">
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             {isTTSEnabled ? "TTS enabled - will read scanned value aloud" : "TTS disabled"}
           </div>
         </DialogFooter>

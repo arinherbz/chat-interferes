@@ -74,7 +74,7 @@ export function Scanner({ open, onClose, onDetected, title = "Scan barcode" }: S
             {title}
           </DialogTitle>
         </DialogHeader>
-        <div className="relative rounded-lg overflow-hidden bg-black/80 aspect-video">
+        <div className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/85 aspect-video shadow-[0_18px_40px_rgba(15,23,42,0.18)]">
           <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
           <div className="absolute inset-0 border-4 border-white/20 pointer-events-none" />
           <Button
@@ -86,8 +86,8 @@ export function Scanner({ open, onClose, onDetected, title = "Scan barcode" }: S
             <X className="w-4 h-4" />
           </Button>
         </div>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="text-sm text-slate-600">
+        <div className="surface-panel flex items-center justify-between gap-3 flex-wrap p-4 shadow-none">
+          <div className="text-sm text-muted-foreground">
             Allow camera access or upload a barcode/QR photo to scan.
           </div>
           <Button variant="outline" size="sm" className="flex items-center gap-2" asChild>
@@ -98,7 +98,7 @@ export function Scanner({ open, onClose, onDetected, title = "Scan barcode" }: S
             </label>
           </Button>
         </div>
-        {error && <div className="text-sm text-red-600">{error}</div>}
+        {error && <div className="rounded-xl border border-rose-200 bg-rose-50/90 px-3 py-2 text-sm text-rose-600">{error}</div>}
       </DialogContent>
     </Dialog>
   );

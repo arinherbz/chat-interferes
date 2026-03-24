@@ -43,8 +43,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-3 text-slate-500">
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 className="w-8 h-8 animate-spin" />
           <p className="text-sm">Securing your session...</p>
         </div>
@@ -53,7 +53,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">{children}</div>;
+    return <div className="min-h-screen bg-background flex items-center justify-center p-4">{children}</div>;
   }
 
   const isOwner = user.role === "Owner";
@@ -73,8 +73,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className={cn(
           "group flex items-center gap-3 rounded-md px-3 py-2 transition-all duration-200 cursor-pointer",
           active 
-            ? "bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/20" 
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            ? "bg-accent text-primary font-semibold shadow-sm ring-1 ring-primary/15" 
+            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
         )}
         title={sidebarCollapsed ? label : undefined}
         aria-current={active ? "page" : undefined}>
@@ -86,16 +86,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className="md:hidden bg-white border-b border-slate-200 p-4 flex items-center justify-between sticky top-0 z-50">
+      <div className="md:hidden border-b border-white/70 bg-white/80 backdrop-blur-xl p-4 flex items-center justify-between sticky top-0 z-50">
         <Link href={`/shop-settings/${activeShop?.id || "shop1"}`}> 
-          <div className="flex items-center gap-2 font-bold text-slate-800" aria-label="Edit shop settings">
+          <div className="flex items-center gap-2 font-bold text-foreground" aria-label="Edit shop settings">
             <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
             <div className="flex items-center gap-2">
               <span>{activeShop?.name || "TechPOS"}</span>
               {activeShop?.isMain && (
-                <span className="text-[10px] bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-full">Main</span>
+                <span className="text-[10px] bg-secondary text-muted-foreground font-medium px-2 py-0.5 rounded-full">Main</span>
               )}
             </div>
           </div>
@@ -113,23 +113,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar Navigation */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 shadow-sm transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen flex flex-col",
+        "fixed inset-y-0 left-0 z-40 border-r border-white/70 bg-white/78 backdrop-blur-2xl shadow-[0_18px_45px_rgba(15,23,42,0.08)] transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen flex flex-col",
         sidebarCollapsed ? "md:w-[84px]" : "md:w-72",
         !sidebarCollapsed && "w-72",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="hidden md:flex items-center justify-between border-b border-slate-100 px-4 py-4">
+        <div className="hidden md:flex items-center justify-between border-b border-white/70 px-4 py-4">
           <Link href={`/shop-settings/${activeShop?.id || "shop1"}`} className="flex items-center gap-3 min-w-0" aria-label="Edit shop settings">
            <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
            {!sidebarCollapsed && (
              <div className="flex flex-col min-w-0">
              <div className="flex items-center gap-2">
-               <span className="font-bold text-lg text-slate-800 leading-tight truncate">{activeShop?.name || "TechPOS"}</span>
+               <span className="font-bold text-lg text-foreground leading-tight truncate">{activeShop?.name || "TechPOS"}</span>
                {activeShop?.isMain && (
-                 <span className="text-xs bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-full">Main</span>
+                 <span className="text-xs bg-secondary text-muted-foreground font-medium px-2 py-0.5 rounded-full">Main</span>
                )}
              </div>
-             <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Operations</span>
+             <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Operations</span>
              </div>
            )}
           </Link>
@@ -137,7 +137,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             type="button"
             variant="ghost"
             size="icon"
-            className="text-slate-500 hover:text-slate-900"
+            className="text-muted-foreground hover:text-foreground"
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!sidebarCollapsed}
             onClick={() => {
@@ -150,8 +150,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
 
-        <div className={cn("flex-1 overflow-y-auto py-6 space-y-1", sidebarCollapsed ? "px-2" : "px-4")}>
-          {!sidebarCollapsed && <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Main</div>}
+          <div className={cn("flex-1 overflow-y-auto py-6 space-y-1", sidebarCollapsed ? "px-2" : "px-4")}>
+          {!sidebarCollapsed && <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">Main</div>}
           
           {canSeeDashboard && (
             <NavLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
@@ -163,7 +163,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
              <NavLink href="/closures" icon={FileText} label="Closures" />
           )}
           
-          {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Management</div>}
+          {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">Management</div>}
           
           <NavLink href="/trade-in" icon={RefreshCw} label="Trade-In / Buyback" />
           <NavLink href="/leads" icon={MessageSquare} label="Leads & Follow-ups" />
@@ -174,7 +174,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           
           {canSeeAdmin && (
             <>
-              {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-3">Admin</div>}
+              {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-3">Admin</div>}
               <NavLink href="/expenses" icon={CreditCard} label="Expenses" />
               <NavLink href="/audit-logs" icon={ShieldAlert} label="Audit Logs" />
               {canSeeBaseValues && <NavLink href="/base-values" icon={UserCog} label="Base Values" />}
@@ -183,22 +183,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </>
           )}
 
-          <div className="mt-auto pt-8 border-t border-slate-100">
-             <div className="px-3 py-2 text-sm text-slate-600 flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
+          <div className="mt-auto pt-8 border-t border-white/70">
+             <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground font-bold">
                 {user.name.charAt(0)}
               </div>
               {!sidebarCollapsed && (
                 <div className="flex flex-col min-w-0">
-                  <span className="font-medium text-slate-900 truncate">{user.name}</span>
-                  <span className="text-xs text-slate-500 capitalize">{user.role}</span>
+                  <span className="font-medium text-foreground truncate">{user.name}</span>
+                  <span className="text-xs text-muted-foreground capitalize">{user.role}</span>
                 </div>
               )}
             </div>
             
             <Button 
               variant="ghost" 
-              className={cn("w-full text-red-600 hover:text-red-700 hover:bg-red-50", sidebarCollapsed ? "justify-center" : "justify-start")}
+              className={cn("w-full text-rose-600 hover:text-rose-700 hover:bg-rose-50/80", sidebarCollapsed ? "justify-center" : "justify-start")}
               onClick={logout}
             >
               <LogOut className={cn("h-4 w-4", sidebarCollapsed ? "" : "mr-2")} />

@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Package, Search, Plus, Scan } from "lucide-react";
 import { FileUploader, type UploadedFileMeta } from "@/components/file-uploader";
+import { useToast } from "@/hooks/use-toast";
 
 const productSchema = z.object({
   brand: z.string().optional(),
@@ -32,11 +33,13 @@ import { BarcodeScanner } from "@/components/barcode-scanner";
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useData();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [attachments, setAttachments] = useState<UploadedFileMeta[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const startEdit = (product: typeof products[number]) => {
     form.reset({
@@ -79,22 +82,35 @@ export default function ProductsPage() {
     setIsScannerOpen(false);
   };
 
-  const onSubmit = (values: z.infer<typeof productSchema>) => {
+  const onSubmit = async (values: z.infer<typeof productSchema>) => {
     const imageUrl = attachments[0]?.url || values.imageUrl || undefined;
     const payload = {
       ...values,
       imageUrl
     };
 
-    if (editingId) {
-      updateProduct(editingId, payload);
-    } else {
-      addProduct(payload);
+    setSaving(true);
+    try {
+      if (editingId) {
+        await updateProduct(editingId, payload);
+        toast({ title: "Product updated", description: `${payload.name} was saved successfully.` });
+      } else {
+        await addProduct(payload);
+        toast({ title: "Product added", description: `${payload.name} is now in inventory.` });
+      }
+      setOpen(false);
+      form.reset();
+      setAttachments([]);
+      setEditingId(null);
+    } catch (err: any) {
+      toast({
+        title: editingId ? "Could not update product" : "Could not add product",
+        description: err?.message || "Please review the product details and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
     }
-    setOpen(false);
-    form.reset();
-    setAttachments([]);
-    setEditingId(null);
   };
 
   const filteredProducts = products.filter(p => 
@@ -103,11 +119,12 @@ export default function ProductsPage() {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="page-shell">
+      <div className="page-hero flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Inventory Management</h1>
-          <p className="text-slate-500">Manage products, pricing, and stock levels.</p>
+          <div className="page-kicker">Stock Control</div>
+          <h1 className="page-title">Inventory Management</h1>
+          <p className="page-subtitle">Manage catalog pricing, stock thresholds, and product media with a cleaner inventory workspace.</p>
         </div>
         
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditingId(null); setAttachments([]); form.reset(); } }}>
@@ -252,14 +269,16 @@ export default function ProductsPage() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full">Save Product</Button>
+                <Button type="submit" className="w-full" disabled={saving}>
+                  {saving ? "Saving..." : "Save Product"}
+                </Button>
               </form>
             </Form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Card>
+      <Card className="surface-panel">
         <CardHeader className="pb-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -324,7 +343,18 @@ export default function ProductsPage() {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => deleteProduct(product.id)}
+                      onClick={async () => {
+                        try {
+                          await deleteProduct(product.id);
+                          toast({ title: "Product removed", description: `${product.name} was removed from inventory.` });
+                        } catch (err: any) {
+                          toast({
+                            title: "Could not remove product",
+                            description: err?.message || "Please try again.",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
                     >
                       Remove
                     </Button>

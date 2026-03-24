@@ -62,6 +62,7 @@ export default function DailyClose() {
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -87,8 +88,9 @@ export default function DailyClose() {
     name: "sales",
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    setTimeout(() => {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+    try {
       // Sum up amounts by type in case user adds multiple entries of same type
       const cashCounted = values.cashEntries
         .filter(e => e.type === "Cash")
@@ -141,16 +143,24 @@ export default function DailyClose() {
       } as any;
 
       if (editingId) {
-        updateClosure(editingId, payload);
+        await updateClosure(editingId, payload);
         setEditingId(null);
         setSubmitted(true);
         toast({ title: "Closure Updated", description: "Closure saved.", className: "bg-green-600 text-white border-none" });
       } else {
-        addClosure(payload);
+        await addClosure(payload);
         setSubmitted(true);
         toast({ title: "Closure Submitted", description: "Your daily report has been successfully recorded.", className: "bg-green-600 text-white border-none" });
       }
-    }, 1000);
+    } catch (error) {
+      toast({
+        title: "Could not save closure",
+        description: error instanceof Error ? error.message : "Please review the daily close details and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   // Helper to load an existing closure into the form for editing
@@ -203,8 +213,8 @@ export default function DailyClose() {
 
   if (submitted) {
     return (
-      <div className="max-w-md mx-auto text-center space-y-6 pt-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+      <div className="surface-panel max-w-md mx-auto text-center space-y-6 pt-12 animate-in fade-in slide-in-from-bottom-4 duration-500 p-8">
+        <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mx-auto">
           <CheckCircle2 className="w-12 h-12 text-green-600" />
         </div>
         <div className="space-y-2">
@@ -217,10 +227,11 @@ export default function DailyClose() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto pb-12">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Daily Close</h1>
-        <p className="text-slate-500">Submit end-of-day sales, repairs, and counts.</p>
+    <div className="page-shell max-w-4xl mx-auto pb-12">
+      <div className="page-hero space-y-1">
+        <div className="page-kicker">End Of Day</div>
+        <h1 className="page-title text-2xl sm:text-3xl">Daily Close</h1>
+        <p className="page-subtitle">Submit sales, repairs, payment proofs, and branch totals in one clean daily handoff.</p>
       </div>
 
       <Form {...form}>
@@ -240,8 +251,8 @@ export default function DailyClose() {
           )}
           
           {/* SALES SECTION */}
-          <Card className="border-slate-200 shadow-sm overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+          <Card className="surface-panel overflow-hidden">
+            <CardHeader className="bg-secondary/35 border-b border-white/70 pb-4">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -391,8 +402,8 @@ export default function DailyClose() {
           </Card>
 
           {/* REPAIRS SECTION */}
-          <Card className="border-slate-200 shadow-sm overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+          <Card className="surface-panel overflow-hidden">
+            <CardHeader className="bg-secondary/35 border-b border-white/70 pb-4">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -539,8 +550,8 @@ export default function DailyClose() {
           </Card>
 
           {/* FINANCIALS SECTION */}
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-4">
+          <Card className="surface-panel">
+            <CardHeader className="bg-secondary/35 border-b border-white/70 pb-4">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -651,8 +662,8 @@ export default function DailyClose() {
           </Card>
 
               <div className="pt-4">
-                <Button type="submit" className="w-full h-12 text-lg" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Submitting..." : (editingId ? "Update Closure" : "Submit Daily Close")}
+                <Button type="submit" className="w-full h-12 text-lg" disabled={isSubmitting}>
+                  {isSubmitting ? "Submitting..." : (editingId ? "Update Closure" : "Submit Daily Close")}
                 </Button>
               </div>
         </form>

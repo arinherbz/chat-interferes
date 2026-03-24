@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { apiRequest } from "./api";
+import { apiRequest, clearApiCache } from "./api";
 
 export type UserRole = "Owner" | "Manager" | "Sales";
 
@@ -64,11 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest<{ user: User; preferences?: UserPreferences }>("GET", "/api/auth/me");
+      const res = await apiRequest<{ user: User; preferences?: UserPreferences }>("GET", "/api/auth/me", undefined, { skipCache: true });
       setUser(res.user);
       setPreferences(res.preferences || null);
       applyUiPreferences(res.preferences || null);
     } catch {
+      clearApiCache("/api/auth/me");
       setUser(null);
       setPreferences(null);
     } finally {
@@ -83,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, secret: string) => {
     setLoading(true);
     try {
+      clearApiCache("/api/auth");
       const res = await apiRequest<{ user: User; preferences?: UserPreferences }>("POST", "/api/auth/login", { username, secret });
       setUser(res.user);
       setPreferences(res.preferences || null);
@@ -100,7 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await apiRequest("POST", "/api/auth/logout");
+    try {
+      await apiRequest("POST", "/api/auth/logout");
+    } finally {
+      clearApiCache("/api/auth");
+    }
     setUser(null);
     setPreferences(null);
     setLocation("/");

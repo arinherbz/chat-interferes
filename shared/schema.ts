@@ -172,6 +172,163 @@ export const insertProductSchema = createInsertSchema(products).omit({ id: true,
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
 
+// ===================== DEVICES =====================
+export const devices = pgTable("devices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  brand: text("brand").notNull(),
+  model: text("model").notNull(),
+  imei: text("imei").notNull().unique(),
+  color: text("color").notNull(),
+  storage: text("storage").notNull(),
+  condition: text("condition").notNull(),
+  status: text("status").notNull().default("In Stock"),
+  price: integer("price").notNull().default(0),
+  cost: integer("cost").notNull().default(0),
+  addedAt: timestamp("added_at").defaultNow(),
+  warrantyPeriod: integer("warranty_period"),
+  warrantyExpiresAt: timestamp("warranty_expires_at"),
+  shopId: varchar("shop_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDeviceSchema = createInsertSchema(devices).omit({
+  id: true,
+  addedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertDevice = z.infer<typeof insertDeviceSchema>;
+export type Device = typeof devices.$inferSelect;
+
+// ===================== CUSTOMERS =====================
+export const customers = pgTable("customers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  email: text("email"),
+  joinedAt: timestamp("joined_at").defaultNow(),
+  totalPurchases: integer("total_purchases").notNull().default(0),
+  shopId: varchar("shop_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCustomerSchema = createInsertSchema(customers).omit({
+  id: true,
+  joinedAt: true,
+  totalPurchases: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type Customer = typeof customers.$inferSelect;
+
+// ===================== SALES =====================
+export const sales = pgTable("sales", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  saleNumber: text("sale_number").notNull().unique(),
+  customerId: varchar("customer_id"),
+  customerName: text("customer_name"),
+  items: jsonb("items").notNull(),
+  totalAmount: integer("total_amount").notNull().default(0),
+  paymentMethod: text("payment_method").notNull(),
+  status: text("status").notNull().default("Completed"),
+  soldBy: text("sold_by").notNull(),
+  shopId: varchar("shop_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSalesSchema = createInsertSchema(sales).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertSale = z.infer<typeof insertSalesSchema>;
+export type Sale = typeof sales.$inferSelect;
+
+// ===================== REPAIRS =====================
+export const repairs = pgTable("repairs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  repairNumber: text("repair_number").notNull().unique(),
+  deviceBrand: text("device_brand").notNull(),
+  deviceModel: text("device_model").notNull(),
+  imei: text("imei").notNull(),
+  issueDescription: text("issue_description").notNull(),
+  repairType: text("repair_type").notNull(),
+  price: integer("price").notNull().default(0),
+  cost: integer("cost").notNull().default(0),
+  notes: text("notes"),
+  status: text("status").notNull().default("Pending"),
+  customerName: text("customer_name"),
+  technician: text("technician"),
+  shopId: varchar("shop_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertRepairSchema = createInsertSchema(repairs).omit({
+  id: true,
+  repairNumber: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertRepair = z.infer<typeof insertRepairSchema>;
+export type Repair = typeof repairs.$inferSelect;
+
+// ===================== EXPENSES =====================
+export const expenses = pgTable("expenses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  category: text("category").notNull(),
+  description: text("description").notNull(),
+  amount: integer("amount").notNull().default(0),
+  paymentMethod: text("payment_method"),
+  date: timestamp("date").defaultNow(),
+  recordedBy: text("recorded_by").notNull(),
+  shopId: varchar("shop_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertExpenseSchema = createInsertSchema(expenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertExpense = z.infer<typeof insertExpenseSchema>;
+export type Expense = typeof expenses.$inferSelect;
+
+// ===================== DAILY CLOSURES =====================
+export const closures = pgTable("closures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: timestamp("date").defaultNow(),
+  cashExpected: integer("cash_expected").notNull().default(0),
+  cashCounted: integer("cash_counted").notNull().default(0),
+  mtnAmount: integer("mtn_amount").notNull().default(0),
+  airtelAmount: integer("airtel_amount").notNull().default(0),
+  cardAmount: integer("card_amount").notNull().default(0),
+  expensesTotal: integer("expenses_total").notNull().default(0),
+  variance: integer("variance").notNull().default(0),
+  submittedBy: text("submitted_by").notNull(),
+  submittedAt: timestamp("submitted_at").defaultNow(),
+  status: text("status").notNull().default("pending"),
+  proofs: jsonb("proofs"),
+  shopId: varchar("shop_id"),
+  sales: jsonb("sales"),
+  repairs: jsonb("repairs"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertClosureSchema = createInsertSchema(closures).omit({
+  id: true,
+  date: true,
+  submittedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertClosure = z.infer<typeof insertClosureSchema>;
+export type Closure = typeof closures.$inferSelect;
+
 // ===================== CONDITION QUESTIONS =====================
 // Structured questions for the trade-in wizard (no free-text)
 export const conditionQuestions = pgTable("condition_questions", {
