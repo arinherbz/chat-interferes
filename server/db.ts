@@ -12,19 +12,31 @@ export let pool: pkg.Pool | undefined;
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const usePostgres = !!databaseUrl && /^postgres(?:ql)?:\/\//i.test(databaseUrl);
 
+function resolveSqlitePath(input?: string) {
+  if (!input) {
+    return path.resolve(process.cwd(), ".data", "dev.sqlite");
+  }
+
+  const normalized = input
+    .replace(/^sqlite:(\/\/)?/i, "")
+    .replace(/^file:/i, "");
+
+  return path.isAbsolute(normalized)
+    ? normalized
+    : path.resolve(process.cwd(), normalized);
+}
+
 if (usePostgres) {
   pool = new Pool({ connectionString: databaseUrl });
   _db = drizzlePostgres(pool);
 } else {
-  if (databaseUrl) {
-    console.warn(
-      `[db] Ignoring non-Postgres DATABASE_URL for local fallback: "${databaseUrl}". Using SQLite at .data/dev.sqlite`,
-    );
+  const sqlitePath = resolveSqlitePath(databaseUrl);
+  try {
+    fs.mkdirSync(path.dirname(sqlitePath), { recursive: true });
+  } catch {}
+  if (databaseUrl && !/^sqlite:(\/\/)?/i.test(databaseUrl) && !path.isAbsolute(databaseUrl) && !databaseUrl.startsWith(".")) {
+    console.warn(`[db] Treating non-Postgres DATABASE_URL as a SQLite file path: "${databaseUrl}"`);
   }
-  // Ensure data directory exists
-  const dataDir = path.resolve(process.cwd(), ".data");
-  try { fs.mkdirSync(dataDir, { recursive: true }); } catch {}
-  const sqlitePath = path.join(dataDir, "dev.sqlite");
   const sqlite = new Database(sqlitePath);
   // create minimal tables required by the server when using SQLite fallback
   try {
