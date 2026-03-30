@@ -11,8 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Smartphone, Plus, Search, Tag, DollarSign } from "lucide-react";
-import { format } from "date-fns";
+import { Smartphone, Plus, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const deviceSchema = z.object({
@@ -75,27 +74,27 @@ export default function DevicesPage() {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="w-full min-w-0 space-y-6 md:space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Device Inventory</h1>
-          <p className="text-slate-500">Track unique devices by IMEI/Serial Number.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Device Inventory</h1>
+          <p className="text-sm text-slate-500 sm:text-base">Track unique devices by IMEI/Serial Number.</p>
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="w-full gap-2 sm:w-auto">
               <Plus className="w-4 h-4" />
               Add Device
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Add New Device</DialogTitle>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="brand"
@@ -149,7 +148,7 @@ export default function DevicesPage() {
                   )}
                 />
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <FormField
                     control={form.control}
                     name="color"
@@ -200,7 +199,7 @@ export default function DevicesPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="cost"
@@ -238,7 +237,7 @@ export default function DevicesPage() {
         </Dialog>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
              <CardTitle className="text-sm font-medium">Total Value</CardTitle>
@@ -267,14 +266,14 @@ export default function DevicesPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
             <Input 
               placeholder="Search by IMEI, Model or Brand..." 
-              className="pl-9 max-w-sm" 
+              className="pl-9 sm:max-w-sm" 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Device Info</TableHead>
@@ -289,13 +288,13 @@ export default function DevicesPage() {
               {filteredDevices.map((device) => (
                 <TableRow key={device.id}>
                   <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center">
                         <Smartphone className="w-4 h-4 text-slate-600" />
                       </div>
-                      <div className="flex flex-col">
-                        <span>{device.model}</span>
-                        <span className="text-xs text-slate-500">{device.brand}</span>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate">{device.model}</span>
+                        <span className="truncate text-xs text-slate-500">{device.brand}</span>
                       </div>
                     </div>
                   </TableCell>

@@ -20,6 +20,7 @@ import {
   RefreshCw,
   UserCog,
   FileText,
+  Tags,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen
@@ -40,6 +41,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setSidebarCollapsed(preferences.sidebarCollapsed);
     }
   }, [preferences?.sidebarCollapsed]);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location]);
 
   if (loading) {
     return (
@@ -88,14 +93,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className="md:hidden border-b bg-white p-4 flex items-center justify-between sticky top-0 z-50">
+      <div className="md:hidden border-b bg-white p-4 flex items-center justify-between gap-3 sticky top-0 z-50">
         <Link href={`/shop-settings/${activeShop?.id || "shop1"}`}> 
-          <div className="flex items-center gap-2 font-bold text-foreground" aria-label="Edit shop settings">
+          <div className="flex min-w-0 items-center gap-2 font-bold text-foreground" aria-label="Edit shop settings">
             <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
-            <div className="flex items-center gap-2">
-              <span>{activeShop?.name || "TechPOS"}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate">{activeShop?.name || "TechPOS"}</span>
               {activeShop?.isMain && (
-                <span className="text-[10px] bg-secondary text-muted-foreground font-medium px-2 py-0.5 rounded-full">Main</span>
+                <span className="shrink-0 text-[10px] bg-secondary text-muted-foreground font-medium px-2 py-0.5 rounded-full">Main</span>
               )}
             </div>
           </div>
@@ -113,9 +118,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar Navigation */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 border-r bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen flex flex-col",
+        "fixed inset-y-0 left-0 z-40 w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] border-r bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen md:max-w-none flex flex-col overflow-hidden",
         sidebarCollapsed ? "md:w-[84px]" : "md:w-72",
-        !sidebarCollapsed && "w-72",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="hidden md:flex items-center justify-between border-b px-4 py-5">
@@ -177,6 +181,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Admin</div>}
               <NavLink href="/expenses" icon={CreditCard} label="Expenses" />
               <NavLink href="/audit-logs" icon={ShieldAlert} label="Audit Logs" />
+              {canSeeBaseValues && <NavLink href="/brands" icon={Tags} label="Brands & Models" />}
               {canSeeBaseValues && <NavLink href="/base-values" icon={UserCog} label="Base Values" />}
               {isOwner && <NavLink href="/staff" icon={UserCog} label="Staff" />}
               <NavLink href="/settings" icon={Settings} label="Settings" />
@@ -211,7 +216,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 md:p-6 xl:p-8">
-          <div className="mx-auto max-w-[1640px]">
+          <div className="mx-auto w-full max-w-[1640px] min-w-0">
             {children}
           </div>
         </div>

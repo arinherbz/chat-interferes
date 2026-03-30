@@ -25,6 +25,7 @@ const ClosuresPage = lazy(() => import("@/pages/closures"));
 const AuditLogsPage = lazy(() => import("@/pages/audit-logs"));
 const TradeInPage = lazy(() => import("@/pages/trade-in"));
 const BaseValuesPage = lazy(() => import("@/pages/base-values"));
+const BrandsPage = lazy(() => import("@/pages/brands"));
 const LeadsPage = lazy(() => import("@/pages/leads"));
 const ShopSettingsPage = lazy(() => import("@/pages/shop-settings/[id]"));
 
@@ -113,6 +114,7 @@ function Router() {
           <Route path="/audit-logs" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={AuditLogsPage} />} />
           <Route path="/staff" component={() => <ProtectedRoute roles={["Owner"]} component={StaffPage} />} />
           <Route path="/settings" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={SettingsPage} />} />
+          <Route path="/brands" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BrandsPage} />} />
           <Route path="/base-values" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BaseValuesPage} />} />
           <Route path="/shop-settings/:id" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ShopSettingsPage} />} />
           <Route component={NotFound} />

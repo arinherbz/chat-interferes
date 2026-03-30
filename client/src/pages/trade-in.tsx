@@ -546,19 +546,6 @@ export default function TradeInPage() {
     submitTradeInMutation.mutate();
   };
 
-  const seedBrandsAndModels = async () => {
-    try {
-      const res = await fetch("/api/seed-brands", { method: "POST" });
-      if (!res.ok) throw new Error("Seed failed");
-      await queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/models"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/storages"] });
-      toast({ title: "Brand catalog refreshed", description: "Brands and models have been seeded." });
-    } catch (err: any) {
-      toast({ title: "Seed failed", description: err?.message || "Could not seed brands/models", variant: "destructive" });
-    }
-  };
-
   const getDecisionBadge = (decision: string, status: string) => {
     if (status === "completed") {
       return <Badge className="tone-success">Completed</Badge>;
@@ -673,14 +660,11 @@ export default function TradeInPage() {
                     </div>
                     
                     {brandsList.length === 0 && (
-                      <div className="tone-warning p-4 rounded-lg flex items-center justify-between gap-3">
+                      <div className="tone-warning p-4 rounded-lg">
                         <div>
-                          <p className="font-semibold text-amber-800">No brands seeded</p>
-                          <p className="text-sm text-amber-700">Seed the catalog to load Apple/Samsung and others.</p>
+                          <p className="font-semibold text-amber-800">No brands available</p>
+                          <p className="text-sm text-amber-700">Add brands and models from the admin catalog, then set device base values before processing trade-ins.</p>
                         </div>
-                        <Button size="sm" variant="outline" onClick={seedBrandsAndModels}>
-                          Seed brands
-                        </Button>
                       </div>
                     )}
                     

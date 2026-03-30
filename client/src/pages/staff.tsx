@@ -128,12 +128,12 @@ export default function StaffPage() {
         
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2" onClick={handleAddNew}>
+            <Button className="w-full gap-2 sm:w-auto" onClick={handleAddNew}>
               <Plus className="w-4 h-4" />
               Add Staff Member
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>{editingUser ? "Edit Staff Member" : "Add New Staff"}</DialogTitle>
             </DialogHeader>
@@ -167,7 +167,7 @@ export default function StaffPage() {
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="role"
@@ -266,7 +266,7 @@ export default function StaffPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+                  <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
                 <TableHead>User</TableHead>
@@ -281,16 +281,16 @@ export default function StaffPage() {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
-                        {user.name.charAt(0)}
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
+                          {user.name.charAt(0)}
+                        </div>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate font-medium text-slate-900">{user.name}</span>
+                          <span className="truncate text-xs text-slate-500">{user.email}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-slate-900">{user.name}</span>
-                        <span className="text-xs text-slate-500">{user.email}</span>
-                      </div>
-                    </div>
-                  </TableCell>
+                    </TableCell>
                   <TableCell>
                     <Badge 
                       variant="outline" 
@@ -318,7 +318,7 @@ export default function StaffPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 whitespace-nowrap">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
                         <Edit2 className="w-4 h-4 text-slate-400 hover:text-primary" />
                       </Button>

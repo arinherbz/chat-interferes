@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useData } from "@/lib/data-context";
-import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Package, Search, Plus, Scan } from "lucide-react";
+import { Search, Plus, Scan } from "lucide-react";
 import { FileUploader, type UploadedFileMeta } from "@/components/file-uploader";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,7 +30,6 @@ import { BarcodeScanner } from "@/components/barcode-scanner";
 
 export default function ProductsPage() {
   const { products, addProduct, updateProduct, deleteProduct } = useData();
-  const { user } = useAuth();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -129,12 +126,12 @@ export default function ProductsPage() {
         
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditingId(null); setAttachments([]); form.reset(); } }}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="w-full gap-2 sm:w-auto">
               <Plus className="w-4 h-4" />
               Add Product
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Product" : "Add New Product"}</DialogTitle>
             </DialogHeader>
@@ -280,7 +277,7 @@ export default function ProductsPage() {
 
       <Card className="surface-panel">
         <CardHeader className="pb-3">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
               <Input 
@@ -290,7 +287,7 @@ export default function ProductsPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)}>
+            <Button variant="outline" size="icon" className="w-full sm:w-10" onClick={() => setIsScannerOpen(true)}>
               <Scan className="w-4 h-4" />
             </Button>
           </div>
@@ -301,7 +298,7 @@ export default function ProductsPage() {
           onScan={handleScanResult} 
         />
         <CardContent>
-          <Table>
+          <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Photo</TableHead>
@@ -323,7 +320,7 @@ export default function ProductsPage() {
                       <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center text-xs text-slate-400">No photo</div>
                     )}
                   </TableCell>
-                  <TableCell className="font-medium">{product.name}</TableCell>
+                  <TableCell className="font-medium whitespace-normal">{product.name}</TableCell>
                   <TableCell>
                     <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-slate-100 text-slate-900 hover:bg-slate-200/80">
                       {product.category}
@@ -332,7 +329,8 @@ export default function ProductsPage() {
                   <TableCell>{product.costPrice?.toLocaleString?.() ?? "-"}</TableCell>
                   <TableCell>{product.stock}</TableCell>
                   <TableCell className="text-right">{product.price.toLocaleString()} UGX</TableCell>
-                  <TableCell className="text-right space-x-2">
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2 whitespace-nowrap">
                     <Button
                       variant="outline"
                       size="sm"
@@ -358,6 +356,7 @@ export default function ProductsPage() {
                     >
                       Remove
                     </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

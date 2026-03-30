@@ -10,8 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { Building, CreditCard, Users, Settings as SettingsIcon, Shield } from "lucide-react";
+import { Shield } from "lucide-react";
 
 export default function SettingsPage() {
   const { activeShop, users } = useData();
@@ -30,19 +29,25 @@ export default function SettingsPage() {
   }, [preferences]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="w-full min-w-0 space-y-6 md:space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Settings</h1>
-          <p className="text-slate-500">Manage shop profile, team access, and subscription.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Settings</h1>
+          <p className="text-sm text-slate-500 sm:text-base">Manage shop profile, team access, and subscription.</p>
         </div>
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="team">Team & Access</TabsTrigger>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-1 rounded-xl p-1 sm:max-w-md sm:grid-cols-3">
+          <TabsTrigger value="general" className="w-full px-3 py-2 text-center whitespace-normal">
+            General
+          </TabsTrigger>
+          <TabsTrigger value="team" className="w-full px-3 py-2 text-center whitespace-normal">
+            Team & Access
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="w-full px-3 py-2 text-center whitespace-normal">
+            Billing
+          </TabsTrigger>
         </TabsList>
         
         <TabsContent value="general" className="mt-6 space-y-6">
@@ -90,8 +95,8 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
+              <div className="flex flex-col gap-4 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <p className="font-medium text-slate-900">Compact layout density</p>
                   <p className="text-sm text-slate-500">Tighten spacing for high-information screens.</p>
                 </div>
@@ -132,27 +137,27 @@ export default function SettingsPage() {
 
         <TabsContent value="team" className="mt-6 space-y-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
                  <CardTitle>Team Members</CardTitle>
                  <CardDescription>Manage staff access and roles.</CardDescription>
               </div>
-              <Button variant="outline" size="sm">Invite New User</Button>
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">Invite New User</Button>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
                 {users.map(user => (
-                  <div key={user.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <Avatar>
+                  <div key={user.id} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <Avatar className="shrink-0">
                         <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                       </Avatar>
-                      <div>
-                        <p className="font-medium text-slate-900">{user.name}</p>
-                        <p className="text-sm text-slate-500">{user.email}</p>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-900">{user.name}</p>
+                        <p className="truncate text-sm text-slate-500">{user.email}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                       <Badge variant={user.role === 'Owner' ? 'default' : 'secondary'}>
                         {user.role}
                       </Badge>
@@ -204,7 +209,7 @@ export default function SettingsPage() {
               <CardDescription>You are currently on the <strong>{activeShop.subscriptionPlan.toUpperCase()}</strong> plan.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-6 md:grid-cols-3">
+              <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
                  <div className="border rounded-lg p-6 bg-slate-50 opacity-50">
                     <h3 className="font-bold text-lg">Basic</h3>
                     <p className="text-2xl font-bold mt-2">$29<span className="text-sm font-normal text-slate-500">/mo</span></p>
