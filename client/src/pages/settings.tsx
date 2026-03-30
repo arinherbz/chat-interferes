@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useData } from "@/lib/data-context";
+import { useEffect, useMemo, useState } from "react";
+import { useData, type Role, type User } from "@/lib/data-context";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,15 +10,67 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Shield } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+type SubscriptionPlan = "trial" | "basic" | "pro" | "enterprise";
+
+const PLAN_DETAILS: Array<{
+  id: SubscriptionPlan;
+  name: string;
+  price: string;
+  description: string[];
+}> = [
+  {
+    id: "basic",
+    name: "Basic",
+    price: "$29/mo",
+    description: ["1 Shop", "2 Users", "Basic Reports"],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "$79/mo",
+    description: ["3 Shops", "10 Users", "Advanced Analytics", "API Access"],
+  },
+  {
+    id: "enterprise",
+    name: "Enterprise",
+    price: "Custom",
+    description: ["Unlimited Shops", "Unlimited Users", "Dedicated Support"],
+  },
+];
+
+const EMPTY_MEMBER_FORM = {
+  name: "",
+  email: "",
+  role: "Sales" as Role,
+  pin: "",
+};
 
 export default function SettingsPage() {
-  const { activeShop, users } = useData();
-  const { preferences, updatePreferences } = useAuth();
+  const { activeShop, users, updateShop, addUser, updateUser } = useData();
+  const { user, preferences, updatePreferences } = useAuth();
+  const { toast } = useToast();
+
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
   const [currency, setCurrency] = useState("UGX");
   const [timezone, setTimezone] = useState("UTC");
   const [density, setDensity] = useState<"compact" | "comfortable">("comfortable");
+
+  const [shopName, setShopName] = useState("");
+  const [shopLocation, setShopLocation] = useState("");
+  const [shopSaving, setShopSaving] = useState(false);
+  const [planSaving, setPlanSaving] = useState<SubscriptionPlan | null>(null);
+
+  const [memberDialogOpen, setMemberDialogOpen] = useState(false);
+  const [memberSaving, setMemberSaving] = useState(false);
+  const [editingMember, setEditingMember] = useState<User | null>(null);
+  const [memberForm, setMemberForm] = useState(EMPTY_MEMBER_FORM);
+
+  const canManageTeam = user?.role === "Owner";
+  const canManageBilling = user?.role === "Owner" || user?.role === "Manager";
 
   useEffect(() => {
     if (!preferences) return;
@@ -27,6 +79,149 @@ export default function SettingsPage() {
     setTimezone(preferences.timezone || "UTC");
     setDensity(preferences.density || "comfortable");
   }, [preferences]);
+
+  useEffect(() => {
+    setShopName(activeShop?.name || "");
+    setShopLocation(activeShop?.location || "");
+  }, [activeShop]);
+
+  const memberCounts = useMemo(
+    () =>
+      users.reduce<Record<Role, number>>(
+        (acc, member) => {
+          acc[member.role] += 1;
+          return acc;
+        },
+        { Owner: 0, Manager: 0, Sales: 0 },
+      ),
+    [users],
+  );
+
+  const openInviteDialog = () => {
+    setEditingMember(null);
+    setMemberForm(EMPTY_MEMBER_FORM);
+    setMemberDialogOpen(true);
+  };
+
+  const openEditDialog = (member: User) => {
+    setEditingMember(member);
+    setMemberForm({
+      name: member.name,
+      email: member.email,
+      role: member.role,
+      pin: "",
+    });
+    setMemberDialogOpen(true);
+  };
+
+  const handleSaveShop = async () => {
+    if (!shopName.trim()) {
+      toast({ title: "Shop name required", description: "Enter a shop name before saving.", variant: "destructive" });
+      return;
+    }
+
+    setShopSaving(true);
+    try {
+      await updateShop(activeShop.id, {
+        name: shopName.trim(),
+        location: shopLocation.trim(),
+      });
+      toast({ title: "Saved", description: "Shop profile updated." });
+    } catch (err: any) {
+      toast({
+        title: "Save failed",
+        description: err?.message || "Could not update the shop profile.",
+        variant: "destructive",
+      });
+    } finally {
+      setShopSaving(false);
+    }
+  };
+
+  const handleSaveMember = async () => {
+    if (!memberForm.name.trim() || !memberForm.email.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Name and email are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!editingMember && !memberForm.pin.trim()) {
+      toast({
+        title: "PIN required",
+        description: "New staff accounts need a login PIN.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMemberSaving(true);
+    try {
+      if (editingMember) {
+        await updateUser(editingMember.id, {
+          name: memberForm.name.trim(),
+          email: memberForm.email.trim(),
+          role: memberForm.role,
+          pin: memberForm.pin.trim() || undefined,
+        });
+        toast({ title: "Team updated", description: `${memberForm.name} was updated.` });
+      } else {
+        await addUser({
+          name: memberForm.name.trim(),
+          email: memberForm.email.trim(),
+          role: memberForm.role,
+          shopId: activeShop.id,
+          status: "active",
+          pin: memberForm.pin.trim(),
+        });
+        toast({ title: "User invited", description: `${memberForm.name} can now sign in.` });
+      }
+
+      setMemberDialogOpen(false);
+      setEditingMember(null);
+      setMemberForm(EMPTY_MEMBER_FORM);
+    } catch (err: any) {
+      toast({
+        title: editingMember ? "Update failed" : "Invite failed",
+        description: err?.message || "Could not save the team member.",
+        variant: "destructive",
+      });
+    } finally {
+      setMemberSaving(false);
+    }
+  };
+
+  const handlePlanChange = async (plan: SubscriptionPlan) => {
+    if (!canManageBilling) {
+      toast({
+        title: "Access denied",
+        description: "Only owners or managers can change plans.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (plan === "enterprise") {
+      window.location.href = `mailto:sales@ariostore.local?subject=${encodeURIComponent(`${activeShop.name} enterprise plan request`)}`;
+      return;
+    }
+
+    setPlanSaving(plan);
+    try {
+      await updateShop(activeShop.id, { subscriptionPlan: plan });
+      toast({ title: "Plan updated", description: `${activeShop.name} is now on the ${plan.toUpperCase()} plan.` });
+    } catch (err: any) {
+      toast({
+        title: "Plan change failed",
+        description: err?.message || "Could not update the subscription plan.",
+        variant: "destructive",
+      });
+    } finally {
+      setPlanSaving(null);
+    }
+  };
 
   return (
     <div className="w-full min-w-0 space-y-6 md:space-y-8 animate-in fade-in duration-500">
@@ -49,7 +244,7 @@ export default function SettingsPage() {
             Billing
           </TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="general" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
@@ -115,22 +310,24 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Shop Profile</CardTitle>
-              <CardDescription>Public details about your shop.</CardDescription>
+              <CardDescription>Update the current branch profile used across the app.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
                 <Label htmlFor="shop-name">Shop Name</Label>
-                <Input id="shop-name" defaultValue={activeShop.name} />
+                <Input id="shop-name" value={shopName} onChange={(e) => setShopName(e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="location">Location / Address</Label>
-                <Input id="location" defaultValue={activeShop.location} />
+                <Input id="location" value={shopLocation} onChange={(e) => setShopLocation(e.target.value)} />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="currency">Currency</Label>
-                <Input id="currency" defaultValue={activeShop.currency} disabled />
+                <Input id="currency" value={activeShop.currency} disabled />
               </div>
-              <Button>Save Changes</Button>
+              <Button onClick={handleSaveShop} disabled={shopSaving}>
+                {shopSaving ? "Saving..." : "Save Changes"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -139,36 +336,72 @@ export default function SettingsPage() {
           <Card>
             <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                 <CardTitle>Team Members</CardTitle>
-                 <CardDescription>Manage staff access and roles.</CardDescription>
+                <CardTitle>Team Members</CardTitle>
+                <CardDescription>Manage staff access and roles for this branch.</CardDescription>
               </div>
-              <Button variant="outline" size="sm" className="w-full sm:w-auto">Invite New User</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={openInviteDialog}
+                disabled={!canManageTeam}
+              >
+                Invite New User
+              </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
+              {!canManageTeam && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Team changes require an owner account.
+                </div>
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border bg-slate-50 px-4 py-3">
+                  <div className="text-sm text-slate-500">Owners</div>
+                  <div className="text-2xl font-semibold text-slate-900">{memberCounts.Owner}</div>
+                </div>
+                <div className="rounded-lg border bg-slate-50 px-4 py-3">
+                  <div className="text-sm text-slate-500">Managers</div>
+                  <div className="text-2xl font-semibold text-slate-900">{memberCounts.Manager}</div>
+                </div>
+                <div className="rounded-lg border bg-slate-50 px-4 py-3">
+                  <div className="text-sm text-slate-500">Sales Staff</div>
+                  <div className="text-2xl font-semibold text-slate-900">{memberCounts.Sales}</div>
+                </div>
+              </div>
+
               <div className="space-y-6">
-                {users.map(user => (
-                  <div key={user.id} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                {users.map((member) => (
+                  <div key={member.id} className="flex flex-col gap-4 border-b pb-5 last:border-b-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-4">
                       <Avatar className="shrink-0">
-                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                        <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-900">{user.name}</p>
-                        <p className="truncate text-sm text-slate-500">{user.email}</p>
+                        <p className="truncate font-medium text-slate-900">{member.name}</p>
+                        <p className="truncate text-sm text-slate-500">{member.email}</p>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-                      <Badge variant={user.role === 'Owner' ? 'default' : 'secondary'}>
-                        {user.role}
+                      <Badge variant={member.role === "Owner" ? "default" : "secondary"}>
+                        {member.role === "Sales" ? "Sales Staff" : member.role}
                       </Badge>
-                      <Button variant="ghost" size="sm">Edit</Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={!canManageTeam}
+                        onClick={() => openEditDialog(member)}
+                      >
+                        Edit
+                      </Button>
                     </div>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader>
               <CardTitle>Role Permissions</CardTitle>
@@ -177,21 +410,21 @@ export default function SettingsPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
-                  <Shield className="w-5 h-5 text-primary mt-1" />
+                  <Shield className="mt-1 h-5 w-5 text-primary" />
                   <div>
                     <h4 className="font-medium">Owner</h4>
                     <p className="text-sm text-slate-500">Full access to everything, including billing and sensitive reports.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
-                  <Shield className="w-5 h-5 text-slate-400 mt-1" />
+                  <Shield className="mt-1 h-5 w-5 text-slate-400" />
                   <div>
                     <h4 className="font-medium">Manager</h4>
                     <p className="text-sm text-slate-500">Can manage closures, view most reports, and edit sales/repairs.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
-                  <Shield className="w-5 h-5 text-slate-200 mt-1" />
+                  <Shield className="mt-1 h-5 w-5 text-slate-200" />
                   <div>
                     <h4 className="font-medium">Sales Staff</h4>
                     <p className="text-sm text-slate-500">Can process sales, repairs, and submit daily closures.</p>
@@ -206,45 +439,134 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Subscription Plan</CardTitle>
-              <CardDescription>You are currently on the <strong>{activeShop.subscriptionPlan.toUpperCase()}</strong> plan.</CardDescription>
+              <CardDescription>
+                Your shop is currently on the <strong>{activeShop.subscriptionPlan.toUpperCase()}</strong> plan.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                 <div className="border rounded-lg p-6 bg-slate-50 opacity-50">
-                    <h3 className="font-bold text-lg">Basic</h3>
-                    <p className="text-2xl font-bold mt-2">$29<span className="text-sm font-normal text-slate-500">/mo</span></p>
-                    <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                      <li>• 1 Shop</li>
-                      <li>• 2 Users</li>
-                      <li>• Basic Reports</li>
-                    </ul>
-                 </div>
-                 <div className="border rounded-lg p-6 border-primary bg-primary/5 relative">
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-xs px-2 py-0.5 rounded-full">Current Plan</div>
-                    <h3 className="font-bold text-lg text-primary">Pro</h3>
-                    <p className="text-2xl font-bold mt-2">$79<span className="text-sm font-normal text-slate-500">/mo</span></p>
-                    <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                      <li>• 3 Shops</li>
-                      <li>• 10 Users</li>
-                      <li>• Advanced Analytics</li>
-                      <li>• API Access</li>
-                    </ul>
-                 </div>
-                 <div className="border rounded-lg p-6 bg-slate-50">
-                    <h3 className="font-bold text-lg">Enterprise</h3>
-                    <p className="text-2xl font-bold mt-2">Custom</p>
-                    <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                      <li>• Unlimited Shops</li>
-                      <li>• Unlimited Users</li>
-                      <li>• Dedicated Support</li>
-                    </ul>
-                    <Button variant="outline" className="w-full mt-4">Contact Sales</Button>
-                 </div>
+                {PLAN_DETAILS.map((plan) => {
+                  const isCurrent = activeShop.subscriptionPlan === plan.id;
+                  const isSaving = planSaving === plan.id;
+
+                  return (
+                    <div
+                      key={plan.id}
+                      className={`relative rounded-lg border p-6 ${isCurrent ? "border-primary bg-primary/5" : "bg-slate-50"}`}
+                    >
+                      {isCurrent && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2 py-0.5 text-xs text-white">
+                          Current Plan
+                        </div>
+                      )}
+                      <h3 className={`text-lg font-bold ${isCurrent ? "text-primary" : "text-slate-900"}`}>{plan.name}</h3>
+                      <p className="mt-2 text-2xl font-bold">{plan.price}</p>
+                      <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                        {plan.description.map((item) => (
+                          <li key={item}>• {item}</li>
+                        ))}
+                      </ul>
+                      <Button
+                        variant={plan.id === "enterprise" ? "outline" : isCurrent ? "secondary" : "default"}
+                        className="mt-4 w-full"
+                        disabled={(isCurrent && plan.id !== "enterprise") || !!planSaving}
+                        onClick={() => handlePlanChange(plan.id)}
+                      >
+                        {plan.id === "enterprise"
+                          ? "Contact Sales"
+                          : isSaving
+                            ? "Updating..."
+                            : isCurrent
+                              ? "Current Plan"
+                              : `Switch to ${plan.name}`}
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={memberDialogOpen} onOpenChange={setMemberDialogOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingMember ? "Edit Team Member" : "Invite Team Member"}</DialogTitle>
+            <DialogDescription>
+              {editingMember
+                ? "Update the staff record and optionally reset the login PIN."
+                : "Create a new staff account for the current branch."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="member-name">Full Name</Label>
+              <Input
+                id="member-name"
+                value={memberForm.name}
+                onChange={(e) => setMemberForm((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="member-email">Email</Label>
+              <Input
+                id="member-email"
+                type="email"
+                value={memberForm.email}
+                onChange={(e) => setMemberForm((prev) => ({ ...prev, email: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Role</Label>
+              <Select
+                value={memberForm.role}
+                onValueChange={(value: Role) => setMemberForm((prev) => ({ ...prev, role: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Sales">Sales Staff</SelectItem>
+                  <SelectItem value="Manager">Manager</SelectItem>
+                  <SelectItem value="Owner">Owner</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="member-pin">{editingMember ? "Reset PIN (optional)" : "Login PIN"}</Label>
+              <Input
+                id="member-pin"
+                type="password"
+                value={memberForm.pin}
+                onChange={(e) => setMemberForm((prev) => ({ ...prev, pin: e.target.value }))}
+                placeholder={editingMember ? "Leave blank to keep current PIN" : "Enter a 4-12 digit PIN"}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setMemberDialogOpen(false);
+                setEditingMember(null);
+                setMemberForm(EMPTY_MEMBER_FORM);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveMember} disabled={memberSaving}>
+              {memberSaving ? "Saving..." : editingMember ? "Save Member" : "Invite User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
