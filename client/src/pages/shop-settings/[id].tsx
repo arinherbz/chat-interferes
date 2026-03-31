@@ -1,22 +1,68 @@
 import { useState, useEffect } from "react";
 import { useData, type Shop } from "@/lib/data-context";
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { FileUpload } from "@/components/ui/file-upload";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/api";
+import { Loader2 } from "lucide-react";
 
 export default function ShopSettingsPage() {
   const { id } = useParams();
   const { shops, updateShop } = useData();
   const { toast } = useToast();
-  const [, navigate] = useLocation();
-
-  const shop = shops.find(s => s.id === id) as Shop | undefined;
+  const [shop, setShop] = useState<Shop | null>(null);
+  const [shopLoading, setShopLoading] = useState(true);
+  const [shopMissing, setShopMissing] = useState(false);
   const [form, setForm] = useState<Partial<Shop>>({});
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fromContext = shops.find((entry) => entry.id === id) as Shop | undefined;
+    if (fromContext) {
+      setShop(fromContext);
+      setShopMissing(false);
+      setShopLoading(false);
+      return;
+    }
+
+    if (!id) {
+      setShop(null);
+      setShopMissing(true);
+      setShopLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setShopLoading(true);
+    setShopMissing(false);
+
+    const loadShop = async () => {
+      try {
+        const loaded = await apiRequest<Shop>("GET", `/api/shops/${id}`, undefined, { skipCache: true });
+        if (cancelled) return;
+        setShop(loaded);
+        setShopMissing(false);
+      } catch {
+        if (cancelled) return;
+        setShop(null);
+        setShopMissing(true);
+      } finally {
+        if (!cancelled) {
+          setShopLoading(false);
+        }
+      }
+    };
+
+    void loadShop();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, shops]);
 
   useEffect(() => {
     if (shop) {
@@ -29,7 +75,27 @@ export default function ShopSettingsPage() {
     }
   }, [shop]);
 
-  if (!shop) return <div className="p-6">Shop not found.</div>;
+  if (shopLoading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center p-6">
+        <div className="flex items-center gap-3 text-slate-500">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Loading shop settings...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (shopMissing || !shop) {
+    return (
+      <div className="p-6">
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="text-lg font-semibold text-slate-900">Shop not found</h2>
+          <p className="mt-2 text-sm text-slate-500">The selected shop could not be loaded.</p>
+        </div>
+      </div>
+    );
+  }
 
   const onChange = (field: keyof Shop, value: any) => setForm(prev => ({ ...prev, [field]: value }));
 
