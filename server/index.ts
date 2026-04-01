@@ -62,6 +62,14 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[process:unhandledRejection]", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[process:uncaughtException]", error);
+});
+
 app.use((req, res, next) => {
   const requestId = `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   res.setHeader("X-Request-Id", requestId);

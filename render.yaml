@@ -3,13 +3,18 @@ services:
     name: ariostore-gadgets
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci && npm run check && npm test && npm run build
     startCommand: npm run start
     autoDeploy: true
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production
       - key: HOST
         value: 0.0.0.0
+      - key: PORT
+        value: 10000
       - key: SESSION_SECRET
         generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: true

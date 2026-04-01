@@ -58,6 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     root.dataset.density = prefs.density || "comfortable";
     if (prefs.accentColor) {
       root.style.setProperty("--primary", prefs.accentColor);
+    } else {
+      root.style.removeProperty("--primary");
     }
   };
 
@@ -80,6 +82,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refresh();
   }, []);
+
+  useEffect(() => {
+    if (!preferences || preferences.theme !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncTheme = () => applyUiPreferences(preferences);
+    syncTheme();
+    media.addEventListener("change", syncTheme);
+    return () => media.removeEventListener("change", syncTheme);
+  }, [preferences]);
 
   const login = async (username: string, secret: string) => {
     setLoading(true);
@@ -109,6 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     setPreferences(null);
+    document.documentElement.classList.remove("dark");
+    document.documentElement.style.removeProperty("--primary");
     setLocation("/");
   };
 

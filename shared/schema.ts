@@ -157,6 +157,18 @@ export const products = pgTable("products", {
   category: text("category"),
   brand: text("brand"),
   model: text("model"),
+  slug: text("slug").unique(),
+  description: text("description"),
+  condition: text("condition").default("New"),
+  ram: text("ram"),
+  storage: text("storage"),
+  specs: jsonb("specs"),
+  featured: boolean("featured").default(false),
+  isPublished: boolean("is_published").default(true),
+  isFlashDeal: boolean("is_flash_deal").default(false),
+  flashDealPrice: integer("flash_deal_price"),
+  flashDealEndsAt: timestamp("flash_deal_ends_at"),
+  popularity: integer("popularity").default(0),
   price: integer("price").notNull().default(0),
   costPrice: integer("cost_price").notNull().default(0),
   stock: integer("stock").notNull().default(0),
@@ -171,6 +183,94 @@ export const products = pgTable("products", {
 export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
+
+// ===================== ORDERS =====================
+export const orders = pgTable("orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderNumber: text("order_number").notNull().unique(),
+  shopId: varchar("shop_id").notNull(),
+  customerId: varchar("customer_id"),
+  customerName: text("customer_name").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  customerEmail: text("customer_email"),
+  subtotal: integer("subtotal").notNull().default(0),
+  deliveryFee: integer("delivery_fee").notNull().default(0),
+  total: integer("total").notNull().default(0),
+  paymentMethod: text("payment_method").notNull(),
+  paymentStatus: text("payment_status").notNull().default("PENDING"),
+  channel: text("channel").notNull().default("ONLINE"),
+  status: text("status").notNull().default("PENDING"),
+  deliveryType: text("delivery_type").notNull(),
+  deliveryAddress: text("delivery_address"),
+  assignedStaffId: varchar("assigned_staff_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const orderItems = pgTable("order_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  productId: varchar("product_id").notNull(),
+  productName: text("product_name").notNull(),
+  imei: text("imei"),
+  quantity: integer("quantity").notNull().default(1),
+  unitPrice: integer("unit_price").notNull().default(0),
+  total: integer("total").notNull().default(0),
+});
+
+export const deliveries = pgTable("deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().unique().references(() => orders.id),
+  assignedRiderId: varchar("assigned_rider_id"),
+  status: text("status").notNull().default("PENDING"),
+  address: text("address").notNull(),
+  scheduledAt: timestamp("scheduled_at"),
+  pickedUpAt: timestamp("picked_up_at"),
+  deliveredAt: timestamp("delivered_at"),
+  failureReason: text("failure_reason"),
+  notes: text("notes"),
+});
+
+export const receipts = pgTable("receipts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  pdfUrl: text("pdf_url"),
+  sentVia: jsonb("sent_via").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  shopId: varchar("shop_id").notNull(),
+  type: text("type").notNull(),
+  targetId: varchar("target_id").notNull(),
+  message: text("message").notNull(),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
+export const insertDeliverySchema = createInsertSchema(deliveries).omit({ id: true });
+export const insertReceiptSchema = createInsertSchema(receipts).omit({ id: true, createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type InsertDelivery = z.infer<typeof insertDeliverySchema>;
+export type InsertReceipt = z.infer<typeof insertReceiptSchema>;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+export type Order = typeof orders.$inferSelect;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type Delivery = typeof deliveries.$inferSelect;
+export type Receipt = typeof receipts.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 
 // ===================== DEVICES =====================
 export const devices = pgTable("devices", {

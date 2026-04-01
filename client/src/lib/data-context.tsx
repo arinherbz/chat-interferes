@@ -298,12 +298,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [pollTick, setPollTick] = useState(0);
 
   useEffect(() => {
     if (authUser?.shopId) {
       setActiveShopId(authUser.shopId);
     }
   }, [authUser?.shopId]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    const interval = window.setInterval(() => setPollTick((value) => value + 1), 15000);
+    return () => window.clearInterval(interval);
+  }, [authUser]);
 
   useEffect(() => {
     try {
@@ -362,7 +369,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadProducts();
-  }, [authUser, activeShopId]);
+  }, [authUser, activeShopId, pollTick]);
 
   useEffect(() => {
     const loadDevices = async () => {
@@ -387,7 +394,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadDevices();
-  }, [authUser, activeShopId]);
+  }, [authUser, activeShopId, pollTick]);
 
   useEffect(() => {
     const loadCustomers = async () => {
@@ -412,7 +419,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadCustomers();
-  }, [authUser, activeShopId]);
+  }, [authUser, activeShopId, pollTick]);
 
   useEffect(() => {
     const loadSales = async () => {
@@ -437,7 +444,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadSales();
-  }, [authUser, activeShopId]);
+  }, [authUser, activeShopId, pollTick]);
 
   useEffect(() => {
     const loadRepairs = async () => {
@@ -462,7 +469,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadRepairs();
-  }, [authUser, activeShopId]);
+  }, [authUser, activeShopId, pollTick]);
 
   useEffect(() => {
     const loadExpenses = async () => {
@@ -490,7 +497,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadExpenses();
-  }, [authUser, activeShopId]);
+  }, [authUser, activeShopId, pollTick]);
 
   useEffect(() => {
     const loadClosures = async () => {
@@ -515,7 +522,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadClosures();
-  }, [authUser, activeShopId]);
+  }, [authUser, activeShopId, pollTick]);
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -540,7 +547,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     void loadLeads();
-  }, [authUser, activeShopId]);
+  }, [authUser, activeShopId, pollTick]);
+
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (!authUser) {
+        setNotifications([]);
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        if (activeShopId) params.set("shopId", activeShopId);
+        const list = await apiRequest<any[]>(
+          "GET",
+          `/api/notifications${params.toString() ? `?${params.toString()}` : ""}`,
+          undefined,
+          { skipCache: true },
+        );
+        setNotifications(
+          list.map((item) => ({
+            id: item.id,
+            title: item.type.replaceAll("_", " "),
+            message: item.message,
+            type: "info",
+            read: Boolean(item.read),
+            timestamp: item.createdAt || new Date().toISOString(),
+          })),
+        );
+      } catch {
+        // keep current local state
+      }
+    };
+
+    void loadNotifications();
+  }, [authUser, activeShopId, pollTick]);
 
   const updateShop = async (id: string, updates: Partial<Shop>) => {
     const updated = await apiRequest<Shop>("PATCH", `/api/shops/${id}`, updates);

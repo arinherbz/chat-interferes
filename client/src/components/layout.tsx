@@ -21,6 +21,7 @@ import {
   UserCog,
   FileText,
   Tags,
+  Truck,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen
@@ -58,7 +59,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
+    if (location.startsWith("/store")) {
+      return <>{children}</>;
+    }
     return <div className="min-h-screen bg-background flex items-center justify-center p-4">{children}</div>;
+  }
+
+  if (location.startsWith("/store")) {
+    return <>{children}</>;
   }
 
   const isOwner = user.role === "Owner";
@@ -171,6 +179,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           
           <NavLink href="/trade-in" icon={RefreshCw} label="Trade-In / Buyback" />
           <NavLink href="/leads" icon={MessageSquare} label="Leads & Follow-ups" />
+          <NavLink href="/orders" icon={Package} label="Orders" />
+          <NavLink href="/deliveries" icon={Truck} label="Deliveries" />
           <NavLink href="/devices" icon={Smartphone} label="Devices (IMEI)" />
           {(isOwner || isManager) && <NavLink href="/products" icon={Package} label="Products" />}
           {(isOwner || isManager) && <NavLink href="/customers" icon={Users} label="Customers" />}
