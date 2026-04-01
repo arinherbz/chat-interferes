@@ -1,152 +1,80 @@
-# TechPOS - Full Stack Setup & Quick Start
+# Ariostore Gadgets
 
-## Quick Start (5 minutes)
+Commerce, POS, repairs, delivery, and admin operations system built with Express, React, Drizzle, and Postgres, with SQLite fallback for local development and tests.
 
-### 1. Clone and Setup
+## Local Run
+
 ```bash
-git clone https://github.com/YOUR_USERNAME/Chat-Interface-Builder.git
-cd Chat-Interface-Builder
 npm install
 cp .env.example .env
-```
-
-### 2. Start Development Servers
-```bash
-# Terminal 1: Backend (API on port 5000)
 npm run dev
-
-# Terminal 2: Frontend (UI on port 5001)
-npm run dev:client
 ```
 
-Visit: **http://localhost:5001**
+Default local URL:
 
-### 3. Run Tests
+```text
+http://127.0.0.1:5050
+```
+
+The app serves both API and frontend from the same process in local development.
+
+## Required Checks
+
 ```bash
+npm run check
 npm test
+npm run build
 ```
 
----
+All three should pass before pushing to GitHub or deploying to Render.
 
-## 📋 What's Inside
+## Environment
 
-- **Backend**: Express.js API with SQLite database
-- **Frontend**: React 19 + Vite + TailwindCSS
-- **Database**: Better-sqlite3 with Drizzle ORM
-- **UI**: Radix UI components + Shadcn
-- **Testing**: Vitest
+Copy [.env.example](/Users/ario/ariostore%20ug/Chat-Interface-Builder/.env.example) to `.env` and set:
 
----
+- `DATABASE_URL` to your Neon Postgres connection string for production-like development
+- `SESSION_SECRET` to a strong random value
+- `ALLOWED_ORIGINS` when frontend and backend are hosted on different origins
+- `VITE_API_URL` only when the frontend should call a different API origin
 
-## 🚀 Deployment & CI/CD
+For simple same-origin local development, leave `VITE_API_URL` blank.
 
-**For team deployment, CI/CD setup, and production deployment:**
+## Health Endpoints
 
-→ See [**DEPLOYMENT.md**](./DEPLOYMENT.md) ← for complete guide
+- `/healthz` for basic uptime checks
+- `/readyz` for database readiness checks
+- `/api/system/health` for authenticated owner-only diagnostics
 
-### Quick Deployment Options:
-- **Docker**: `docker-compose up -d`
-- **Heroku**: `git push heroku main`
-- **DigitalOcean/AWS**: Follow DEPLOYMENT.md
+## Deployment
 
----
+Render config lives in [render.yaml](/Users/ario/ariostore%20ug/Chat-Interface-Builder/render.yaml).
 
-## 📦 Key Scripts
+Production expectations:
+
+- Render web service runs `npm run start`
+- Neon Postgres is configured through `DATABASE_URL`
+- `SESSION_COOKIE_SECURE=true`
+- `HOST=0.0.0.0`
+- health check points at `/healthz`
+
+## Main Folders
+
+```text
+client/src/components
+client/src/lib
+client/src/pages
+server
+shared
+script
+```
+
+## Git Workflow
 
 ```bash
-npm run dev          # Start backend (5000)
-npm run dev:client   # Start frontend (5001)
-npm test             # Run tests
-npm run build        # Production build
-npm run check        # TypeScript type check
-npm run db:push      # Sync database schema
+git checkout -b feature/<scope>
+git add <files>
+git commit -m "feat: summary"
+git push -u origin feature/<scope>
 ```
 
----
-
-## 🔑 Environment Variables
-
-Copy `.env.example` to `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` for local development. **Never commit `.env` files.**
-
----
-
-## 🐳 Docker (Local & Team)
-
-```bash
-# Start everything
-docker-compose up -d
-
-# Stop
-docker-compose down
-
-# View logs
-docker-compose logs -f
-```
-
----
-
-## 📚 Folder Structure
-
-```
-├── client/              # React frontend
-│   └── src/
-│       ├── pages/       # Route pages
-│       ├── components/  # Reusable components
-│       └── lib/         # Utilities & hooks
-├── server/              # Express backend
-│   ├── routes.ts        # API routes
-│   ├── db.ts            # Database setup
-│   └── __tests__/       # Backend tests
-├── shared/              # Shared types
-├── migrations/          # Database migrations
-└── script/              # Build & seed scripts
-```
-
----
-
-## 🛠 Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| White screen | Check console (F12) and `npm run dev` logs |
-| Port in use | Change PORT in `.env` or kill: `lsof -i :5000` |
-| Database error | Run `npm install && npm rebuild` |
-| Module not found | `npm install --no-save` |
-
----
-
-## 🔄 Git Workflow (Team)
-
-```bash
-# Create feature branch
-git checkout -b feature/my-feature
-
-# Make changes & commit
-git add .
-git commit -m "feat: description"
-
-# Push & create PR
-git push origin feature/my-feature
-
-# GitHub Actions will test automatically
-# Merge to main after approval
-```
-
----
-
-## 📞 Need Help?
-
-- Check [DEPLOYMENT.md](./DEPLOYMENT.md) for production setup
-- Run `npm test` to verify everything works
-- Check browser console (F12) for frontend errors
-- Check terminal for backend errors
-
----
-
-**Happy coding! 🚀**
+Use feature branches for all active work. Keep `main` production-ready.

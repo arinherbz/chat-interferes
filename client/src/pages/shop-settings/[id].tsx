@@ -131,8 +131,8 @@ export default function ShopSettingsPage() {
         <h1 className="text-2xl sm:text-3xl font-semibold mb-2 break-words">{shop.name} — Settings</h1>
         <p className="text-sm text-slate-500 mb-6">Edit shop details, brand assets, and appearance.</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="md:col-span-1">
+        <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-3">
+          <Card className="self-start md:col-span-1">
             <CardHeader>
               <CardTitle>Brand</CardTitle>
             </CardHeader>

@@ -21,9 +21,14 @@ import {
   type Repair, type InsertRepair, repairs,
   type Expense, type InsertExpense, expenses,
   type Closure, type InsertClosure, closures,
+  type Order, type InsertOrder, orders,
+  type OrderItem, type InsertOrderItem, orderItems,
+  type Delivery, type InsertDelivery, deliveries,
+  type Receipt, type InsertReceipt, receipts,
+  type Notification, type InsertNotification, notifications,
 } from "@shared/schema";
-import { db, pool } from "./db";
-import { eq, and, desc, sql as sqlFn } from "drizzle-orm";
+import { db, pool, sqliteClient } from "./db";
+import { eq, and, desc, sql as sqlFn, inArray, asc } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -113,6 +118,29 @@ export interface IStorage {
   // Sales
   getSales(shopId?: string): Promise<Sale[]>;
   createSale(sale: InsertSale): Promise<Sale>;
+
+  // Orders
+  getOrders(filters?: { shopId?: string; status?: string; assignedStaffId?: string }): Promise<Order[]>;
+  getOrder(id: string): Promise<Order | undefined>;
+  getOrderByNumber(orderNumber: string): Promise<Order | undefined>;
+  createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order>;
+  updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined>;
+  getOrderItems(orderId: string): Promise<OrderItem[]>;
+
+  // Deliveries
+  getDeliveries(filters?: { status?: string; assignedRiderId?: string }): Promise<Delivery[]>;
+  getDeliveryByOrderId(orderId: string): Promise<Delivery | undefined>;
+  updateDelivery(id: string, data: Partial<InsertDelivery>): Promise<Delivery | undefined>;
+  upsertDelivery(data: InsertDelivery): Promise<Delivery>;
+
+  // Receipts
+  createReceipt(receipt: InsertReceipt): Promise<Receipt>;
+  getReceiptsByOrderId(orderId: string): Promise<Receipt[]>;
+
+  // Notifications
+  getNotifications(shopId?: string): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationRead(id: string): Promise<Notification | undefined>;
 
   // Repairs
   getRepairs(shopId?: string): Promise<Repair[]>;
@@ -578,12 +606,134 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProduct(product: import("@shared/schema").InsertProduct): Promise<import("@shared/schema").Product> {
-    const [created] = await db.insert(products).values(product).returning();
+    if (sqliteClient && !pool) {
+      const id = (globalThis as any).crypto?.randomUUID?.() || `product-${Date.now()}`;
+      sqliteClient
+        .prepare(`
+          INSERT INTO products (
+            id, name, category, brand, model, slug, description, condition, ram, storage, specs,
+            featured, is_published, is_flash_deal, flash_deal_price, flash_deal_ends_at, popularity,
+            price, cost_price, stock, min_stock, sku, image_url, shop_id, created_at, updated_at
+          ) VALUES (
+            @id, @name, @category, @brand, @model, @slug, @description, @condition, @ram, @storage, @specs,
+            @featured, @isPublished, @isFlashDeal, @flashDealPrice, @flashDealEndsAt, @popularity,
+            @price, @costPrice, @stock, @minStock, @sku, @imageUrl, @shopId, @createdAt, @updatedAt
+          )
+        `)
+        .run({
+          id,
+          name: product.name,
+          category: product.category ?? null,
+          brand: product.brand ?? null,
+          model: product.model ?? null,
+          slug: product.slug ?? null,
+          description: product.description ?? null,
+          condition: product.condition ?? "New",
+          ram: product.ram ?? null,
+          storage: product.storage ?? null,
+          specs: product.specs ? JSON.stringify(product.specs) : null,
+          featured: Number(Boolean(product.featured)),
+          isPublished: product.isPublished === false ? 0 : 1,
+          isFlashDeal: Number(Boolean(product.isFlashDeal)),
+          flashDealPrice: product.flashDealPrice ?? null,
+          flashDealEndsAt: product.flashDealEndsAt ? new Date(product.flashDealEndsAt as any).toISOString() : null,
+          popularity: product.popularity ?? 0,
+          price: product.price ?? 0,
+          costPrice: product.costPrice ?? 0,
+          stock: product.stock ?? 0,
+          minStock: product.minStock ?? 0,
+          sku: product.sku ?? null,
+          imageUrl: product.imageUrl ?? null,
+          shopId: product.shopId ?? null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      const [created] = await db.select().from(products).where(eq(products.id, id));
+      return created;
+    }
+
+    const normalizedProduct = this.stripUndefined({
+      ...product,
+      featured: product.featured === undefined ? undefined : Number(Boolean(product.featured)),
+      isPublished: product.isPublished === undefined ? undefined : Number(Boolean(product.isPublished)),
+      isFlashDeal: product.isFlashDeal === undefined ? undefined : Number(Boolean(product.isFlashDeal)),
+    }) as typeof product;
+    const [created] = await db.insert(products).values(normalizedProduct).returning();
     return created;
   }
 
   async updateProduct(id: string, data: Partial<import("@shared/schema").InsertProduct>): Promise<import("@shared/schema").Product | undefined> {
-    const [updated] = await db.update(products).set({ ...data, updatedAt: new Date() }).where(eq(products.id, id)).returning();
+    if (sqliteClient && !pool) {
+      const existing = await this.getProduct(id);
+      if (!existing) return undefined;
+      const next = { ...existing, ...data };
+      sqliteClient
+        .prepare(`
+          UPDATE products SET
+            name = @name,
+            category = @category,
+            brand = @brand,
+            model = @model,
+            slug = @slug,
+            description = @description,
+            condition = @condition,
+            ram = @ram,
+            storage = @storage,
+            specs = @specs,
+            featured = @featured,
+            is_published = @isPublished,
+            is_flash_deal = @isFlashDeal,
+            flash_deal_price = @flashDealPrice,
+            flash_deal_ends_at = @flashDealEndsAt,
+            popularity = @popularity,
+            price = @price,
+            cost_price = @costPrice,
+            stock = @stock,
+            min_stock = @minStock,
+            sku = @sku,
+            image_url = @imageUrl,
+            shop_id = @shopId,
+            updated_at = @updatedAt
+          WHERE id = @id
+        `)
+        .run({
+          id,
+          name: next.name,
+          category: next.category ?? null,
+          brand: next.brand ?? null,
+          model: next.model ?? null,
+          slug: next.slug ?? null,
+          description: (next as any).description ?? null,
+          condition: (next as any).condition ?? "New",
+          ram: (next as any).ram ?? null,
+          storage: (next as any).storage ?? null,
+          specs: (next as any).specs ? JSON.stringify((next as any).specs) : null,
+          featured: Number(Boolean((next as any).featured)),
+          isPublished: (next as any).isPublished === false ? 0 : 1,
+          isFlashDeal: Number(Boolean((next as any).isFlashDeal)),
+          flashDealPrice: (next as any).flashDealPrice ?? null,
+          flashDealEndsAt: (next as any).flashDealEndsAt ? new Date((next as any).flashDealEndsAt).toISOString() : null,
+          popularity: (next as any).popularity ?? 0,
+          price: next.price ?? 0,
+          costPrice: next.costPrice ?? 0,
+          stock: next.stock ?? 0,
+          minStock: next.minStock ?? 0,
+          sku: next.sku ?? null,
+          imageUrl: next.imageUrl ?? null,
+          shopId: next.shopId ?? null,
+          updatedAt: new Date().toISOString(),
+        });
+      const [updated] = await db.select().from(products).where(eq(products.id, id));
+      return updated;
+    }
+
+    const normalizedData = this.stripUndefined({
+      ...data,
+      featured: data.featured === undefined ? undefined : Number(Boolean(data.featured)),
+      isPublished: data.isPublished === undefined ? undefined : Number(Boolean(data.isPublished)),
+      isFlashDeal: data.isFlashDeal === undefined ? undefined : Number(Boolean(data.isFlashDeal)),
+    }) as Partial<import("@shared/schema").InsertProduct>;
+    const [updated] = await db.update(products).set({ ...normalizedData, updatedAt: new Date() }).where(eq(products.id, id)).returning();
     return updated;
   }
 
@@ -649,6 +799,121 @@ export class DatabaseStorage implements IStorage {
   async createSale(sale: InsertSale): Promise<Sale> {
     const [created] = await db.insert(sales).values(sale).returning();
     return created;
+  }
+
+  // ==================== ORDERS ====================
+  async getOrders(filters?: { shopId?: string; status?: string; assignedStaffId?: string }): Promise<Order[]> {
+    const clauses = [];
+    if (filters?.shopId) clauses.push(eq(orders.shopId, filters.shopId));
+    if (filters?.status) clauses.push(eq(orders.status, filters.status));
+    if (filters?.assignedStaffId) clauses.push(eq(orders.assignedStaffId, filters.assignedStaffId));
+
+    if (clauses.length > 0) {
+      return db.select().from(orders).where(and(...clauses)).orderBy(desc(orders.createdAt));
+    }
+    return db.select().from(orders).orderBy(desc(orders.createdAt));
+  }
+
+  async getOrder(id: string): Promise<Order | undefined> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, id));
+    return order;
+  }
+
+  async getOrderByNumber(orderNumber: string): Promise<Order | undefined> {
+    const [order] = await db.select().from(orders).where(eq(orders.orderNumber, orderNumber));
+    return order;
+  }
+
+  async createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order> {
+    const [created] = await db.insert(orders).values(order).returning();
+    if (items.length > 0) {
+      await db.insert(orderItems).values(items.map((item) => ({ ...item, orderId: created.id })));
+    }
+    return created;
+  }
+
+  async updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined> {
+    const [updated] = await db
+      .update(orders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(orders.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getOrderItems(orderId: string): Promise<OrderItem[]> {
+    return db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).orderBy(asc(orderItems.productName));
+  }
+
+  // ==================== DELIVERIES ====================
+  async getDeliveries(filters?: { status?: string; assignedRiderId?: string }): Promise<Delivery[]> {
+    const clauses = [];
+    if (filters?.status) clauses.push(eq(deliveries.status, filters.status));
+    if (filters?.assignedRiderId) clauses.push(eq(deliveries.assignedRiderId, filters.assignedRiderId));
+
+    if (clauses.length > 0) {
+      return db.select().from(deliveries).where(and(...clauses)).orderBy(desc(deliveries.scheduledAt));
+    }
+    return db.select().from(deliveries).orderBy(desc(deliveries.scheduledAt));
+  }
+
+  async getDeliveryByOrderId(orderId: string): Promise<Delivery | undefined> {
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.orderId, orderId));
+    return delivery;
+  }
+
+  async updateDelivery(id: string, data: Partial<InsertDelivery>): Promise<Delivery | undefined> {
+    const [updated] = await db.update(deliveries).set(data).where(eq(deliveries.id, id)).returning();
+    return updated;
+  }
+
+  async upsertDelivery(data: InsertDelivery): Promise<Delivery> {
+    const existing = await this.getDeliveryByOrderId(data.orderId);
+    if (existing) {
+      const [updated] = await db
+        .update(deliveries)
+        .set(data)
+        .where(eq(deliveries.orderId, data.orderId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(deliveries).values(data).returning();
+    return created;
+  }
+
+  // ==================== RECEIPTS ====================
+  async createReceipt(receipt: InsertReceipt): Promise<Receipt> {
+    const [created] = await db.insert(receipts).values(receipt).returning();
+    return created;
+  }
+
+  async getReceiptsByOrderId(orderId: string): Promise<Receipt[]> {
+    return db.select().from(receipts).where(eq(receipts.orderId, orderId)).orderBy(desc(receipts.createdAt));
+  }
+
+  // ==================== NOTIFICATIONS ====================
+  async getNotifications(shopId?: string): Promise<Notification[]> {
+    if (shopId) {
+      return db.select().from(notifications).where(eq(notifications.shopId, shopId)).orderBy(desc(notifications.createdAt));
+    }
+    return db.select().from(notifications).orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [created] = await db
+      .insert(notifications)
+      .values({ ...notification, read: Number(Boolean(notification.read)) } as unknown as InsertNotification)
+      .returning();
+    return created;
+  }
+
+  async markNotificationRead(id: string): Promise<Notification | undefined> {
+    const [updated] = await db
+      .update(notifications)
+      .set({ read: Number(true) } as unknown as Partial<InsertNotification>)
+      .where(eq(notifications.id, id))
+      .returning();
+    return updated;
   }
 
   // ==================== REPAIRS ====================

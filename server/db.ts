@@ -9,6 +9,7 @@ import path from "path";
 
 let _db: any;
 export let pool: pkg.Pool | undefined;
+export let sqliteClient: any;
 const databaseUrl = process.env.DATABASE_URL?.trim();
 const usePostgres = !!databaseUrl && /^postgres(?:ql)?:\/\//i.test(databaseUrl);
 
@@ -38,6 +39,7 @@ if (usePostgres) {
     console.warn(`[db] Treating non-Postgres DATABASE_URL as a SQLite file path: "${databaseUrl}"`);
   }
   const sqlite = new Database(sqlitePath);
+  sqliteClient = sqlite;
   // create minimal tables required by the server when using SQLite fallback
   try {
     // expose a gen_random_uuid() function in SQLite to mimic Postgres default
@@ -107,6 +109,18 @@ if (usePostgres) {
         category TEXT,
         brand TEXT,
         model TEXT,
+        slug TEXT UNIQUE,
+        description TEXT,
+        condition TEXT DEFAULT 'New',
+        ram TEXT,
+        storage TEXT,
+        specs TEXT,
+        featured INTEGER DEFAULT 0,
+        is_published INTEGER DEFAULT 1,
+        is_flash_deal INTEGER DEFAULT 0,
+        flash_deal_price INTEGER,
+        flash_deal_ends_at TEXT,
+        popularity INTEGER DEFAULT 0,
         price INTEGER DEFAULT 0,
         cost_price INTEGER DEFAULT 0,
         stock INTEGER DEFAULT 0,
@@ -382,7 +396,91 @@ if (usePostgres) {
         sort_order INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1
       );
+
+      CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY,
+        order_number TEXT NOT NULL UNIQUE,
+        shop_id TEXT NOT NULL,
+        customer_id TEXT,
+        customer_name TEXT NOT NULL,
+        customer_phone TEXT NOT NULL,
+        customer_email TEXT,
+        subtotal INTEGER DEFAULT 0,
+        delivery_fee INTEGER DEFAULT 0,
+        total INTEGER DEFAULT 0,
+        payment_method TEXT NOT NULL,
+        payment_status TEXT DEFAULT 'PENDING',
+        channel TEXT DEFAULT 'ONLINE',
+        status TEXT DEFAULT 'PENDING',
+        delivery_type TEXT NOT NULL,
+        delivery_address TEXT,
+        assigned_staff_id TEXT,
+        notes TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS order_items (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        imei TEXT,
+        quantity INTEGER DEFAULT 1,
+        unit_price INTEGER DEFAULT 0,
+        total INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS deliveries (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL UNIQUE,
+        assigned_rider_id TEXT,
+        status TEXT DEFAULT 'PENDING',
+        address TEXT NOT NULL,
+        scheduled_at TEXT,
+        picked_up_at TEXT,
+        delivered_at TEXT,
+        failure_reason TEXT,
+        notes TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS receipts (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        pdf_url TEXT,
+        sent_via TEXT,
+        created_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        shop_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        message TEXT NOT NULL,
+        read INTEGER DEFAULT 0,
+        created_at TEXT
+      );
     `);
+    const sqliteMigrations = [
+      "ALTER TABLE products ADD COLUMN slug TEXT",
+      "ALTER TABLE products ADD COLUMN description TEXT",
+      "ALTER TABLE products ADD COLUMN condition TEXT DEFAULT 'New'",
+      "ALTER TABLE products ADD COLUMN ram TEXT",
+      "ALTER TABLE products ADD COLUMN storage TEXT",
+      "ALTER TABLE products ADD COLUMN specs TEXT",
+      "ALTER TABLE products ADD COLUMN featured INTEGER DEFAULT 0",
+      "ALTER TABLE products ADD COLUMN is_published INTEGER DEFAULT 1",
+      "ALTER TABLE products ADD COLUMN is_flash_deal INTEGER DEFAULT 0",
+      "ALTER TABLE products ADD COLUMN flash_deal_price INTEGER",
+      "ALTER TABLE products ADD COLUMN flash_deal_ends_at TEXT",
+      "ALTER TABLE products ADD COLUMN popularity INTEGER DEFAULT 0",
+    ];
+    for (const statement of sqliteMigrations) {
+      try {
+        sqlite.exec(statement);
+      } catch {}
+    }
   } catch (err) {
     // ignore schema creation errors
   }

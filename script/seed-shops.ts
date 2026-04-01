@@ -58,7 +58,7 @@ async function main() {
       const id = (globalThis as any).crypto?.randomUUID?.() || `shop-${Date.now()}`;
       const now = new Date().toISOString();
       sqlite.prepare(`INSERT INTO shops (id,name,slug,description,address,phone,email,timezone,is_main,currency,subscription_plan,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-        id, "Kampala Main", "kampala-main", "Main Kampala store", "Kampala Road", "+256 700 000000", "kampala@store.local", "Africa/Kampala", 1, "UGX", "pro", now, now
+        id, "Kampala Main", "kampala-main", "Main Kampala store", "Kampala Road", "+256 756 524407", "kampala@store.local", "Africa/Kampala", 1, "UGX", "pro", now, now
       );
       console.log("Created shop:", id);
       sqlite.close();
@@ -86,7 +86,7 @@ async function main() {
     slug: "kampala-main",
     description: "Main Kampala store",
     address: "Kampala Road",
-    phone: "+256 700 000000",
+    phone: "+256 756 524407",
     email: "kampala@store.local",
     timezone: "Africa/Kampala",
     isMain: true,

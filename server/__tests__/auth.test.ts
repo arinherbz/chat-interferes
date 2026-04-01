@@ -375,6 +375,73 @@ describe("authentication", () => {
     expect(updatedDevice.status).toBe("Sold");
   });
 
+  it("creates an online order and restores stock when cancelled", async () => {
+    const username = uniqueUsername("auth-order");
+    const password = "OrderFlow!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Order Manager",
+      email: `${username}@example.com`,
+      role: "Owner",
+      status: "active",
+      shopId: null,
+    });
+
+    const product = await storage.createProduct({
+      name: "Order Test Charger",
+      category: "Accessories",
+      price: 45000,
+      costPrice: 20000,
+      stock: 3,
+      minStock: 1,
+      shopId: null,
+    });
+
+    const checkoutRes = await fetch(`${baseUrl}/api/store/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Online Buyer",
+        customerPhone: "0700000002",
+        customerEmail: "buyer@example.com",
+        deliveryType: "KAMPALA",
+        deliveryAddress: "Kampala Road",
+        deliveryFee: 15000,
+        paymentMethod: "MTN_MOMO",
+        items: [{ productId: product.id, quantity: 1 }],
+      }),
+    });
+    expect(checkoutRes.status).toBe(201);
+    const order = await checkoutRes.json();
+    expect(order.orderNumber).toBeTruthy();
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+
+    const productAfterOrder = await storage.getProduct(product.id);
+    expect(productAfterOrder?.stock).toBe(2);
+
+    const cancelRes = await fetch(`${baseUrl}/api/orders/${order.id}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: setCookie!,
+      },
+      body: JSON.stringify({ status: "CANCELLED" }),
+    });
+    expect(cancelRes.status).toBe(200);
+
+    const productAfterCancel = await storage.getProduct(product.id);
+    expect(productAfterCancel?.stock).toBe(3);
+  });
+
   it("creates repairs and updates their status through authenticated routes", async () => {
     const username = uniqueUsername("auth-repair");
     const password = "RepairFlow!123";

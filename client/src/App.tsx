@@ -28,6 +28,16 @@ const BaseValuesPage = lazy(() => import("@/pages/base-values"));
 const BrandsPage = lazy(() => import("@/pages/brands"));
 const LeadsPage = lazy(() => import("@/pages/leads"));
 const ShopSettingsPage = lazy(() => import("@/pages/shop-settings/[id]"));
+const OrdersPage = lazy(() => import("@/pages/orders"));
+const DeliveriesPage = lazy(() => import("@/pages/deliveries"));
+const StoreHomePage = lazy(() => import("@/pages/store-home"));
+const StoreProductsPage = lazy(() => import("@/pages/store-products"));
+const StoreProductDetailPage = lazy(() => import("@/pages/store-product-detail"));
+const StoreCartPage = lazy(() => import("@/pages/store-cart"));
+const StoreCheckoutPage = lazy(() => import("@/pages/store-checkout"));
+const StoreConfirmationPage = lazy(() => import("@/pages/store-confirmation"));
+const StoreAccountPage = lazy(() => import("@/pages/store-account"));
+const StoreOrderTrackingPage = lazy(() => import("@/pages/store-order-tracking"));
 
 function AppShellFallback() {
   return (
@@ -106,6 +116,8 @@ function Router() {
           <Route path="/closures" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ClosuresPage} />} />
           <Route path="/trade-in" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={TradeInPage} />} />
           <Route path="/products" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ProductsPage} />} />
+          <Route path="/orders" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={OrdersPage} />} />
+          <Route path="/deliveries" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DeliveriesPage} />} />
           <Route path="/devices" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DevicesPage} />} />
           <Route path="/customers" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={CustomersPage} />} />
           <Route path="/repairs" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={RepairsPage} />} />
@@ -117,6 +129,14 @@ function Router() {
           <Route path="/brands" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BrandsPage} />} />
           <Route path="/base-values" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BaseValuesPage} />} />
           <Route path="/shop-settings/:id" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ShopSettingsPage} />} />
+          <Route path="/store" component={StoreHomePage} />
+          <Route path="/store/products" component={StoreProductsPage} />
+          <Route path="/store/products/:slug" component={StoreProductDetailPage} />
+          <Route path="/store/cart" component={StoreCartPage} />
+          <Route path="/store/checkout" component={StoreCheckoutPage} />
+          <Route path="/store/confirmation" component={StoreConfirmationPage} />
+          <Route path="/store/account" component={StoreAccountPage} />
+          <Route path="/store/track" component={StoreOrderTrackingPage} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

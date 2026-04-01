@@ -98,6 +98,50 @@
   --chart-5: 32 85% 58%;
 }
 
+.dark {
+  --background: 222 47% 8%;
+  --foreground: 210 40% 96%;
+
+  --card: 222 40% 11%;
+  --card-foreground: 210 40% 96%;
+
+  --popover: 222 40% 11%;
+  --popover-foreground: 210 40% 96%;
+
+  --primary: 221 83% 61%;
+  --primary-foreground: 222 47% 10%;
+
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 96%;
+
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 70%;
+
+  --accent: 217 33% 20%;
+  --accent-foreground: 210 40% 96%;
+
+  --destructive: 0 72% 56%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 142 60% 42%;
+  --success-foreground: 0 0% 100%;
+
+  --warning: 38 92% 55%;
+  --warning-foreground: 222 47% 10%;
+
+  --border: 217 26% 22%;
+  --input: 217 26% 22%;
+  --ring: 221 83% 61%;
+  --button-outline: hsl(217 26% 22%);
+  --secondary-border: hsl(217 26% 22%);
+
+  --chart-1: 221 83% 61%;
+  --chart-2: 196 80% 56%;
+  --chart-3: 271 81% 66%;
+  --chart-4: 142 60% 48%;
+  --chart-5: 35 92% 62%;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -105,11 +149,19 @@
   html {
     color-scheme: light;
   }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
     @apply font-sans antialiased bg-background text-foreground;
     background-image:
       radial-gradient(circle at top left, rgba(255, 255, 255, 0.98), transparent 28%),
       linear-gradient(180deg, #ffffff 0%, #f8fafc 32%, #f8fafc 100%);
+  }
+  .dark body {
+    background-image:
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.1), transparent 24%),
+      linear-gradient(180deg, #09090b 0%, #0f172a 42%, #111827 100%);
   }
   #root {
     min-height: 100vh;
@@ -123,6 +175,10 @@
   .page-hero {
     @apply rounded-[1.25rem] border bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)];
   }
+  .dark .page-hero {
+    @apply bg-card;
+    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
+  }
   .page-kicker {
     @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
   }
@@ -134,6 +190,12 @@
   }
   .surface-panel {
     @apply rounded-xl border bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)];
+  }
+  .dark .surface-panel,
+  .dark .stat-card,
+  .dark .section-card {
+    @apply bg-card;
+    box-shadow: 0 10px 28px rgba(2, 6, 23, 0.3);
   }
   .surface-muted {
     @apply rounded-xl border border-border bg-secondary;

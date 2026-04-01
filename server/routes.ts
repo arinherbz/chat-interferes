@@ -213,10 +213,103 @@ const closureStatusUpdateSchema = z.object({
   status: z.enum(["pending", "confirmed", "flagged"]),
 });
 
+const storefrontCartItemSchema = z.object({
+  productId: z.string().min(1),
+  quantity: z.number().int().positive(),
+});
+
+const orderCreateSchema = z.object({
+  shopId: z.string().optional(),
+  customerId: z.string().optional(),
+  customerName: z.string().min(1),
+  customerPhone: z.string().min(10),
+  customerEmail: z.string().email().optional().or(z.literal("")),
+  items: z.array(storefrontCartItemSchema).min(1),
+  deliveryType: z.enum(["PICKUP", "KAMPALA", "UPCOUNTRY"]),
+  deliveryAddress: z.string().optional(),
+  deliveryFee: z.number().int().nonnegative().default(0),
+  paymentMethod: z.enum(["MTN_MOMO", "AIRTEL_MONEY", "CASH_ON_DELIVERY", "PAY_AT_STORE"]),
+  paymentStatus: z.enum(["PENDING", "PAID", "PARTIAL"]).default("PENDING"),
+  channel: z.enum(["ONLINE", "POS"]).default("ONLINE"),
+  notes: z.string().optional(),
+  assignedStaffId: z.string().optional(),
+  status: z.enum(["PENDING", "CONFIRMED", "PACKED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "RETURNED"]).default("PENDING"),
+});
+
+const orderStatusUpdateSchema = z.object({
+  status: z.enum(["PENDING", "CONFIRMED", "PACKED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "RETURNED"]),
+  paymentStatus: z.enum(["PENDING", "PAID", "PARTIAL"]).optional(),
+  assignedStaffId: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const deliveryStatusUpdateSchema = z.object({
+  status: z.enum(["PENDING", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "FAILED"]),
+  failureReason: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const deliveryAssignSchema = z.object({
+  assignedRiderId: z.string().min(1),
+  scheduledAt: z.string().datetime().optional().or(z.literal("")),
+  notes: z.string().optional(),
+});
+
+const notificationReadSchema = z.object({
+  read: z.boolean().default(true),
+});
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function toEastAfricaDate(input?: string | Date | null) {
+  if (!input) return null;
+  const date = typeof input === "string" ? new Date(input) : input;
+  return new Intl.DateTimeFormat("en-UG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Africa/Kampala",
+  }).format(date);
+}
+
+function formatUGX(amount: number) {
+  return `${Math.round(amount).toLocaleString("en-US")} UGX`;
+}
+
+function normalizeUgPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("256")) return `+${digits}`;
+  if (digits.startsWith("0")) return `+256${digits.slice(1)}`;
+  if (digits.length === 9) return `+256${digits}`;
+  return phone.startsWith("+") ? phone : `+${digits}`;
+}
+
+function sanitizeErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
+function allowedOriginsFromEnv() {
+  return (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 type LoginWindow = { count: number; firstAttemptTs: number };
 const loginAttempts = new Map<string, LoginWindow>();
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
+
+type RateLimitWindow = { count: number; firstTs: number };
+const writeRateLimits = new Map<string, RateLimitWindow>();
+const WRITE_LIMIT_WINDOW_MS = 60 * 1000;
+const WRITE_LIMIT_MAX = 120;
 
 const idempotencyCache = new Map<string, { status: number; payload: unknown; storedAt: number }>();
 const IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
@@ -228,6 +321,35 @@ export async function registerRoutes(
   // Railway and similar hosts sit behind reverse proxies.
   // Trust proxy headers so session/cookie handling works correctly.
   app.set("trust proxy", true);
+
+  app.get("/healthz", async (_req: Request, res: Response) => {
+    res.json({
+      status: "ok",
+      service: "ariostore-gadgets",
+      time: new Date().toISOString(),
+      uptimeSec: Math.floor(process.uptime()),
+    });
+  });
+
+  app.get("/readyz", async (_req: Request, res: Response) => {
+    try {
+      if (pool) {
+        await pool.query("select 1");
+      }
+
+      res.json({
+        status: "ready",
+        database: pool ? "connected" : "sqlite-fallback",
+        time: new Date().toISOString(),
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: "not_ready",
+        database: "unreachable",
+        message: error instanceof Error ? error.message : "Database connection failed",
+      });
+    }
+  });
 
   // Ensure session table exists when using Postgres-backed sessions.
   if (pool) {
@@ -258,6 +380,83 @@ export async function registerRoutes(
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS "IDX_user_preferences_user_id" ON user_preferences (user_id);`);
+    await pool.query(`
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS slug text;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS description text;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS condition text DEFAULT 'New';
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS ram text;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS storage text;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS specs jsonb;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS featured boolean DEFAULT false;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS is_published boolean DEFAULT true;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS is_flash_deal boolean DEFAULT false;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS flash_deal_price integer;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS flash_deal_ends_at timestamp(6);
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS popularity integer DEFAULT 0;
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_products_slug" ON products (slug);`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_number text NOT NULL UNIQUE,
+        shop_id varchar NOT NULL,
+        customer_id varchar,
+        customer_name text NOT NULL,
+        customer_phone text NOT NULL,
+        customer_email text,
+        subtotal integer NOT NULL DEFAULT 0,
+        delivery_fee integer NOT NULL DEFAULT 0,
+        total integer NOT NULL DEFAULT 0,
+        payment_method text NOT NULL,
+        payment_status text NOT NULL DEFAULT 'PENDING',
+        channel text NOT NULL DEFAULT 'ONLINE',
+        status text NOT NULL DEFAULT 'PENDING',
+        delivery_type text NOT NULL,
+        delivery_address text,
+        assigned_staff_id varchar,
+        notes text,
+        created_at timestamp(6) DEFAULT now(),
+        updated_at timestamp(6) DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS order_items (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_id varchar NOT NULL,
+        product_id varchar NOT NULL,
+        product_name text NOT NULL,
+        imei text,
+        quantity integer NOT NULL DEFAULT 1,
+        unit_price integer NOT NULL DEFAULT 0,
+        total integer NOT NULL DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS deliveries (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_id varchar NOT NULL UNIQUE,
+        assigned_rider_id varchar,
+        status text NOT NULL DEFAULT 'PENDING',
+        address text NOT NULL,
+        scheduled_at timestamp(6),
+        picked_up_at timestamp(6),
+        delivered_at timestamp(6),
+        failure_reason text,
+        notes text
+      );
+      CREATE TABLE IF NOT EXISTS receipts (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        order_id varchar NOT NULL,
+        pdf_url text,
+        sent_via jsonb DEFAULT '[]'::jsonb,
+        created_at timestamp(6) DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS notifications (
+        id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+        shop_id varchar NOT NULL,
+        type text NOT NULL,
+        target_id varchar NOT NULL,
+        message text NOT NULL,
+        read boolean NOT NULL DEFAULT false,
+        created_at timestamp(6) DEFAULT now()
+      );
+    `);
   }
 
   if (process.env.NODE_ENV === "production" && !pool) {
@@ -411,6 +610,25 @@ export async function registerRoutes(
     next();
   });
 
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    const allowedOrigins = allowedOriginsFromEnv();
+
+    if (origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Requested-With");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS");
+    }
+
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+
+    next();
+  });
+
   app.use("/api", (req, res, next) => {
     const method = req.method.toUpperCase();
     if (!["POST", "PATCH", "PUT", "DELETE"].includes(method)) return next();
@@ -425,6 +643,28 @@ export async function registerRoutes(
     } catch {
       return res.status(403).json({ message: "Invalid origin" });
     }
+    next();
+  });
+
+  app.use("/api", (req, res, next) => {
+    const method = req.method.toUpperCase();
+    if (!["POST", "PATCH", "PUT", "DELETE"].includes(method)) return next();
+
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const key = `${ip}:${method}`;
+    const now = Date.now();
+    const current = writeRateLimits.get(key);
+
+    if (!current || now - current.firstTs > WRITE_LIMIT_WINDOW_MS) {
+      writeRateLimits.set(key, { count: 1, firstTs: now });
+      return next();
+    }
+
+    if (current.count >= WRITE_LIMIT_MAX) {
+      return res.status(429).json({ message: "Too many write requests. Please slow down." });
+    }
+
+    writeRateLimits.set(key, { ...current, count: current.count + 1 });
     next();
   });
 
@@ -466,10 +706,10 @@ export async function registerRoutes(
     next();
   });
 
-  // Require auth for all API routes except auth endpoints
+  // Require auth for all API routes except auth and store endpoints
   app.use("/api", (req, res, next) => {
-    // Allow unauthenticated access only to auth bootstrap/login endpoints.
-    if (req.path.startsWith("/auth")) return next();
+    // Allow unauthenticated access to auth bootstrap/login endpoints and public store endpoints.
+    if (req.path.startsWith("/auth") || req.path.startsWith("/store")) return next();
     return requireAuth(req, res, next);
   });
 
@@ -741,6 +981,7 @@ export async function registerRoutes(
 
     try {
       const payload = parsed.data;
+      const computedTotal = payload.items.reduce((sum, item) => sum + item.totalPrice, 0);
 
       for (const item of payload.items) {
         if (!item.productId) continue;
@@ -770,7 +1011,7 @@ export async function registerRoutes(
         customerId: payload.customerId || null,
         customerName: payload.customerName || "Walk-in Customer",
         items: payload.items,
-        totalAmount: payload.totalAmount,
+        totalAmount: computedTotal,
         paymentMethod: payload.paymentMethod,
         status: payload.status,
         soldBy: payload.soldBy,
@@ -811,6 +1052,713 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error creating sale:", error);
       res.status(500).json({ message: "Failed to create sale" });
+    }
+  });
+
+  const hydrateOrder = async (orderId: string) => {
+    const order = await storage.getOrder(orderId);
+    if (!order) return null;
+    const items = await storage.getOrderItems(order.id);
+    const delivery = await storage.getDeliveryByOrderId(order.id);
+    const receiptList = await storage.getReceiptsByOrderId(order.id);
+    return { ...order, items, delivery, receipts: receiptList };
+  };
+
+  const resolveShopId = async (requestedShopId?: string | null) => {
+    if (requestedShopId) return requestedShopId;
+    const shops = await storage.getShops();
+    return shops[0]?.id ?? "shop1";
+  };
+
+  const buildValidatedCart = async (items: Array<{ productId: string; quantity: number }>, shopId?: string) => {
+    const scopedProducts = await storage.getProducts(shopId);
+    const allProducts = shopId ? [...scopedProducts, ...(await storage.getProducts()).filter((product) => !product.shopId)] : scopedProducts;
+    const productMap = new Map(allProducts.map((product) => [product.id, product]));
+    const normalizedItems = [];
+    let subtotal = 0;
+
+    for (const item of items) {
+      const product = productMap.get(item.productId);
+      if (!product) {
+        throw new Error(`Product ${item.productId} not found`);
+      }
+      if ((product.isPublished ?? true) === false) {
+        throw new Error(`${product.name} is not available online`);
+      }
+      if (product.stock < item.quantity) {
+        throw new Error(`${product.name} only has ${product.stock} item(s) left`);
+      }
+
+      const flashDealActive =
+        product.isFlashDeal &&
+        product.flashDealPrice &&
+        (!product.flashDealEndsAt || new Date(product.flashDealEndsAt) > new Date());
+      const unitPrice = flashDealActive ? product.flashDealPrice! : product.price;
+      const total = unitPrice * item.quantity;
+      subtotal += total;
+      normalizedItems.push({ product, quantity: item.quantity, unitPrice, total });
+    }
+
+    return { items: normalizedItems, subtotal };
+  };
+
+  const restoreOrderStock = async (orderId: string) => {
+    const items = await storage.getOrderItems(orderId);
+    for (const item of items) {
+      const product = await storage.getProduct(item.productId);
+      if (!product) continue;
+      await storage.updateProduct(product.id, {
+        stock: product.stock + item.quantity,
+      });
+    }
+  };
+
+  const reserveOrderStock = async (items: Array<{ product: any; quantity: number }>) => {
+    for (const item of items) {
+      await storage.updateProduct(item.product.id, {
+        stock: Math.max(0, item.product.stock - item.quantity),
+        popularity: (item.product.popularity ?? 0) + item.quantity,
+      });
+    }
+  };
+
+  const createOrderFromPayload = async (
+    payload: z.infer<typeof orderCreateSchema>,
+    fallbackShopId?: string | null,
+  ) => {
+    if (payload.deliveryType !== "PICKUP" && !payload.deliveryAddress?.trim()) {
+      throw new Error("Delivery address is required for delivery orders.");
+    }
+    const shopId = await resolveShopId(payload.shopId || fallbackShopId || null);
+    const customerPhone = normalizeUgPhone(payload.customerPhone);
+    const { items, subtotal } = await buildValidatedCart(payload.items, shopId);
+    const deliveryFee = payload.deliveryType === "UPCOUNTRY" ? 0 : payload.deliveryFee;
+    const total = subtotal + deliveryFee;
+    const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
+
+    const existingCustomers = await storage.getCustomers(shopId);
+    let matchedCustomer = existingCustomers.find((customer) => normalizeUgPhone(customer.phone) === customerPhone);
+    if (!matchedCustomer) {
+      matchedCustomer = await storage.createCustomer({
+        name: payload.customerName,
+        phone: customerPhone,
+        email: payload.customerEmail || null,
+        shopId,
+      });
+    }
+
+    const created = await storage.createOrder(
+      {
+        orderNumber,
+        shopId,
+        customerId: payload.customerId || matchedCustomer.id || null,
+        customerName: payload.customerName,
+        customerPhone,
+        customerEmail: payload.customerEmail || null,
+        subtotal,
+        deliveryFee,
+        total,
+        paymentMethod: payload.paymentMethod,
+        paymentStatus: payload.paymentStatus,
+        channel: payload.channel,
+        status: payload.status,
+        deliveryType: payload.deliveryType,
+        deliveryAddress: payload.deliveryAddress || null,
+        assignedStaffId: payload.assignedStaffId || null,
+        notes: payload.notes || null,
+      },
+      items.map((item) => ({
+        orderId: "" as never,
+        productId: item.product.id,
+        productName: item.product.name,
+        imei: null,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        total: item.total,
+      })),
+    );
+
+    await reserveOrderStock(items);
+
+    if (payload.deliveryType !== "PICKUP" && payload.deliveryAddress) {
+      await storage.upsertDelivery({
+        orderId: created.id,
+        assignedRiderId: null,
+        status: "PENDING",
+        address: payload.deliveryAddress,
+        scheduledAt: null,
+        pickedUpAt: null,
+        deliveredAt: null,
+        failureReason: null,
+        notes: payload.notes || null,
+      });
+    }
+
+    await storage.createNotification({
+      shopId,
+      type: "ORDER_CREATED",
+      targetId: created.id,
+      message: `New ${payload.channel.toLowerCase()} order ${orderNumber} from ${payload.customerName}`,
+      read: false,
+    });
+
+    await storage.incrementCustomerPurchases(matchedCustomer.id);
+
+    return hydrateOrder(created.id);
+  };
+
+  app.post("/api/orders", async (req: Request, res: Response) => {
+    const parsed = orderCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid order payload", details: parsed.error.errors });
+    }
+
+    try {
+      const hydrated = await createOrderFromPayload(parsed.data, req.currentUser?.shopId || null);
+      res.status(201).json(hydrated);
+    } catch (error: any) {
+      console.error("Error creating order:", error);
+      res.status(500).json({ message: error?.message || "Failed to create order" });
+    }
+  });
+
+  app.get("/api/orders", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const filters = {
+        shopId: (req.query.shopId as string) || req.currentUser?.shopId || undefined,
+        status: (req.query.status as string) || undefined,
+        assignedStaffId:
+          req.currentUser?.role === "Sales"
+            ? req.currentUser.id
+            : ((req.query.assignedStaffId as string) || undefined),
+      };
+      const list = await storage.getOrders(filters);
+      const items = await Promise.all(list.map((order) => hydrateOrder(order.id)));
+      res.json(items.filter(Boolean));
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  app.get("/api/orders/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const order = await hydrateOrder(req.params.id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+      res.json(order);
+    } catch (error) {
+      console.error("Error fetching order:", error);
+      res.status(500).json({ message: "Failed to fetch order" });
+    }
+  });
+
+  app.patch("/api/orders/:id/status", requireAuth, async (req: Request, res: Response) => {
+    const parsed = orderStatusUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid status payload", details: parsed.error.errors });
+    }
+
+    try {
+      const existing = await storage.getOrder(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Order not found" });
+
+      const nextStatus = parsed.data.status;
+      const wasTerminal = ["CANCELLED", "RETURNED"].includes(existing.status);
+      const becomesTerminal = ["CANCELLED", "RETURNED"].includes(nextStatus);
+      const isReactivation = wasTerminal && !becomesTerminal;
+
+      if (isReactivation) {
+        const items = await storage.getOrderItems(existing.id);
+        const enriched = await Promise.all(
+          items.map(async (item) => ({
+            quantity: item.quantity,
+            product: await storage.getProduct(item.productId),
+          })),
+        );
+        const missing = enriched.find((item) => !item.product || item.product.stock < item.quantity);
+        if (missing) {
+          return res.status(409).json({ message: "Cannot reopen order because stock is no longer available." });
+        }
+      }
+
+      const updated = await storage.updateOrder(req.params.id, parsed.data);
+      if (!updated) return res.status(404).json({ message: "Order not found" });
+
+      if (!wasTerminal && becomesTerminal) {
+        await restoreOrderStock(updated.id);
+        const delivery = await storage.getDeliveryByOrderId(updated.id);
+        if (delivery) {
+          await storage.updateDelivery(delivery.id, {
+            status: "FAILED",
+            failureReason: `Order ${updated.status.toLowerCase()}`,
+          });
+        }
+      }
+      if (isReactivation) {
+        const items = await storage.getOrderItems(updated.id);
+        const enriched = await Promise.all(
+          items.map(async (item) => ({
+            quantity: item.quantity,
+            product: await storage.getProduct(item.productId),
+          })),
+        );
+        const missing = enriched.find((item) => !item.product || item.product.stock < item.quantity);
+        await reserveOrderStock(enriched as Array<{ product: any; quantity: number }>);
+      }
+
+      if (parsed.data.status === "OUT_FOR_DELIVERY" || parsed.data.status === "DELIVERED") {
+        const delivery = await storage.getDeliveryByOrderId(updated.id);
+        if (delivery) {
+          await storage.updateDelivery(delivery.id, {
+            status: parsed.data.status === "DELIVERED" ? "DELIVERED" : "IN_TRANSIT",
+            deliveredAt: parsed.data.status === "DELIVERED" ? new Date() : delivery.deliveredAt,
+          });
+        }
+      }
+
+      await storage.createNotification({
+        shopId: updated.shopId,
+        type: "ORDER_STATUS",
+        targetId: updated.id,
+        message: `Order ${updated.orderNumber} updated to ${parsed.data.status}`,
+        read: false,
+      });
+
+      const order = await hydrateOrder(updated.id);
+      res.json(order);
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      res.status(500).json({ message: "Failed to update order status" });
+    }
+  });
+
+  const sendOrderReceipt = async (req: Request, res: Response) => {
+    try {
+      const order = await hydrateOrder(req.params.id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      const shop = await storage.getShop(order.shopId);
+      const html = `<!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>${order.orderNumber} Receipt</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 32px; color: #111827; }
+          .wrap { max-width: 720px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 24px; padding: 32px; }
+          .muted { color: #6b7280; font-size: 12px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { text-align: left; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+          .right { text-align: right; }
+          .total { font-weight: 700; font-size: 18px; }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <h1>${shop?.name || "TechPOS"} Receipt</h1>
+          <p class="muted">${shop?.address || ""} ${shop?.phone ? `• ${shop.phone}` : ""}</p>
+          <p><strong>Order:</strong> ${order.orderNumber}<br/><strong>Date:</strong> ${toEastAfricaDate(order.createdAt)}<br/><strong>Customer:</strong> ${order.customerName}<br/><strong>Phone:</strong> ${order.customerPhone}</p>
+          <table>
+            <thead><tr><th>Item</th><th>Qty</th><th class="right">Amount</th></tr></thead>
+            <tbody>
+              ${order.items.map((item) => `<tr><td>${item.productName}</td><td>${item.quantity}</td><td class="right">${formatUGX(item.total)}</td></tr>`).join("")}
+              <tr><td colspan="2">Subtotal</td><td class="right">${formatUGX(order.subtotal)}</td></tr>
+              <tr><td colspan="2">Delivery</td><td class="right">${formatUGX(order.deliveryFee)}</td></tr>
+              <tr><td colspan="2" class="total">Total</td><td class="right total">${formatUGX(order.total)}</td></tr>
+            </tbody>
+          </table>
+          <p><strong>Payment:</strong> ${order.paymentMethod} (${order.paymentStatus})</p>
+          <p class="muted">Thank you for shopping with ${shop?.name || "TechPOS"}.</p>
+        </div>
+      </body>
+      </html>`;
+
+      const receipt = await storage.createReceipt({
+        orderId: order.id,
+        pdfUrl: null,
+        sentVia: [],
+      });
+
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Content-Disposition", `inline; filename="${order.orderNumber}.html"`);
+      res.setHeader("X-Receipt-Id", receipt.id);
+      res.send(html);
+    } catch (error) {
+      console.error("Error generating receipt:", error);
+      res.status(500).json({ message: "Failed to generate receipt" });
+    }
+  };
+
+  app.get("/api/orders/:id/receipt", requireAuth, sendOrderReceipt);
+  app.post("/api/orders/:id/receipt", requireAuth, sendOrderReceipt);
+
+  app.get("/api/deliveries", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const filters = {
+        status: (req.query.status as string) || undefined,
+        assignedRiderId:
+          req.currentUser?.role === "Sales"
+            ? req.currentUser.id
+            : ((req.query.assignedRiderId as string) || undefined),
+      };
+      const list = await storage.getDeliveries(filters);
+      const payload = await Promise.all(
+        list.map(async (delivery) => ({
+          ...delivery,
+          order: await storage.getOrder(delivery.orderId),
+        })),
+      );
+      res.json(payload.filter((delivery) => !shopId || delivery.order?.shopId === shopId));
+    } catch (error) {
+      console.error("Error fetching deliveries:", error);
+      res.status(500).json({ message: "Failed to fetch deliveries" });
+    }
+  });
+
+  app.patch("/api/deliveries/:id/status", requireAuth, async (req: Request, res: Response) => {
+    const parsed = deliveryStatusUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid delivery status payload", details: parsed.error.errors });
+    }
+
+    try {
+      const nextData: Record<string, unknown> = { ...parsed.data };
+      if (parsed.data.status === "PICKED_UP") nextData.pickedUpAt = new Date();
+      if (parsed.data.status === "DELIVERED") nextData.deliveredAt = new Date();
+      const updated = await storage.updateDelivery(req.params.id, nextData);
+      if (!updated) return res.status(404).json({ message: "Delivery not found" });
+
+      if (updated.orderId) {
+        const mappedOrderStatus =
+          parsed.data.status === "DELIVERED"
+            ? "DELIVERED"
+            : parsed.data.status === "IN_TRANSIT"
+              ? "OUT_FOR_DELIVERY"
+              : undefined;
+        if (mappedOrderStatus) {
+          await storage.updateOrder(updated.orderId, { status: mappedOrderStatus });
+        }
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating delivery status:", error);
+      res.status(500).json({ message: "Failed to update delivery status" });
+    }
+  });
+
+  app.post("/api/deliveries/:id/assign", requireAuth, async (req: Request, res: Response) => {
+    const parsed = deliveryAssignSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid delivery assignment payload", details: parsed.error.errors });
+    }
+
+    try {
+      const updated = await storage.updateDelivery(req.params.id, {
+        assignedRiderId: parsed.data.assignedRiderId,
+        status: "ASSIGNED",
+        scheduledAt: parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null,
+        notes: parsed.data.notes || null,
+      });
+      if (!updated) return res.status(404).json({ message: "Delivery not found" });
+      const order = await storage.getOrder(updated.orderId);
+      if (order) {
+        await storage.createNotification({
+          shopId: order.shopId,
+          type: "DELIVERY_ASSIGNED",
+          targetId: updated.id,
+          message: `Delivery assigned for order ${order.orderNumber}`,
+          read: false,
+        });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error assigning delivery:", error);
+      res.status(500).json({ message: "Failed to assign delivery" });
+    }
+  });
+
+  app.get("/api/notifications", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const list = await storage.getNotifications(shopId);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.patch("/api/notifications/:id", requireAuth, async (req: Request, res: Response) => {
+    const parsed = notificationReadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid notification payload", details: parsed.error.errors });
+    }
+
+    try {
+      const updated = parsed.data.read
+        ? await storage.markNotificationRead(req.params.id)
+        : undefined;
+      if (!updated) return res.status(404).json({ message: "Notification not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating notification:", error);
+      res.status(500).json({ message: "Failed to update notification" });
+    }
+  });
+
+  app.get("/api/store/products", async (req: Request, res: Response) => {
+    try {
+      const shopId = (req.query.shopId as string) || undefined;
+      const q = ((req.query.q as string) || "").toLowerCase().trim();
+      const brand = (req.query.brand as string) || "";
+      const condition = (req.query.condition as string) || "";
+      const ram = (req.query.ram as string) || "";
+      const storageSize = (req.query.storage as string) || "";
+      const minPrice = req.query.minPrice ? Number(req.query.minPrice) : undefined;
+      const maxPrice = req.query.maxPrice ? Number(req.query.maxPrice) : undefined;
+      const category = (req.query.category as string) || "";
+      const sort = (req.query.sort as string) || "popular";
+
+      let list = await storage.getProducts(shopId);
+      list = list.filter((product) => (product.isPublished ?? true) !== false);
+
+      if (q) {
+        list = list.filter((product) =>
+          [product.name, product.brand, product.model, product.category, product.description]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(q)),
+        );
+      }
+      if (brand) list = list.filter((product) => (product.brand || "").toLowerCase() === brand.toLowerCase());
+      if (condition) list = list.filter((product) => (product.condition || "New").toLowerCase() === condition.toLowerCase());
+      if (ram) list = list.filter((product) => (product.ram || "").toLowerCase() === ram.toLowerCase());
+      if (storageSize) list = list.filter((product) => (product.storage || "").toLowerCase() === storageSize.toLowerCase());
+      if (category) list = list.filter((product) => (product.category || "").toLowerCase() === category.toLowerCase());
+      if (minPrice !== undefined) list = list.filter((product) => product.price >= minPrice);
+      if (maxPrice !== undefined) list = list.filter((product) => product.price <= maxPrice);
+
+      list = [...list].sort((a, b) => {
+        if (sort === "price-asc") return a.price - b.price;
+        if (sort === "newest") return +new Date(b.createdAt || 0) - +new Date(a.createdAt || 0);
+        if (sort === "stock") return b.stock - a.stock;
+        return (b.popularity ?? 0) - (a.popularity ?? 0);
+      });
+
+      res.json(
+        list.map((product) => ({
+          ...product,
+          slug: product.slug || `${slugify(product.name)}-${product.id.slice(0, 6)}`,
+          priceLabel: formatUGX(product.price),
+        })),
+      );
+    } catch (error) {
+      console.error("Error fetching storefront products:", error);
+      res.status(500).json({ message: "Failed to fetch storefront products" });
+    }
+  });
+
+  app.get("/api/store/products/:slug", async (req: Request, res: Response) => {
+    try {
+      const list = await storage.getProducts((req.query.shopId as string) || undefined);
+      const product = list.find((entry) => {
+        const slug = entry.slug || `${slugify(entry.name)}-${entry.id.slice(0, 6)}`;
+        return slug === req.params.slug;
+      });
+      if (!product) return res.status(404).json({ message: "Product not found" });
+
+      const related = list
+        .filter((entry) => entry.id !== product.id && entry.category === product.category)
+        .slice(0, 8)
+        .map((entry) => ({
+          ...entry,
+          slug: entry.slug || `${slugify(entry.name)}-${entry.id.slice(0, 6)}`,
+        }));
+
+      const imeiTracked = (await storage.getDevices(product.shopId || undefined)).some(
+        (device) =>
+          device.status === "In Stock" &&
+          device.brand.toLowerCase() === (product.brand || "").toLowerCase() &&
+          device.model.toLowerCase() === (product.model || "").toLowerCase(),
+      );
+
+      res.json({
+        ...product,
+        slug: product.slug || `${slugify(product.name)}-${product.id.slice(0, 6)}`,
+        related,
+        imeiTracked,
+      });
+    } catch (error) {
+      console.error("Error fetching storefront product:", error);
+      res.status(500).json({ message: "Failed to fetch storefront product" });
+    }
+  });
+
+  app.post("/api/store/cart", async (req: Request, res: Response) => {
+    const parsed = z.object({ items: z.array(storefrontCartItemSchema).min(1) }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid cart payload", details: parsed.error.errors });
+    }
+
+    try {
+      const { items, subtotal } = await buildValidatedCart(parsed.data.items);
+      res.json({
+        items: items.map((item) => ({
+          productId: item.product.id,
+          name: item.product.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.total,
+          stock: item.product.stock,
+        })),
+        subtotal,
+      });
+    } catch (error: any) {
+      console.error("Error validating cart:", error);
+      res.status(400).json({ message: error?.message || "Failed to validate cart" });
+    }
+  });
+
+  app.post("/api/store/checkout", async (req: Request, res: Response) => {
+    const parsed = orderCreateSchema.safeParse({ ...req.body, channel: "ONLINE" });
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid checkout payload", details: parsed.error.errors });
+    }
+
+    try {
+      const hydrated = await createOrderFromPayload(parsed.data, null);
+      res.status(201).json(hydrated);
+    } catch (error: any) {
+      console.error("Error during checkout:", error);
+      res.status(500).json({ message: error?.message || "Failed to complete checkout" });
+    }
+  });
+
+  // app.get("/api/store/orders/track/:orderNumber", async (req: Request, res: Response) => {
+  //   try {
+  //     const { orderNumber } = req.params;
+  //     const orders = await storage.getOrders();
+  //     const order = orders.find((o) => o.orderNumber === orderNumber);
+
+  //     if (!order) {
+  //       return res.status(404).json({ message: "Order not found" });
+  //     }
+
+  //     const orderItems = await storage.getOrderItems(order.id);
+  //     const deliveries = await storage.getDeliveries();
+  //     const delivery = deliveries.find((d) => d.orderId === order.id);
+
+  //     res.json({
+  //       order: {
+  //         id: order.id,
+  //         orderNumber: order.orderNumber,
+  //         customerName: order.customerName,
+  //         customerPhone: order.customerPhone,
+  //         customerEmail: order.customerEmail,
+  //         subtotal: order.subtotal,
+  //         deliveryFee: order.deliveryFee,
+  //         total: order.total,
+  //         paymentMethod: order.paymentMethod,
+  //         paymentStatus: order.paymentStatus,
+  //         status: order.status,
+  //         deliveryType: order.deliveryType,
+  //         deliveryAddress: order.deliveryAddress,
+  //         notes: order.notes,
+  //         createdAt: order.createdAt,
+  //       },
+  //       items: orderItems.map((item) => ({
+  //         id: item.id,
+  //         productName: item.productName,
+  //         quantity: item.quantity,
+  //         unitPrice: item.unitPrice,
+  //         total: item.total,
+  //       })),
+  //       delivery: delivery ? {
+  //         status: delivery.status,
+  //         address: delivery.address,
+  //         scheduledAt: delivery.scheduledAt,
+  //         pickedUpAt: delivery.pickedUpAt,
+  //         deliveredAt: delivery.deliveredAt,
+  //         failureReason: delivery.failureReason,
+  //       } : undefined,
+  //     });
+  //   } catch (error) {
+  //     console.error("Error fetching order tracking:", error);
+  //     res.status(500).json({ message: "Failed to fetch order tracking" });
+  //   }
+  // });
+
+  app.get("/api/dashboard/metrics", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const days = Math.max(1, Number(req.query.days || 7));
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      const shopId = (req.query.shopId as string) || req.currentUser?.shopId || undefined;
+      const [orders, deliveries, sales, products] = await Promise.all([
+        storage.getOrders({ shopId }),
+        storage.getDeliveries({}),
+        storage.getSales(shopId),
+        storage.getProducts(shopId),
+      ]);
+
+      const scopedOrders = orders.filter((order) => new Date(order.createdAt || 0) >= since);
+      const scopedSales = sales.filter((sale) => new Date(sale.createdAt || 0) >= since);
+      const scopedDeliveries = deliveries.filter((delivery) => {
+        const order = orders.find((entry) => entry.id === delivery.orderId);
+        return !!order && new Date(order.createdAt || 0) >= since;
+      });
+
+      const now = Date.now();
+      const pendingDeliveries = scopedDeliveries.filter((delivery) => delivery.status !== "DELIVERED").length;
+      const overdueDeliveries = scopedDeliveries.filter(
+        (delivery) => delivery.status !== "DELIVERED" && delivery.scheduledAt && +new Date(delivery.scheduledAt) < now,
+      ).length;
+      const deliveredCount = scopedDeliveries.filter((delivery) => delivery.status === "DELIVERED").length;
+      const deliveryCompletionRate = scopedDeliveries.length > 0 ? Math.round((deliveredCount / scopedDeliveries.length) * 100) : 0;
+
+      const onlineRevenue = scopedOrders.reduce((sum, order) => sum + order.total, 0);
+      const posRevenue = scopedSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+
+      const topSellingProducts = Object.values(
+        (await Promise.all(scopedOrders.map((order) => storage.getOrderItems(order.id)))).flat().reduce((acc, item) => {
+          const current = acc[item.productId] || { productId: item.productId, name: item.productName, units: 0, revenue: 0 };
+          current.units += item.quantity;
+          current.revenue += item.total;
+          acc[item.productId] = current;
+          return acc;
+        }, {} as Record<string, { productId: string; name: string; units: number; revenue: number }>),
+      ).sort((a, b) => b.units - a.units).slice(0, 5);
+
+      const paymentBreakdown = scopedOrders.reduce(
+        (acc, order) => {
+          acc[order.paymentMethod] = (acc[order.paymentMethod] || 0) + order.total;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+
+      res.json({
+        ordersTodayCount: orders.filter((order) => new Date(order.createdAt || 0).toDateString() === new Date().toDateString()).length,
+        ordersTodayValue: orders
+          .filter((order) => new Date(order.createdAt || 0).toDateString() === new Date().toDateString())
+          .reduce((sum, order) => sum + order.total, 0),
+        pendingDeliveries,
+        overdueDeliveries,
+        deliveryCompletionRate,
+        topSellingProducts,
+        revenueByChannel: [
+          { channel: "Walk-in POS", value: posRevenue },
+          { channel: "Online Store", value: onlineRevenue },
+        ],
+        paymentMethodBreakdown: Object.entries(paymentBreakdown).map(([method, value]) => ({ method, value })),
+        stockVelocity: {
+          fastestSelling: [...topSellingProducts].slice(0, 3),
+          longestSitting: [...products].sort((a, b) => (a.popularity ?? 0) - (b.popularity ?? 0)).slice(0, 3),
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard metrics:", error);
+      res.status(500).json({ message: "Failed to fetch dashboard metrics" });
     }
   });
 
@@ -2049,7 +2997,11 @@ export async function registerRoutes(
       if (Number(payload.price) < 0 || Number(payload.costPrice) < 0) {
         return sendError(res, 400, "Price values cannot be negative");
       }
-      const created = await storage.createProduct({ ...payload, shopId: payload.shopId || req.currentUser?.shopId || null });
+      const created = await storage.createProduct({
+        ...payload,
+        slug: payload.slug || slugify(payload.name || ""),
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      });
       await storage.createActivityLog({ action: "product_created", entity: "product", entityId: created.id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Created product ${created.name}`, metadata: { product: created } });
       res.status(201).json(created);
     } catch (err) {
@@ -2073,7 +3025,10 @@ export async function registerRoutes(
       if (req.body.costPrice !== undefined && Number(req.body.costPrice) < 0) {
         return sendError(res, 400, "Cost price cannot be negative");
       }
-      const updated = await storage.updateProduct(id, req.body);
+      const updated = await storage.updateProduct(id, {
+        ...req.body,
+        slug: req.body.slug || (req.body.name ? slugify(req.body.name) : undefined),
+      });
       if (!updated) return sendError(res, 404, "Product not found");
       await storage.createActivityLog({ action: "product_updated", entity: "product", entityId: id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Updated product ${updated.name}` });
       res.json(updated);
