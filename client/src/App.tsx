@@ -28,6 +28,16 @@ const BaseValuesPage = lazy(() => import("@/pages/base-values"));
 const BrandsPage = lazy(() => import("@/pages/brands"));
 const LeadsPage = lazy(() => import("@/pages/leads"));
 const ShopSettingsPage = lazy(() => import("@/pages/shop-settings/[id]"));
+const StoreHomePage = lazy(() => import("@/pages/store-home"));
+const StoreProductsPage = lazy(() => import("@/pages/store-products"));
+const StoreProductDetailPage = lazy(() => import("@/pages/store-product-detail"));
+const StoreCartPage = lazy(() => import("@/pages/store-cart"));
+const StoreCheckoutPage = lazy(() => import("@/pages/store-checkout"));
+const StoreConfirmationPage = lazy(() => import("@/pages/store-confirmation"));
+const StoreAccountPage = lazy(() => import("@/pages/store-account"));
+const StoreOrderTrackingPage = lazy(() => import("@/pages/store-order-tracking"));
+const OrdersPage = lazy(() => import("@/pages/orders"));
+const DeliveriesPage = lazy(() => import("@/pages/deliveries"));
 
 function AppShellFallback() {
   return (
@@ -94,32 +104,56 @@ function ProtectedRoute({ component: Component, roles }: { component: React.Comp
 }
 
 function Router() {
+  const [location] = useLocation();
+  const isCustomerRoute = location.startsWith("/store");
+  const isAuthRoute = location === "/" || location === "/login";
+
+  const routes = (
+    <Suspense fallback={<AppShellFallback />}>
+      <Switch>
+        <Route path="/" component={Login} />
+        <Route path="/login" component={Login} />
+        <Route path="/dashboard" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={Dashboard} />} />
+        <Route path="/pos" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={POSPage} />} />
+        <Route path="/daily-close" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DailyClose} />} />
+        <Route path="/closures" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ClosuresPage} />} />
+        <Route path="/trade-in" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={TradeInPage} />} />
+        <Route path="/products" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ProductsPage} />} />
+        <Route path="/devices" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DevicesPage} />} />
+        <Route path="/customers" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={CustomersPage} />} />
+        <Route path="/repairs" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={RepairsPage} />} />
+        <Route path="/leads" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={LeadsPage} />} />
+        <Route path="/expenses" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ExpensesPage} />} />
+        <Route path="/audit-logs" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={AuditLogsPage} />} />
+        <Route path="/staff" component={() => <ProtectedRoute roles={["Owner"]} component={StaffPage} />} />
+        <Route path="/settings" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={SettingsPage} />} />
+        <Route path="/brands" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BrandsPage} />} />
+        <Route path="/base-values" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BaseValuesPage} />} />
+        <Route path="/shop-settings/:id" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ShopSettingsPage} />} />
+        <Route path="/store" component={StoreHomePage} />
+        <Route path="/store/products" component={StoreProductsPage} />
+        <Route path="/store/products/:id" component={StoreProductDetailPage} />
+        <Route path="/store/cart" component={StoreCartPage} />
+        <Route path="/store/checkout" component={StoreCheckoutPage} />
+        <Route path="/store/confirmation" component={StoreConfirmationPage} />
+        <Route path="/store/account" component={StoreAccountPage} />
+        <Route path="/store/track" component={StoreOrderTrackingPage} />
+        <Route path="/orders" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={OrdersPage} />} />
+        <Route path="/deliveries" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DeliveriesPage} />} />
+        <Route path="/management/orders" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={OrdersPage} />} />
+        <Route path="/management/deliveries" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DeliveriesPage} />} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
+  );
+
+  if (isCustomerRoute || isAuthRoute) {
+    return routes;
+  }
+
   return (
     <Layout>
-      <Suspense fallback={<AppShellFallback />}>
-        <Switch>
-          <Route path="/" component={Login} />
-          <Route path="/login" component={Login} />
-          <Route path="/dashboard" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={Dashboard} />} />
-          <Route path="/pos" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={POSPage} />} />
-          <Route path="/daily-close" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DailyClose} />} />
-          <Route path="/closures" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ClosuresPage} />} />
-          <Route path="/trade-in" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={TradeInPage} />} />
-          <Route path="/products" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ProductsPage} />} />
-          <Route path="/devices" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DevicesPage} />} />
-          <Route path="/customers" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={CustomersPage} />} />
-          <Route path="/repairs" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={RepairsPage} />} />
-          <Route path="/leads" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={LeadsPage} />} />
-          <Route path="/expenses" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ExpensesPage} />} />
-          <Route path="/audit-logs" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={AuditLogsPage} />} />
-          <Route path="/staff" component={() => <ProtectedRoute roles={["Owner"]} component={StaffPage} />} />
-          <Route path="/settings" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={SettingsPage} />} />
-          <Route path="/brands" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BrandsPage} />} />
-          <Route path="/base-values" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BaseValuesPage} />} />
-          <Route path="/shop-settings/:id" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ShopSettingsPage} />} />
-          <Route component={NotFound} />
-        </Switch>
-      </Suspense>
+      {routes}
     </Layout>
   );
 }

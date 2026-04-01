@@ -28,6 +28,14 @@ function resolveSqlitePath(input?: string) {
 
 if (usePostgres) {
   pool = new Pool({ connectionString: databaseUrl });
+  pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS barcode TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_idx ON products(barcode);
+    CREATE INDEX IF NOT EXISTS products_shop_idx ON products(shop_id);
+  `).catch((err) => {
+    console.warn("[db] Unable to apply product barcode drift fix:", err?.message || err);
+  });
   _db = drizzlePostgres(pool);
 } else {
   const sqlitePath = resolveSqlitePath(databaseUrl);
@@ -112,6 +120,7 @@ if (usePostgres) {
         stock INTEGER DEFAULT 0,
         min_stock INTEGER DEFAULT 0,
         sku TEXT,
+        barcode TEXT,
         image_url TEXT,
         shop_id TEXT,
         created_at TEXT,
@@ -250,13 +259,15 @@ if (usePostgres) {
 
       CREATE TABLE IF NOT EXISTS condition_questions (
         id TEXT PRIMARY KEY,
+        device_type TEXT DEFAULT 'phone',
         category TEXT NOT NULL,
         question TEXT NOT NULL,
         options TEXT NOT NULL,
         sort_order INTEGER DEFAULT 0,
         is_required INTEGER DEFAULT 1,
         is_critical INTEGER DEFAULT 0,
-        is_active INTEGER DEFAULT 1
+        is_active INTEGER DEFAULT 1,
+        shop_id TEXT
       );
 
       CREATE TABLE IF NOT EXISTS trade_in_assessments (
@@ -383,6 +394,11 @@ if (usePostgres) {
         is_active INTEGER DEFAULT 1
       );
     `);
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN barcode TEXT`); } catch {}
+    try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_idx ON products(barcode)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS products_shop_idx ON products(shop_id)`); } catch {}
+    try { sqlite.exec(`ALTER TABLE condition_questions ADD COLUMN device_type TEXT DEFAULT 'phone'`); } catch {}
+    try { sqlite.exec(`ALTER TABLE condition_questions ADD COLUMN shop_id TEXT`); } catch {}
   } catch (err) {
     // ignore schema creation errors
   }

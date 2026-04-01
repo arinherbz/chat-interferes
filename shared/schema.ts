@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { TRADE_IN_DEVICE_TYPES } from "./trade-in-profile";
 
 
 
@@ -162,11 +163,15 @@ export const products = pgTable("products", {
   stock: integer("stock").notNull().default(0),
   minStock: integer("min_stock").notNull().default(0),
   sku: text("sku"),
+  barcode: text("barcode"),
   imageUrl: text("image_url"),
   shopId: varchar("shop_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  barcodeUniqueIdx: uniqueIndex("products_barcode_unique_idx").on(table.barcode),
+  shopIdx: index("products_shop_idx").on(table.shopId),
+}));
 
 export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertProduct = z.infer<typeof insertProductSchema>;
@@ -333,6 +338,7 @@ export type Closure = typeof closures.$inferSelect;
 // Structured questions for the trade-in wizard (no free-text)
 export const conditionQuestions = pgTable("condition_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceType: text("device_type").default("phone"),
   category: text("category").notNull(), // 'screen', 'body', 'functionality', 'security'
   question: text("question").notNull(),
   options: jsonb("options").notNull(), // Array of { value: string, label: string, deduction: number }
@@ -340,6 +346,7 @@ export const conditionQuestions = pgTable("condition_questions", {
   isRequired: boolean("is_required").default(true),
   isCritical: boolean("is_critical").default(false), // If true, certain answers = instant rejection
   isActive: boolean("is_active").default(true),
+  shopId: varchar("shop_id"),
 });
 
 export const insertConditionQuestionSchema = createInsertSchema(conditionQuestions).omit({
@@ -517,16 +524,17 @@ export type ScoringRule = typeof scoringRules.$inferSelect;
 // Schema for trade-in wizard submission
 export const tradeInWizardSchema = z.object({
   // Step 1: Device identification
+  deviceType: z.enum(TRADE_IN_DEVICE_TYPES).optional(),
   brand: z.string().min(1, "Brand is required"),
   model: z.string().min(1, "Model is required"),
   storage: z.string().optional(),
   color: z.string().optional(),
-  imei: z.string().min(15, "Valid IMEI required").max(15, "IMEI must be 15 digits"),
+  imei: z.string().trim().optional().default(""),
   serialNumber: z.string().optional(),
   
   // Step 2: Security checks (critical - can cause instant rejection)
-  isIcloudLocked: z.boolean(),
-  isGoogleLocked: z.boolean(),
+  isIcloudLocked: z.boolean().optional().default(false),
+  isGoogleLocked: z.boolean().optional().default(false),
   
   // Step 3: Condition answers (structured)
   conditionAnswers: z.record(z.string(), z.string()), // { questionId: selectedOptionValue }
@@ -609,3 +617,87 @@ export const leadAuditLogs = pgTable("lead_audit_logs", {
 export const insertLeadAuditLogSchema = createInsertSchema(leadAuditLogs).omit({ id: true, timestamp: true });
 export type InsertLeadAuditLog = z.infer<typeof insertLeadAuditLogSchema>;
 export type LeadAuditLog = typeof leadAuditLogs.$inferSelect;
+
+// ===================== ORDERS & COMMERCE =====================
+export const orders = pgTable("orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderNumber: text("order_number").notNull().unique(),
+  shopId: varchar("shop_id").notNull(),
+  customerId: varchar("customer_id"),
+  customerName: text("customer_name").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  customerEmail: text("customer_email"),
+  subtotal: integer("subtotal").notNull().default(0),
+  deliveryFee: integer("delivery_fee").notNull().default(0),
+  total: integer("total").notNull().default(0),
+  paymentMethod: text("payment_method").notNull(),
+  paymentStatus: text("payment_status").notNull().default("PENDING"),
+  channel: text("channel").notNull().default("ONLINE"),
+  status: text("status").notNull().default("PENDING"),
+  deliveryType: text("delivery_type").notNull(),
+  deliveryAddress: text("delivery_address"),
+  assignedStaffId: varchar("assigned_staff_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const orderItems = pgTable("order_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  productId: varchar("product_id").notNull(),
+  productName: text("product_name").notNull(),
+  imei: text("imei"),
+  quantity: integer("quantity").notNull().default(1),
+  unitPrice: integer("unit_price").notNull().default(0),
+  total: integer("total").notNull().default(0),
+});
+
+export const deliveries = pgTable("deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().unique().references(() => orders.id),
+  assignedRiderId: varchar("assigned_rider_id"),
+  status: text("status").notNull().default("PENDING"),
+  address: text("address").notNull(),
+  scheduledAt: timestamp("scheduled_at"),
+  pickedUpAt: timestamp("picked_up_at"),
+  deliveredAt: timestamp("delivered_at"),
+  failureReason: text("failure_reason"),
+  notes: text("notes"),
+});
+
+export const receipts = pgTable("receipts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  pdfUrl: text("pdf_url"),
+  sentVia: jsonb("sent_via").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  shopId: varchar("shop_id").notNull(),
+  type: text("type").notNull(),
+  targetId: varchar("target_id").notNull(),
+  message: text("message").notNull(),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
+export const insertDeliverySchema = createInsertSchema(deliveries).omit({ id: true });
+export const insertReceiptSchema = createInsertSchema(receipts).omit({ id: true, createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type InsertDelivery = z.infer<typeof insertDeliverySchema>;
+export type InsertReceipt = z.infer<typeof insertReceiptSchema>;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+export type Order = typeof orders.$inferSelect;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type Delivery = typeof deliveries.$inferSelect;
+export type Receipt = typeof receipts.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

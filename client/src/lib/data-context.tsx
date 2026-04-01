@@ -44,6 +44,7 @@ export interface Product {
   stock: number;
   minStock: number;
   sku?: string;
+  barcode?: string;
   imageUrl?: string;
 }
 

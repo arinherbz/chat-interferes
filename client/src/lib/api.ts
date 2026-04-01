@@ -1,3 +1,5 @@
+import { unwrapApiData } from "./api-response";
+
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 interface ApiError extends Error {
@@ -62,7 +64,7 @@ export async function apiRequest<T = any>(
     throw error;
   }
 
-    const parsed = (data as T) ?? ({} as T);
+    const parsed = data === undefined ? ({} as T) : unwrapApiData(data as T);
     if (shouldCacheGet) {
       getCache.set(requestKey, { data: parsed, ts: Date.now() });
     } else {

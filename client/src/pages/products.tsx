@@ -13,12 +13,14 @@ import { z } from "zod";
 import { Search, Plus, Scan } from "lucide-react";
 import { FileUploader, type UploadedFileMeta } from "@/components/file-uploader";
 import { useToast } from "@/hooks/use-toast";
+import { ProductImage } from "@/components/product-image";
 
 const productSchema = z.object({
   brand: z.string().optional(),
   model: z.string().optional(),
   name: z.string().min(1, "Name required"),
   category: z.string().min(1, "Category required"),
+  barcode: z.string().optional(),
   price: z.coerce.number().min(0, "Price required"),
   stock: z.coerce.number().min(0, "Stock required"),
   costPrice: z.coerce.number().min(0, "Cost required"),
@@ -44,6 +46,7 @@ export default function ProductsPage() {
       model: product.model ?? "",
       name: product.name,
       category: product.category as any,
+      barcode: product.barcode ?? "",
       price: product.price,
       stock: product.stock,
       costPrice: product.costPrice ?? 0,
@@ -66,6 +69,7 @@ export default function ProductsPage() {
       model: "",
       name: "",
       category: "iPhone",
+      barcode: "",
       price: 0,
       stock: 0,
       costPrice: 0,
@@ -80,9 +84,10 @@ export default function ProductsPage() {
   };
 
   const onSubmit = async (values: z.infer<typeof productSchema>) => {
-    const imageUrl = attachments[0]?.url || values.imageUrl || undefined;
+    const imageUrl = attachments[0]?.url || undefined;
     const payload = {
       ...values,
+      barcode: values.barcode?.trim() || undefined,
       imageUrl
     };
 
@@ -112,7 +117,11 @@ export default function ProductsPage() {
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(search.toLowerCase()) || 
-    p.category.toLowerCase().includes(search.toLowerCase())
+    p.category.toLowerCase().includes(search.toLowerCase()) ||
+    p.brand?.toLowerCase().includes(search.toLowerCase()) ||
+    p.model?.toLowerCase().includes(search.toLowerCase()) ||
+    p.sku?.toLowerCase().includes(search.toLowerCase()) ||
+    p.barcode?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -195,6 +204,20 @@ export default function ProductsPage() {
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="barcode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Barcode</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Scan or enter barcode" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -259,10 +282,14 @@ export default function ProductsPage() {
                   <Label>Photo (optional)</Label>
                   <FileUploader
                     value={attachments}
-                    onChange={setAttachments}
+                    onChange={(files) => {
+                      setAttachments(files);
+                      form.setValue("imageUrl", files[0]?.url || "");
+                    }}
                     multiple={false}
                     accept="image/*"
                     maxFiles={1}
+                    uploadFolder="product-images"
                   />
                 </div>
 
@@ -300,12 +327,13 @@ export default function ProductsPage() {
         <CardContent>
           <Table className="min-w-[760px]">
             <TableHeader>
-              <TableRow>
-                <TableHead>Photo</TableHead>
-                <TableHead>Product Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Cost</TableHead>
-                <TableHead>Stock</TableHead>
+                <TableRow>
+                  <TableHead>Photo</TableHead>
+                  <TableHead>Product Name</TableHead>
+                  <TableHead>Barcode</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Cost</TableHead>
+                  <TableHead>Stock</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -314,13 +342,15 @@ export default function ProductsPage() {
               {filteredProducts.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell>
-                    {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded object-cover" />
-                    ) : (
-                      <div className="w-12 h-12 rounded bg-slate-100 flex items-center justify-center text-xs text-slate-400">No photo</div>
-                    )}
+                    <ProductImage
+                      src={product.imageUrl}
+                      alt={product.name}
+                      fallbackLabel={product.brand || product.category || "Product"}
+                      className="h-12 w-12 rounded-xl"
+                    />
                   </TableCell>
                   <TableCell className="font-medium whitespace-normal">{product.name}</TableCell>
+                  <TableCell className="font-mono text-xs text-slate-600">{product.barcode || "—"}</TableCell>
                   <TableCell>
                     <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-slate-100 text-slate-900 hover:bg-slate-200/80">
                       {product.category}
@@ -362,7 +392,7 @@ export default function ProductsPage() {
               ))}
               {filteredProducts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     No products found.
                   </TableCell>
                 </TableRow>

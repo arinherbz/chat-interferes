@@ -21,9 +21,14 @@ import {
   type Repair, type InsertRepair, repairs,
   type Expense, type InsertExpense, expenses,
   type Closure, type InsertClosure, closures,
+  type Order, type InsertOrder, orders,
+  type OrderItem, type InsertOrderItem, orderItems,
+  type Delivery, type InsertDelivery, deliveries,
+  type Receipt, type InsertReceipt, receipts,
+  type Notification, type InsertNotification, notifications,
 } from "@shared/schema";
 import { db, pool } from "./db";
-import { eq, and, desc, sql as sqlFn } from "drizzle-orm";
+import { eq, and, desc, sql as sqlFn, count } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -62,7 +67,7 @@ export interface IStorage {
   deleteDeviceBaseValue(id: string): Promise<boolean>;
   
   // Condition Questions
-  getConditionQuestions(): Promise<ConditionQuestion[]>;
+  getConditionQuestions(filters?: { deviceType?: string; shopId?: string }): Promise<ConditionQuestion[]>;
   createConditionQuestion(question: InsertConditionQuestion): Promise<ConditionQuestion>;
   updateConditionQuestion(id: string, question: Partial<InsertConditionQuestion>): Promise<ConditionQuestion | undefined>;
   
@@ -127,6 +132,36 @@ export interface IStorage {
   getClosures(shopId?: string): Promise<Closure[]>;
   createClosure(closure: InsertClosure): Promise<Closure>;
   updateClosure(id: string, data: Partial<InsertClosure>): Promise<Closure | undefined>;
+
+  // Orders
+  getOrders(filters?: { shopId?: string; status?: string; assignedStaffId?: string }): Promise<import("@shared/schema").Order[]>;
+  getOrder(id: string): Promise<import("@shared/schema").Order | undefined>;
+  createOrder(order: import("@shared/schema").InsertOrder): Promise<import("@shared/schema").Order>;
+  updateOrder(id: string, data: Partial<import("@shared/schema").InsertOrder>): Promise<import("@shared/schema").Order | undefined>;
+  updateOrderStatus(id: string, status: string, assignedStaffId?: string): Promise<import("@shared/schema").Order | undefined>;
+
+  // Order Items
+  getOrderItems(orderId: string): Promise<import("@shared/schema").OrderItem[]>;
+  createOrderItem(item: import("@shared/schema").InsertOrderItem): Promise<import("@shared/schema").OrderItem>;
+  createOrderItems(items: import("@shared/schema").InsertOrderItem[]): Promise<import("@shared/schema").OrderItem[]>;
+
+  // Deliveries
+  getDeliveries(filters?: { status?: string; assignedRiderId?: string }): Promise<import("@shared/schema").Delivery[]>;
+  getDelivery(id: string): Promise<import("@shared/schema").Delivery | undefined>;
+  getDeliveryByOrderId(orderId: string): Promise<import("@shared/schema").Delivery | undefined>;
+  createDelivery(delivery: import("@shared/schema").InsertDelivery): Promise<import("@shared/schema").Delivery>;
+  updateDelivery(id: string, data: Partial<import("@shared/schema").InsertDelivery>): Promise<import("@shared/schema").Delivery | undefined>;
+  updateDeliveryStatus(id: string, status: string, riderId?: string): Promise<import("@shared/schema").Delivery | undefined>;
+
+  // Receipts
+  getReceipts(orderId?: string): Promise<import("@shared/schema").Receipt[]>;
+  createReceipt(receipt: import("@shared/schema").InsertReceipt): Promise<import("@shared/schema").Receipt>;
+
+  // Notifications
+  getNotifications(shopId?: string): Promise<import("@shared/schema").Notification[]>;
+  createNotification(notification: import("@shared/schema").InsertNotification): Promise<import("@shared/schema").Notification>;
+  markNotificationRead(id: string): Promise<import("@shared/schema").Notification | undefined>;
+  getUnreadNotificationCount(shopId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -143,6 +178,10 @@ export class DatabaseStorage implements IStorage {
   private normalizeBoolean(value: boolean | null | undefined): boolean | undefined {
     if (value === null || value === undefined) return undefined;
     return value;
+  }
+
+  private normalizeLookupValue(value: string | null | undefined): string {
+    return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
   }
 
   // ==================== USERS ====================
@@ -341,24 +380,20 @@ export class DatabaseStorage implements IStorage {
   async getDeviceBaseValue(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined> {
     const values = await this.getDeviceBaseValues(shopId);
     return values.find((value) =>
-      value.brand === brand &&
-      value.model === model &&
-      value.storage === storage &&
+      this.normalizeLookupValue(value.brand) === this.normalizeLookupValue(brand) &&
+      this.normalizeLookupValue(value.model) === this.normalizeLookupValue(model) &&
+      this.normalizeLookupValue(value.storage) === this.normalizeLookupValue(storage) &&
       value.isActive !== false,
     );
   }
 
   async findDeviceBaseValueAnyStatus(brand: string, model: string, storage: string, shopId?: string): Promise<DeviceBaseValue | undefined> {
-    const conditions = [
-      eq(deviceBaseValues.brand, brand),
-      eq(deviceBaseValues.model, model),
-      eq(deviceBaseValues.storage, storage),
-    ];
-    if (shopId) {
-      conditions.push(eq(deviceBaseValues.shopId, shopId));
-    }
-    const [value] = await db.select().from(deviceBaseValues).where(and(...conditions));
-    return value;
+    const values = await this.getDeviceBaseValues(shopId);
+    return values.find((value) =>
+      this.normalizeLookupValue(value.brand) === this.normalizeLookupValue(brand) &&
+      this.normalizeLookupValue(value.model) === this.normalizeLookupValue(model) &&
+      this.normalizeLookupValue(value.storage) === this.normalizeLookupValue(storage)
+    );
   }
 
   async upsertDeviceBaseValue(value: InsertDeviceBaseValue): Promise<DeviceBaseValue> {
@@ -391,9 +426,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ==================== CONDITION QUESTIONS ====================
-  async getConditionQuestions(): Promise<ConditionQuestion[]> {
+  async getConditionQuestions(filters?: { deviceType?: string; shopId?: string }): Promise<ConditionQuestion[]> {
+    const predicates = [eq(conditionQuestions.isActive, true)];
+    if (filters?.deviceType) {
+      predicates.push(eq(conditionQuestions.deviceType, filters.deviceType));
+    }
+    if (filters?.shopId) {
+      predicates.push(eq(conditionQuestions.shopId, filters.shopId));
+    }
     return db.select().from(conditionQuestions)
-      .where(eq(conditionQuestions.isActive, true))
+      .where(and(...predicates))
       .orderBy(conditionQuestions.sortOrder);
   }
 
@@ -451,9 +493,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNextTradeInNumber(): Promise<string> {
-    const [result] = await db.select({ count: sqlFn`COUNT(*)::int` }).from(tradeInAssessments);
-    const count = (result?.count as number) || 0;
-    return `TI-${String(10001 + count).padStart(5, '0')}`;
+    const [result] = await db.select({ total: count() }).from(tradeInAssessments);
+    const totalValue = typeof result?.total === "number" ? result.total : Number(result?.total || 0);
+    const total = Number.isFinite(totalValue) ? totalValue : 0;
+    return `TI-${String(10001 + total).padStart(5, '0')}`;
   }
 
   // ==================== BLOCKED IMEIs ====================
@@ -575,6 +618,13 @@ export class DatabaseStorage implements IStorage {
   async getProduct(id: string): Promise<import("@shared/schema").Product | undefined> {
     const [p] = await db.select().from(products).where(eq(products.id, id));
     return p;
+  }
+
+  async getProductByBarcode(barcode: string): Promise<import("@shared/schema").Product | undefined> {
+    const normalized = barcode.trim();
+    if (!normalized) return undefined;
+    const [product] = await db.select().from(products).where(eq(products.barcode, normalized));
+    return product;
   }
 
   async createProduct(product: import("@shared/schema").InsertProduct): Promise<import("@shared/schema").Product> {
@@ -700,6 +750,145 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // ==================== ORDERS ====================
+  async getOrders(filters?: { shopId?: string; status?: string; assignedStaffId?: string }): Promise<Order[]> {
+    let query = db.select().from(orders);
+    if (filters?.shopId) {
+      query = query.where(eq(orders.shopId, filters.shopId));
+    }
+    if (filters?.status) {
+      query = query.where(eq(orders.status, filters.status));
+    }
+    if (filters?.assignedStaffId) {
+      query = query.where(eq(orders.assignedStaffId, filters.assignedStaffId));
+    }
+    return query.orderBy(desc(orders.createdAt));
+  }
+
+  async getOrder(id: string): Promise<Order | undefined> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, id));
+    return order;
+  }
+
+  async createOrder(order: InsertOrder): Promise<Order> {
+    const [newOrder] = await db.insert(orders).values(order).returning();
+    return newOrder;
+  }
+
+  async updateOrder(id: string, data: Partial<InsertOrder>): Promise<Order | undefined> {
+    const [order] = await db.update(orders).set({ ...data, updatedAt: new Date() }).where(eq(orders.id, id)).returning();
+    return order;
+  }
+
+  async updateOrderStatus(id: string, status: string, assignedStaffId?: string): Promise<Order | undefined> {
+    const updateData: Partial<InsertOrder> = { status };
+    if (assignedStaffId) {
+      updateData.assignedStaffId = assignedStaffId;
+    }
+    return this.updateOrder(id, updateData);
+  }
+
+  // ==================== ORDER ITEMS ====================
+  async getOrderItems(orderId: string): Promise<OrderItem[]> {
+    return db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  }
+
+  async createOrderItem(item: InsertOrderItem): Promise<OrderItem> {
+    const [newItem] = await db.insert(orderItems).values(item).returning();
+    return newItem;
+  }
+
+  async createOrderItems(items: InsertOrderItem[]): Promise<OrderItem[]> {
+    return db.insert(orderItems).values(items).returning();
+  }
+
+  // ==================== DELIVERIES ====================
+  async getDeliveries(filters?: { status?: string; assignedRiderId?: string }): Promise<Delivery[]> {
+    let query = db.select().from(deliveries);
+    if (filters?.status) {
+      query = query.where(eq(deliveries.status, filters.status));
+    }
+    if (filters?.assignedRiderId) {
+      query = query.where(eq(deliveries.assignedRiderId, filters.assignedRiderId));
+    }
+    return query.orderBy(desc(deliveries.scheduledAt));
+  }
+
+  async getDelivery(id: string): Promise<Delivery | undefined> {
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, id));
+    return delivery;
+  }
+
+  async getDeliveryByOrderId(orderId: string): Promise<Delivery | undefined> {
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.orderId, orderId));
+    return delivery;
+  }
+
+  async createDelivery(delivery: InsertDelivery): Promise<Delivery> {
+    const [newDelivery] = await db.insert(deliveries).values(delivery).returning();
+    return newDelivery;
+  }
+
+  async updateDelivery(id: string, data: Partial<InsertDelivery>): Promise<Delivery | undefined> {
+    const [delivery] = await db.update(deliveries).set(data).where(eq(deliveries.id, id)).returning();
+    return delivery;
+  }
+
+  async updateDeliveryStatus(id: string, status: string, riderId?: string): Promise<Delivery | undefined> {
+    const updateData: Partial<InsertDelivery> = { status };
+    if (riderId) {
+      updateData.assignedRiderId = riderId;
+    }
+    return this.updateDelivery(id, updateData);
+  }
+
+  // ==================== RECEIPTS ====================
+  async getReceipts(orderId?: string): Promise<Receipt[]> {
+    let query = db.select().from(receipts);
+    if (orderId) {
+      query = query.where(eq(receipts.orderId, orderId));
+    }
+    return query.orderBy(desc(receipts.createdAt));
+  }
+
+  async createReceipt(receipt: InsertReceipt): Promise<Receipt> {
+    const [newReceipt] = await db.insert(receipts).values(receipt).returning();
+    return newReceipt;
+  }
+
+  // ==================== NOTIFICATIONS ====================
+  async getNotifications(shopId?: string): Promise<Notification[]> {
+    let query = db.select().from(notifications);
+    if (shopId) {
+      query = query.where(eq(notifications.shopId, shopId));
+    }
+    return query.orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db.insert(notifications).values({
+      shopId: notification.shopId,
+      type: notification.type,
+      targetId: notification.targetId,
+      message: notification.message,
+      read: sqlFn`0` as any,
+    }).returning();
+    return newNotification;
+  }
+
+  async markNotificationRead(id: string): Promise<Notification | undefined> {
+    const [notification] = await db.update(notifications).set({ read: sqlFn`1` as any }).where(eq(notifications.id, id)).returning();
+    return notification;
+  }
+
+  async getUnreadNotificationCount(shopId: string): Promise<number> {
+    const shopNotifications = await this.getNotifications(shopId);
+    return shopNotifications.filter((notification) => {
+      const readValue = notification.read as unknown;
+      return readValue !== true && readValue !== 1 && readValue !== "1";
+    }).length;
+  }
+
   // ==================== SHOPS ====================
   async getShop(id: string): Promise<import("@shared/schema").Shop | undefined> {
     const [shop] = await db.select().from(shops).where(eq(shops.id, id));
@@ -719,6 +908,8 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db.update(shops).set({ ...data, updatedAt: new Date() }).where(eq(shops.id, id)).returning();
     return updated;
   }
+
+
 }
 
 export const storage = new DatabaseStorage();

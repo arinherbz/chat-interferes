@@ -18,6 +18,21 @@ function uniqueUsername(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function uniqueValidImei() {
+  const prefix14 = String(Date.now()).replace(/\D/g, "").slice(-14).padStart(14, "4");
+  let sum = 0;
+  for (let index = 0; index < 14; index += 1) {
+    let digit = Number(prefix14[index]);
+    if (index % 2 === 1) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return `${prefix14}${checkDigit}`;
+}
+
 describe("authentication", () => {
   let baseUrl = "";
   let server: ReturnType<typeof createServer>;
@@ -743,6 +758,181 @@ describe("authentication", () => {
     });
   });
 
+  it("rejects duplicate product barcodes with a clear validation error", async () => {
+    const username = uniqueUsername("auth-product-barcode");
+    const password = "ProductBarcode!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Barcode Manager",
+      email: `${username}@example.com`,
+      role: "Manager",
+      status: "active",
+      shopId: null,
+    });
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+
+    const barcode = `BAR-${Date.now()}`;
+    const firstRes = await fetch(`${baseUrl}/api/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: setCookie!,
+      },
+      body: JSON.stringify({
+        name: "Barcode Product A",
+        category: "Accessories",
+        barcode,
+        price: 1000,
+        costPrice: 500,
+        stock: 3,
+        minStock: 0,
+      }),
+    });
+    expect(firstRes.status).toBe(201);
+
+    const duplicateRes = await fetch(`${baseUrl}/api/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: setCookie!,
+      },
+      body: JSON.stringify({
+        name: "Barcode Product B",
+        category: "Accessories",
+        barcode,
+        price: 1500,
+        costPrice: 800,
+        stock: 2,
+        minStock: 0,
+      }),
+    });
+
+    expect(duplicateRes.status).toBe(409);
+    await expect(duplicateRes.json()).resolves.toMatchObject({
+      message: "Barcode is already assigned to another product",
+    });
+  });
+
+  it("persists product barcode and image url and reflects them in the products listing", async () => {
+    const username = uniqueUsername("auth-product-media");
+    const password = "ProductMedia!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Product Media Manager",
+      email: `${username}@example.com`,
+      role: "Manager",
+      status: "active",
+      shopId: null,
+    });
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+
+    const barcode = `IMG-${Date.now()}`;
+    const imageUrl = `/uploads/product-images/2026-04-01/${barcode}.png`;
+
+    const createRes = await fetch(`${baseUrl}/api/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: setCookie!,
+      },
+      body: JSON.stringify({
+        name: "Product With Media",
+        category: "Accessories",
+        barcode,
+        imageUrl,
+        price: 2400,
+        costPrice: 1200,
+        stock: 4,
+        minStock: 1,
+      }),
+    });
+
+    expect(createRes.status).toBe(201);
+    await expect(createRes.json()).resolves.toMatchObject({
+      barcode,
+      imageUrl,
+    });
+
+    const listRes = await fetch(`${baseUrl}/api/products`, {
+      headers: { Cookie: setCookie! },
+    });
+
+    expect(listRes.status).toBe(200);
+    const listBody = await listRes.json();
+    expect(Array.isArray(listBody.data)).toBe(true);
+    expect(listBody.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Product With Media",
+          barcode,
+          imageUrl,
+        }),
+      ])
+    );
+  });
+
+  it("normalizes storefront display names and brand filters away from barcode placeholders", async () => {
+    const placeholderNameA = `Barcode Product A ${Date.now()}`;
+    const placeholderNameB = `Barcode Product B ${Date.now()}`;
+
+    await storage.createProduct({
+      name: placeholderNameA,
+      brand: "apple",
+      model: "iphone 16 pro",
+      category: "phones",
+      price: 2500000,
+      costPrice: 2000000,
+      stock: 2,
+      minStock: 1,
+      imageUrl: null,
+      shopId: null,
+    });
+
+    await storage.createProduct({
+      name: placeholderNameB,
+      brand: "Apple",
+      model: "iPhone 16 Pro",
+      category: "Phones",
+      price: 2500000,
+      costPrice: 2000000,
+      stock: 1,
+      minStock: 1,
+      imageUrl: null,
+      shopId: null,
+    });
+
+    const storefrontRes = await fetch(`${baseUrl}/api/store/products`);
+    expect(storefrontRes.status).toBe(200);
+    const storefrontBody = await storefrontRes.json();
+    const data = storefrontBody.data ?? storefrontBody;
+    expect(Array.isArray(data)).toBe(true);
+
+    const iphoneEntries = data.filter((entry: any) => entry.name === "Apple iPhone 16 Pro");
+    expect(iphoneEntries).toHaveLength(1);
+    expect(iphoneEntries[0]).toMatchObject({
+      brand: "Apple",
+      category: "Phones",
+    });
+  });
+
   it("returns a message-based error when trade-in calculation has no base value", async () => {
     const username = uniqueUsername("auth-tradein-calc");
     const password = "TradeCalc!123";
@@ -752,7 +942,7 @@ describe("authentication", () => {
       password: hashSecret(password),
       name: "Trade Calc User",
       email: `${username}@example.com`,
-      role: "Manager",
+      role: "Sales",
       status: "active",
       shopId: null,
     });
@@ -778,13 +968,130 @@ describe("authentication", () => {
         conditionAnswers: {},
         isIcloudLocked: false,
         isGoogleLocked: false,
-        imei: "356998123456789",
+        imei: "490154203237518",
       }),
     });
 
     expect(res.status).toBe(404);
     await expect(res.json()).resolves.toMatchObject({
       message: "No base value found for this device configuration",
+    });
+  });
+
+  it("allows managers to preview trade-ins without pricing as manual review", async () => {
+    const username = uniqueUsername("auth-tradein-manual-preview");
+    const password = "TradePreview!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Trade Preview Manager",
+      email: `${username}@example.com`,
+      role: "Manager",
+      status: "active",
+      shopId: null,
+    });
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+
+    const res = await fetch(`${baseUrl}/api/trade-in/calculate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: setCookie!,
+      },
+      body: JSON.stringify({
+        deviceType: "phone",
+        brand: "Unknown",
+        model: "Nonexistent",
+        storage: "128GB",
+        conditionAnswers: {},
+        imei: "490154203237518",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      decision: "manual_review",
+      requiresPricingRule: true,
+      baseValue: 0,
+      calculatedOffer: 0,
+    });
+  });
+
+  it("allows managers to submit trade-ins without pricing as pending manual review", async () => {
+    const username = uniqueUsername("auth-tradein-manual-submit");
+    const password = "TradeSubmit!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Trade Submit Manager",
+      email: `${username}@example.com`,
+      role: "Manager",
+      status: "active",
+      shopId: null,
+    });
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+    const imei = uniqueValidImei();
+
+    const res = await fetch(`${baseUrl}/api/trade-in/submit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: setCookie!,
+      },
+      body: JSON.stringify({
+        deviceType: "phone",
+        brand: "Unknown",
+        model: "Nonexistent",
+        storage: "128GB",
+        imei,
+        conditionAnswers: {
+          "security-activation-lock": "yes",
+          "security-managed-lock": "no",
+          "display-surface": "perfect",
+          "display-touch": "yes",
+          "body-back": "perfect",
+          "body-frame": "perfect",
+          "functionality-power": "yes",
+          "functionality-battery": "good",
+          "functionality-cameras": "all_working",
+          "functionality-audio": "all_working",
+          "functionality-buttons": "all_working",
+          "functionality-biometric": "working",
+        },
+        customerName: "Manual Review Customer",
+        customerPhone: "+256700000001",
+        payoutMethod: "Cash",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      requiresPricingRule: true,
+      scoring: {
+        decision: "manual_review",
+        calculatedOffer: 0,
+      },
+      assessment: {
+        status: "pending",
+        decision: "manual_review",
+        baseValue: 0,
+      },
     });
   });
 

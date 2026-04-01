@@ -19,6 +19,7 @@ interface FileUploaderProps {
   accept?: string;
   maxFiles?: number;
   className?: string;
+  uploadFolder?: string;
 }
 
 export function FileUploader({
@@ -28,6 +29,7 @@ export function FileUploader({
   accept = "image/*,application/pdf,text/plain",
   maxFiles = 5,
   className,
+  uploadFolder,
 }: FileUploaderProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -52,14 +54,16 @@ export function FileUploader({
           .slice(0, remaining)
           .forEach((file) => formData.append("files", file));
 
-        const res = await fetch("/api/uploads", {
+        const uploadPath = uploadFolder ? `/api/uploads?folder=${encodeURIComponent(uploadFolder)}` : "/api/uploads";
+        const res = await fetch(uploadPath, {
           method: "POST",
           body: formData,
           credentials: "include",
         });
 
         if (!res.ok) {
-          throw new Error("Upload failed");
+          const payload = await res.json().catch(() => undefined);
+          throw new Error(payload?.message || "Upload failed");
         }
 
         const metas = (await res.json()) as UploadedFileMeta[];
@@ -171,6 +175,11 @@ export function FileUploader({
               <div className="text-xs text-muted-foreground">
                 {(file.size / 1024).toFixed(1)} KB • {file.contentType}
               </div>
+              {file.contentType.startsWith("image/") ? (
+                <div className="overflow-hidden rounded-xl border border-border/70 bg-slate-50">
+                  <img src={file.url} alt={file.filename || "Uploaded preview"} className="h-24 w-full object-cover" />
+                </div>
+              ) : null}
               <a
                 href={file.url}
                 target="_blank"

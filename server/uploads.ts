@@ -16,6 +16,7 @@ export interface UploadedFileMeta {
 
 const uploadRoot = path.join(process.cwd(), "uploads");
 ensureDir(uploadRoot);
+const PRODUCT_IMAGE_FOLDER = "product-images";
 
 function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) {
@@ -23,11 +24,30 @@ function ensureDir(dir: string) {
   }
 }
 
+function normalizeUploadFolder(input?: string | null) {
+  const normalized = (input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9/-]/g, "-")
+    .replace(/\/+/g, "/")
+    .replace(/^-+|-+$/g, "");
+
+  if (!normalized) return "misc";
+  return normalized.split("/").filter(Boolean).join("/");
+}
+
+function getQueryFolder(value: unknown) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+  return undefined;
+}
+
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
+  destination: (req, _file, cb) => {
     const now = new Date();
     const dateFolder = now.toISOString().slice(0, 10);
-    const target = path.join(uploadRoot, dateFolder);
+    const folder = normalizeUploadFolder(getQueryFolder(req.query.folder));
+    const target = path.join(uploadRoot, folder, dateFolder);
     ensureDir(target);
     cb(null, target);
   },
@@ -43,9 +63,18 @@ export const uploadMiddleware = multer({
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB
   },
-  fileFilter: (_req, file, cb) => {
-    const allowed = ["image/", "application/pdf", "text/plain"];
-    if (allowed.some((p) => file.mimetype.startsWith(p))) {
+  fileFilter: (req, file, cb) => {
+    const folder = normalizeUploadFolder(getQueryFolder(req.query.folder));
+    const allowedMimePrefixes = folder === PRODUCT_IMAGE_FOLDER
+      ? ["image/"]
+      : ["image/", "application/pdf", "text/plain"];
+
+    if (folder === PRODUCT_IMAGE_FOLDER && !file.mimetype.startsWith("image/")) {
+      cb(new Error("Product images must be PNG, JPG, WEBP, or GIF"));
+      return;
+    }
+
+    if (allowedMimePrefixes.some((p) => file.mimetype.startsWith(p))) {
       cb(null, true);
     } else {
       cb(new Error("Unsupported file type"));
@@ -66,10 +95,10 @@ export function handleUpload(req: Request, res: Response) {
     const files = Object.values(grouped).flat();
     const metas: UploadedFileMeta[] = files.map((file) => {
       const id = path.parse(file.filename).name;
-      const dateFolder = path.basename(file.destination);
+      const relativeDir = path.relative(uploadRoot, file.destination).split(path.sep).join("/");
       return {
         id,
-        url: `/uploads/${dateFolder}/${file.filename}`,
+        url: `/uploads/${relativeDir}/${file.filename}`,
         filename: file.originalname,
         contentType: file.mimetype,
         size: file.size,
@@ -78,4 +107,16 @@ export function handleUpload(req: Request, res: Response) {
     });
     res.json(metas);
   });
+}
+
+export function removeUploadedFileByUrl(url?: string | null) {
+  if (!url || !url.startsWith("/uploads/")) return;
+  const relativePath = url.replace(/^\/uploads\//, "");
+  const target = path.join(uploadRoot, relativePath);
+  if (!target.startsWith(uploadRoot)) return;
+  try {
+    if (fs.existsSync(target)) {
+      fs.unlinkSync(target);
+    }
+  } catch {}
 }

@@ -17,6 +17,8 @@ import {
   Settings,
   ShieldAlert,
   ShoppingCart,
+  Truck,
+  ClipboardList,
   RefreshCw,
   UserCog,
   FileText,
@@ -28,6 +30,7 @@ import {
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import logoUrl from "@assets/generated_images/minimalist_phone_shop_logo_icon.png";
+import { StaffLayout } from "@/components/staff-layout";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout, loading, preferences, updatePreferences } = useAuth();
@@ -35,6 +38,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(preferences?.sidebarCollapsed ?? false);
+  const isPOSRoute = location === "/pos";
 
   useEffect(() => {
     if (preferences?.sidebarCollapsed !== undefined) {
@@ -61,15 +65,48 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return <div className="min-h-screen bg-background flex items-center justify-center p-4">{children}</div>;
   }
 
+  if (user.role === "Sales") {
+    return <StaffLayout>{children}</StaffLayout>;
+  }
+
   const isOwner = user.role === "Owner";
   const isManager = user.role === "Manager";
-  const isSales = user.role === "Sales";
   const canSeeAdmin = isOwner || isManager;
   const canSeeDashboard = isOwner || isManager;
   const canSeeClosures = isOwner || isManager;
   const canSeeBaseValues = isOwner || isManager;
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
+  const posFocusedNav = [
+    { href: "/pos", icon: ShoppingCart, label: "Point of Sale" },
+    { href: "/management/orders", icon: ClipboardList, label: "Orders" },
+    { href: "/products", icon: Package, label: "Products" },
+    { href: "/customers", icon: Users, label: "Customers" },
+  ];
+  const standardMainNav = [
+    canSeeDashboard ? { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" } : null,
+    { href: "/pos", icon: ShoppingCart, label: "Point of Sale" },
+    { href: "/daily-close", icon: PlusCircle, label: "Daily Close" },
+    canSeeClosures ? { href: "/closures", icon: FileText, label: "Closures" } : null,
+  ].filter(Boolean) as Array<{ href: string; icon: any; label: string }>;
+  const standardManagementNav = [
+    { href: "/management/orders", icon: ClipboardList, label: "Orders" },
+    { href: "/management/deliveries", icon: Truck, label: "Deliveries" },
+    { href: "/trade-in", icon: RefreshCw, label: "Trade-In / Buyback" },
+    { href: "/leads", icon: MessageSquare, label: "Leads & Follow-ups" },
+    { href: "/devices", icon: Smartphone, label: "Devices (IMEI)" },
+    (isOwner || isManager) ? { href: "/products", icon: Package, label: "Products" } : null,
+    (isOwner || isManager) ? { href: "/customers", icon: Users, label: "Customers" } : null,
+    { href: "/repairs", icon: Wrench, label: "Repairs" },
+  ].filter(Boolean) as Array<{ href: string; icon: any; label: string }>;
+  const standardAdminNav = canSeeAdmin ? [
+    { href: "/expenses", icon: CreditCard, label: "Expenses" },
+    { href: "/audit-logs", icon: ShieldAlert, label: "Audit Logs" },
+    canSeeBaseValues ? { href: "/brands", icon: Tags, label: "Brands & Models" } : null,
+    canSeeBaseValues ? { href: "/base-values", icon: UserCog, label: "Base Values" } : null,
+    isOwner ? { href: "/staff", icon: UserCog, label: "Staff" } : null,
+    { href: "/settings", icon: Settings, label: "Settings" },
+  ].filter(Boolean) as Array<{ href: string; icon: any; label: string }> : [];
 
   const NavLink = ({ href, icon: Icon, label }: { href: string; icon: any; label: string }) => {
     const active = location === href;
@@ -93,13 +130,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className="md:hidden border-b bg-white p-4 flex items-center justify-between gap-3 sticky top-0 z-50">
+      <div className={cn("md:hidden border-b bg-white flex items-center justify-between gap-3 sticky top-0 z-50", isPOSRoute ? "p-3" : "p-4")}>
         <Link href={`/shop-settings/${activeShop?.id || "shop1"}`}> 
           <div className="flex min-w-0 items-center gap-2 font-bold text-foreground" aria-label="Edit shop settings">
             <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate">{activeShop?.name || "TechPOS"}</span>
-              {activeShop?.isMain && (
+              <span className="truncate">{isPOSRoute ? "POS" : (activeShop?.name || "TechPOS")}</span>
+              {!isPOSRoute && activeShop?.isMain && (
                 <span className="shrink-0 text-[10px] bg-secondary text-muted-foreground font-medium px-2 py-0.5 rounded-full">Main</span>
               )}
             </div>
@@ -119,13 +156,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar Navigation */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-40 w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] border-r bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen md:max-w-none flex flex-col overflow-hidden",
-        sidebarCollapsed ? "md:w-[84px]" : "md:w-72",
+        (sidebarCollapsed || isPOSRoute) ? "md:w-[96px]" : "md:w-72",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="hidden md:flex items-center justify-between border-b px-4 py-5">
           <Link href={`/shop-settings/${activeShop?.id || "shop1"}`} className="flex items-center gap-3 min-w-0" aria-label="Edit shop settings">
            <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
-           {!sidebarCollapsed && (
+           {!(sidebarCollapsed || isPOSRoute) && (
              <div className="flex flex-col min-w-0">
              <div className="flex items-center gap-2">
                <span className="font-bold text-lg text-foreground leading-tight truncate">{activeShop?.name || "TechPOS"}</span>
@@ -142,50 +179,46 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground"
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-expanded={!sidebarCollapsed}
+            aria-label={(sidebarCollapsed || isPOSRoute) ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!(sidebarCollapsed || isPOSRoute)}
             onClick={() => {
               const next = !sidebarCollapsed;
               setSidebarCollapsed(next);
               void updatePreferences({ sidebarCollapsed: next });
             }}
+            disabled={isPOSRoute}
           >
-            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {(sidebarCollapsed || isPOSRoute) ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
         </div>
 
-          <div className={cn("flex-1 overflow-y-auto py-6 space-y-1.5", sidebarCollapsed ? "px-2" : "px-4")}>
-          {!sidebarCollapsed && <div className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Main</div>}
+          <div className={cn("flex-1 overflow-y-auto py-6 space-y-1.5", (sidebarCollapsed || isPOSRoute) ? "px-2" : "px-4")}>
+          {!isPOSRoute && !sidebarCollapsed && <div className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Main</div>}
+          {isPOSRoute
+            ? posFocusedNav.map((item) => <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} />)
+            : standardMainNav.map((item) => <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} />)}
           
-          {canSeeDashboard && (
-            <NavLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-          )}
+          {!isPOSRoute && !sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Management</div>}
+          {!isPOSRoute && standardManagementNav.map((item) => <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} />)}
           
-          <NavLink href="/pos" icon={ShoppingCart} label="Point of Sale" />
-          <NavLink href="/daily-close" icon={PlusCircle} label="Daily Close" />
-          {canSeeClosures && (
-             <NavLink href="/closures" icon={FileText} label="Closures" />
-          )}
-          
-          {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Management</div>}
-          
-          <NavLink href="/trade-in" icon={RefreshCw} label="Trade-In / Buyback" />
-          <NavLink href="/leads" icon={MessageSquare} label="Leads & Follow-ups" />
-          <NavLink href="/devices" icon={Smartphone} label="Devices (IMEI)" />
-          {(isOwner || isManager) && <NavLink href="/products" icon={Package} label="Products" />}
-          {(isOwner || isManager) && <NavLink href="/customers" icon={Users} label="Customers" />}
-          <NavLink href="/repairs" icon={Wrench} label="Repairs" />
-          
-          {canSeeAdmin && (
+          {!isPOSRoute && canSeeAdmin && (
             <>
               {!sidebarCollapsed && <div className="mt-8 text-xs font-semibold text-muted-foreground uppercase tracking-[0.16em] mb-2 px-3">Admin</div>}
-              <NavLink href="/expenses" icon={CreditCard} label="Expenses" />
-              <NavLink href="/audit-logs" icon={ShieldAlert} label="Audit Logs" />
-              {canSeeBaseValues && <NavLink href="/brands" icon={Tags} label="Brands & Models" />}
-              {canSeeBaseValues && <NavLink href="/base-values" icon={UserCog} label="Base Values" />}
-              {isOwner && <NavLink href="/staff" icon={UserCog} label="Staff" />}
-              <NavLink href="/settings" icon={Settings} label="Settings" />
+              {standardAdminNav.map((item) => <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} />)}
             </>
+          )}
+
+          {isPOSRoute && (
+            <details className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2">
+              <summary className="cursor-pointer list-none text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                More
+              </summary>
+              <div className="mt-2 space-y-1">
+                {[...standardManagementNav.slice(1, 5), ...standardAdminNav.slice(0, 2)].map((item) => (
+                  <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} />
+                ))}
+              </div>
+            </details>
           )}
 
           <div className="mt-auto pt-8 border-t">
@@ -193,7 +226,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground font-bold">
                 {user.name.charAt(0)}
               </div>
-              {!sidebarCollapsed && (
+              {!(sidebarCollapsed || isPOSRoute) && (
                 <div className="flex flex-col min-w-0">
                   <span className="font-medium text-foreground truncate">{user.name}</span>
                   <span className="text-xs text-muted-foreground capitalize">{user.role}</span>
@@ -203,11 +236,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             
             <Button 
               variant="ghost" 
-              className={cn("w-full text-rose-600 hover:text-rose-700 hover:bg-rose-50/80", sidebarCollapsed ? "justify-center" : "justify-start")}
+              className={cn("w-full text-rose-600 hover:text-rose-700 hover:bg-rose-50/80", (sidebarCollapsed || isPOSRoute) ? "justify-center" : "justify-start")}
               onClick={logout}
             >
-              <LogOut className={cn("h-4 w-4", sidebarCollapsed ? "" : "mr-2")} />
-              {!sidebarCollapsed && "Logout"}
+              <LogOut className={cn("h-4 w-4", (sidebarCollapsed || isPOSRoute) ? "" : "mr-2")} />
+              {!(sidebarCollapsed || isPOSRoute) && "Logout"}
             </Button>
           </div>
         </div>
@@ -215,8 +248,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 xl:p-8">
-          <div className="mx-auto w-full max-w-[1640px] min-w-0">
+        <div className={cn("flex-1 overflow-y-auto", isPOSRoute ? "p-3 md:p-4 xl:p-5" : "p-4 md:p-6 xl:p-8")}>
+          <div className={cn("mx-auto w-full min-w-0", isPOSRoute ? "max-w-[1800px]" : "max-w-[1640px]")}>
             {children}
           </div>
         </div>

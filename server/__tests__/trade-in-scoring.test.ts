@@ -4,7 +4,9 @@ import {
   calculateConditionScore,
   determineDecision,
   calculateOffer,
+  getConditionQuestionsForDeviceType,
 } from '../trade-in-scoring';
+import { inferTradeInDeviceType } from '../../shared/trade-in-profile';
 
 describe('trade-in-scoring', () => {
   it('validates a known-good IMEI', () => {
@@ -49,5 +51,19 @@ describe('trade-in-scoring', () => {
   it('calculates offer based on condition score', () => {
     expect(calculateOffer(1000, 75)).toBe(750);
     expect(calculateOffer(1234, 50)).toBe(Math.round(1234 * 0.5));
+  });
+
+  it('infers laptop device types from model naming', () => {
+    expect(inferTradeInDeviceType({ brand: 'Apple', model: 'MacBook Pro 14' })).toBe('laptop');
+    expect(inferTradeInDeviceType({ brand: 'Dell', model: 'Latitude 5420' })).toBe('laptop');
+  });
+
+  it('returns laptop-specific questions without touchscreen checks', () => {
+    const laptopQuestions = getConditionQuestionsForDeviceType('laptop');
+    const phoneQuestions = getConditionQuestionsForDeviceType('phone');
+
+    expect(laptopQuestions.some((question) => question.question.includes('keyboard and trackpad'))).toBe(true);
+    expect(laptopQuestions.some((question) => question.question.includes('touchscreen'))).toBe(false);
+    expect(phoneQuestions.some((question) => question.question.includes('touchscreen'))).toBe(true);
   });
 });

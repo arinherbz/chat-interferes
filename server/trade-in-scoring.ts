@@ -1,4 +1,5 @@
 import type { ConditionOption, TradeInAssessment, ConditionQuestion, DeviceBaseValue } from "../shared/schema";
+import type { TradeInDeviceType } from "../shared/trade-in-profile";
 
 // ===================== IMEI VALIDATION =====================
 export function validateIMEI(imei: string): { valid: boolean; error?: string } {
@@ -39,6 +40,18 @@ export interface ScoringResult {
   decision: "auto_accept" | "auto_reject" | "manual_review";
   rejectionReasons: string[];
   deductionBreakdown: { question: string; deduction: number }[];
+}
+
+export interface TradeInQuestionDefinition {
+  id: string;
+  category: string;
+  question: string;
+  options: ConditionOption[];
+  sortOrder: number;
+  isRequired: boolean;
+  isCritical: boolean;
+  isActive: boolean;
+  deviceTypes: TradeInDeviceType[];
 }
 
 // Default scoring thresholds
@@ -169,195 +182,256 @@ export function processTradeIn(
   };
 }
 
-// ===================== DEFAULT CONDITION QUESTIONS =====================
-// These are seeded into the database for new shops
-export const DEFAULT_CONDITION_QUESTIONS = [
-  // Security (Critical)
+// ===================== STANDARD CONDITION QUESTIONS =====================
+export const STANDARD_CONDITION_QUESTIONS: TradeInQuestionDefinition[] = [
   {
+    id: "security-activation-lock",
     category: "security",
-    question: "Is iCloud/Find My iPhone enabled?",
+    question: "Can the device be fully signed out and factory reset?",
     options: [
-      { value: "no", label: "No - Account signed out", deduction: 0, isRejection: false },
-      { value: "yes", label: "Yes - Account still active", deduction: 100, isRejection: true },
-    ] as ConditionOption[],
+      { value: "yes", label: "Yes - Ready for reset", deduction: 0, isRejection: false },
+      { value: "no", label: "No - Lock or account still active", deduction: 100, isRejection: true },
+    ],
     sortOrder: 1,
     isRequired: true,
     isCritical: true,
     isActive: true,
+    deviceTypes: ["phone", "tablet", "laptop", "other"],
   },
   {
+    id: "security-managed-lock",
     category: "security",
-    question: "Is Google FRP (Factory Reset Protection) enabled?",
+    question: "Is the device tied to FRP, MDM, BIOS, or company management?",
     options: [
-      { value: "no", label: "No - Account removed", deduction: 0, isRejection: false },
-      { value: "yes", label: "Yes - Account still linked", deduction: 100, isRejection: true },
-      { value: "na", label: "N/A - Apple device", deduction: 0, isRejection: false },
-    ] as ConditionOption[],
+      { value: "no", label: "No - Not restricted", deduction: 0, isRejection: false },
+      { value: "yes", label: "Yes - Still restricted", deduction: 100, isRejection: true },
+    ],
     sortOrder: 2,
     isRequired: true,
     isCritical: true,
     isActive: true,
-  },
-  
-  // Screen Condition
-  {
-    category: "screen",
-    question: "What is the screen condition?",
-    options: [
-      { value: "perfect", label: "Perfect - No scratches or marks", deduction: 0, isRejection: false },
-      { value: "minor_scratches", label: "Minor scratches (not visible when screen is on)", deduction: 5, isRejection: false },
-      { value: "visible_scratches", label: "Visible scratches (seen when screen is on)", deduction: 15, isRejection: false },
-      { value: "cracked", label: "Cracked screen", deduction: 40, isRejection: false },
-      { value: "broken", label: "Screen not working / Black screen", deduction: 60, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 3,
-    isRequired: true,
-    isCritical: false,
-    isActive: true,
+    deviceTypes: ["phone", "tablet", "laptop", "other"],
   },
   {
-    category: "screen",
-    question: "Does the touchscreen respond correctly?",
+    id: "display-surface",
+    category: "display",
+    question: "What is the display condition?",
     options: [
-      { value: "yes", label: "Yes - Fully responsive", deduction: 0, isRejection: false },
-      { value: "partially", label: "Partially - Some areas unresponsive", deduction: 25, isRejection: false },
-      { value: "no", label: "No - Touchscreen not working", deduction: 50, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 4,
-    isRequired: true,
-    isCritical: false,
-    isActive: true,
-  },
-  
-  // Body Condition
-  {
-    category: "body",
-    question: "What is the back panel condition?",
-    options: [
-      { value: "perfect", label: "Perfect - Like new", deduction: 0, isRejection: false },
-      { value: "minor_wear", label: "Minor wear - Small scratches", deduction: 5, isRejection: false },
-      { value: "visible_damage", label: "Visible damage - Dents or deep scratches", deduction: 15, isRejection: false },
-      { value: "cracked", label: "Cracked back", deduction: 25, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 5,
-    isRequired: true,
-    isCritical: false,
-    isActive: true,
-  },
-  {
-    category: "body",
-    question: "What is the frame/edge condition?",
-    options: [
-      { value: "perfect", label: "Perfect - No dents or scratches", deduction: 0, isRejection: false },
-      { value: "minor_wear", label: "Minor wear - Small scuffs", deduction: 3, isRejection: false },
-      { value: "moderate_wear", label: "Moderate wear - Visible dents", deduction: 10, isRejection: false },
-      { value: "heavy_damage", label: "Heavy damage - Bent frame", deduction: 30, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 6,
-    isRequired: true,
-    isCritical: false,
-    isActive: true,
-  },
-  
-  // Functionality
-  {
-    category: "functionality",
-    question: "Does the device power on?",
-    options: [
-      { value: "yes", label: "Yes - Powers on normally", deduction: 0, isRejection: false },
-      { value: "slow", label: "Yes but slow / freezes", deduction: 15, isRejection: false },
-      { value: "no", label: "No - Does not power on", deduction: 70, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 7,
-    isRequired: true,
-    isCritical: false,
-    isActive: true,
-  },
-  {
-    category: "functionality",
-    question: "What is the battery health?",
-    options: [
-      { value: "excellent", label: "Excellent (85%+)", deduction: 0, isRejection: false },
-      { value: "good", label: "Good (70-84%)", deduction: 5, isRejection: false },
-      { value: "fair", label: "Fair (50-69%)", deduction: 15, isRejection: false },
-      { value: "poor", label: "Poor (below 50%)", deduction: 25, isRejection: false },
-      { value: "swollen", label: "Battery swollen/damaged", deduction: 40, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 8,
-    isRequired: true,
-    isCritical: false,
-    isActive: true,
-  },
-  {
-    category: "functionality",
-    question: "Do all cameras work?",
-    options: [
-      { value: "all_working", label: "All cameras working", deduction: 0, isRejection: false },
-      { value: "front_broken", label: "Front camera not working", deduction: 15, isRejection: false },
-      { value: "back_broken", label: "Back camera not working", deduction: 20, isRejection: false },
-      { value: "both_broken", label: "Both cameras not working", deduction: 35, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 9,
-    isRequired: true,
-    isCritical: false,
-    isActive: true,
-  },
-  {
-    category: "functionality",
-    question: "Do speakers and microphone work?",
-    options: [
-      { value: "all_working", label: "All working", deduction: 0, isRejection: false },
-      { value: "speaker_issue", label: "Speaker issues", deduction: 10, isRejection: false },
-      { value: "mic_issue", label: "Microphone issues", deduction: 10, isRejection: false },
-      { value: "both_issues", label: "Both have issues", deduction: 20, isRejection: false },
-    ] as ConditionOption[],
+      { value: "perfect", label: "Perfect - Clean display", deduction: 0, isRejection: false },
+      { value: "light_wear", label: "Light wear - Fine marks only", deduction: 5, isRejection: false },
+      { value: "visible_wear", label: "Visible wear - Deep scratches", deduction: 15, isRejection: false },
+      { value: "cracked", label: "Cracked or chipped display", deduction: 40, isRejection: false },
+      { value: "faulty", label: "Black spots, lines, flicker, or dead display", deduction: 60, isRejection: false },
+    ],
     sortOrder: 10,
     isRequired: true,
     isCritical: false,
     isActive: true,
+    deviceTypes: ["phone", "tablet", "laptop", "other"],
   },
   {
-    category: "functionality",
-    question: "Do all buttons work?",
+    id: "display-touch",
+    category: "display",
+    question: "Does the touchscreen respond correctly?",
     options: [
-      { value: "all_working", label: "All buttons work", deduction: 0, isRejection: false },
-      { value: "some_issues", label: "Some buttons stuck/not working", deduction: 10, isRejection: false },
-      { value: "major_issues", label: "Power or volume buttons not working", deduction: 20, isRejection: false },
-    ] as ConditionOption[],
+      { value: "yes", label: "Yes - Fully responsive", deduction: 0, isRejection: false },
+      { value: "partial", label: "Partially responsive", deduction: 25, isRejection: false },
+      { value: "no", label: "No - Touch not working", deduction: 50, isRejection: false },
+    ],
     sortOrder: 11,
     isRequired: true,
     isCritical: false,
     isActive: true,
+    deviceTypes: ["phone", "tablet"],
   },
   {
-    category: "functionality",
-    question: "Does Face ID / Touch ID / Fingerprint work?",
+    id: "body-back",
+    category: "body",
+    question: "What is the body or rear panel condition?",
     options: [
-      { value: "working", label: "Working", deduction: 0, isRejection: false },
-      { value: "not_working", label: "Not working", deduction: 15, isRejection: false },
-      { value: "na", label: "N/A - Device doesn't have this feature", deduction: 0, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 12,
+      { value: "perfect", label: "Perfect - Clean body", deduction: 0, isRejection: false },
+      { value: "minor_wear", label: "Minor wear - Light scratches", deduction: 5, isRejection: false },
+      { value: "visible_damage", label: "Visible damage - Dents or gouges", deduction: 15, isRejection: false },
+      { value: "cracked", label: "Cracked or broken housing", deduction: 30, isRejection: false },
+    ],
+    sortOrder: 20,
     isRequired: true,
     isCritical: false,
     isActive: true,
+    deviceTypes: ["phone", "tablet", "other"],
   },
-  
-  // Accessories
   {
+    id: "body-frame",
+    category: "body",
+    question: "What is the frame, hinge, or chassis condition?",
+    options: [
+      { value: "perfect", label: "Perfect - No dents or bending", deduction: 0, isRejection: false },
+      { value: "minor_wear", label: "Minor wear - Small scuffs", deduction: 5, isRejection: false },
+      { value: "moderate_wear", label: "Moderate wear - Visible dents", deduction: 12, isRejection: false },
+      { value: "heavy_damage", label: "Heavy damage - Bent frame or hinge issue", deduction: 30, isRejection: false },
+    ],
+    sortOrder: 21,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["phone", "tablet", "laptop", "other"],
+  },
+  {
+    id: "functionality-power",
+    category: "functionality",
+    question: "Does the device power on and stay stable?",
+    options: [
+      { value: "yes", label: "Yes - Starts normally", deduction: 0, isRejection: false },
+      { value: "slow", label: "Yes - Slow, freezing, or unstable", deduction: 15, isRejection: false },
+      { value: "no", label: "No - Does not power on", deduction: 70, isRejection: false },
+    ],
+    sortOrder: 30,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["phone", "tablet", "laptop", "other"],
+  },
+  {
+    id: "functionality-battery",
+    category: "functionality",
+    question: "What is the battery condition?",
+    options: [
+      { value: "excellent", label: "Excellent - Strong battery life", deduction: 0, isRejection: false },
+      { value: "good", label: "Good - Noticeable wear only", deduction: 5, isRejection: false },
+      { value: "fair", label: "Fair - Needs charge often", deduction: 15, isRejection: false },
+      { value: "poor", label: "Poor - Very weak battery", deduction: 25, isRejection: false },
+      { value: "damaged", label: "Swollen or damaged battery", deduction: 40, isRejection: false },
+    ],
+    sortOrder: 31,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["phone", "tablet", "laptop", "other"],
+  },
+  {
+    id: "functionality-cameras",
+    category: "functionality",
+    question: "Do all cameras work correctly?",
+    options: [
+      { value: "all_working", label: "Yes - All cameras working", deduction: 0, isRejection: false },
+      { value: "minor_issue", label: "Minor issue - One camera affected", deduction: 15, isRejection: false },
+      { value: "major_issue", label: "Major issue - Multiple cameras affected", deduction: 30, isRejection: false },
+    ],
+    sortOrder: 32,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["phone", "tablet"],
+  },
+  {
+    id: "functionality-audio",
+    category: "functionality",
+    question: "Do speakers, microphone, and media audio work?",
+    options: [
+      { value: "all_working", label: "All working", deduction: 0, isRejection: false },
+      { value: "minor_issue", label: "One audio function has issues", deduction: 10, isRejection: false },
+      { value: "major_issue", label: "Multiple audio functions have issues", deduction: 20, isRejection: false },
+    ],
+    sortOrder: 33,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["phone", "tablet", "laptop", "other"],
+  },
+  {
+    id: "functionality-buttons",
+    category: "functionality",
+    question: "Do all buttons, ports, and key controls work?",
+    options: [
+      { value: "all_working", label: "Everything works", deduction: 0, isRejection: false },
+      { value: "minor_issue", label: "Minor issue - One control or port affected", deduction: 10, isRejection: false },
+      { value: "major_issue", label: "Major issue - Several controls or ports affected", deduction: 20, isRejection: false },
+    ],
+    sortOrder: 34,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["phone", "tablet", "other"],
+  },
+  {
+    id: "functionality-biometric",
+    category: "functionality",
+    question: "Does Face ID, Touch ID, or fingerprint unlock work?",
+    options: [
+      { value: "working", label: "Working", deduction: 0, isRejection: false },
+      { value: "not_working", label: "Not working", deduction: 15, isRejection: false },
+      { value: "na", label: "Not available on this device", deduction: 0, isRejection: false },
+    ],
+    sortOrder: 35,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["phone", "tablet"],
+  },
+  {
+    id: "functionality-keyboard-trackpad",
+    category: "functionality",
+    question: "Do the keyboard and trackpad work correctly?",
+    options: [
+      { value: "all_working", label: "Yes - Fully working", deduction: 0, isRejection: false },
+      { value: "minor_issue", label: "Minor issue - A few keys or gestures affected", deduction: 15, isRejection: false },
+      { value: "major_issue", label: "Major issue - Keyboard or trackpad failing", deduction: 35, isRejection: false },
+    ],
+    sortOrder: 36,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["laptop"],
+  },
+  {
+    id: "functionality-ports-webcam",
+    category: "functionality",
+    question: "Do ports, Wi-Fi, webcam, and charging work correctly?",
+    options: [
+      { value: "all_working", label: "Yes - Fully working", deduction: 0, isRejection: false },
+      { value: "minor_issue", label: "Minor issue - One function affected", deduction: 12, isRejection: false },
+      { value: "major_issue", label: "Major issue - Multiple functions affected", deduction: 28, isRejection: false },
+    ],
+    sortOrder: 37,
+    isRequired: true,
+    isCritical: false,
+    isActive: true,
+    deviceTypes: ["laptop"],
+  },
+  {
+    id: "accessories-included",
     category: "accessories",
     question: "What accessories are included?",
     options: [
-      { value: "all", label: "Original box, charger, and cable", deduction: 0, isRejection: false },
-      { value: "some", label: "Some accessories (charger or cable)", deduction: 0, isRejection: false },
-      { value: "none", label: "No accessories", deduction: 0, isRejection: false },
-    ] as ConditionOption[],
-    sortOrder: 13,
+      { value: "full", label: "Primary charger and key accessories included", deduction: 0, isRejection: false },
+      { value: "partial", label: "Some accessories included", deduction: 5, isRejection: false },
+      { value: "none", label: "No accessories included", deduction: 10, isRejection: false },
+    ],
+    sortOrder: 40,
     isRequired: false,
     isCritical: false,
     isActive: true,
+    deviceTypes: ["phone", "tablet", "laptop", "other"],
   },
-] as unknown as ConditionQuestion[];
+];
+
+export function getConditionQuestionsForDeviceType(deviceType: TradeInDeviceType): ConditionQuestion[] {
+  return STANDARD_CONDITION_QUESTIONS
+    .filter((question) => question.deviceTypes.includes(deviceType))
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((question) => ({
+      id: question.id,
+      category: question.category,
+      question: question.question,
+      options: question.options as any,
+      sortOrder: question.sortOrder,
+      isRequired: question.isRequired,
+      isCritical: question.isCritical,
+      isActive: question.isActive,
+    })) as ConditionQuestion[];
+}
+
+export const DEFAULT_CONDITION_QUESTIONS = getConditionQuestionsForDeviceType("phone");
 
 // ===================== DEFAULT BASE VALUES =====================
 // Sample base values for common devices (2018-2025 lineup)

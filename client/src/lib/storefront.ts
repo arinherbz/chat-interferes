@@ -1,0 +1,23 @@
+export type StoreProduct = {
+  id: string;
+  name: string;
+  shopId?: string | null;
+  brand?: string;
+  model?: string;
+  price: number;
+  flashDealPrice?: number;
+  flashDealEndsAt?: string;
+  stock: number;
+  condition?: string;
+  imageUrl?: string;
+  description?: string;
+  featured?: boolean;
+  isFlashDeal?: boolean;
+  slug?: string;
+  category?: string;
+  ram?: string;
+  storage?: string;
+  popularity?: number;
+  createdAt?: string;
+  displayBadge?: string;
+};

@@ -8,17 +8,23 @@ import {
   tradeInWizardSchema, 
   tradeInReviewSchema,
   type ConditionOption,
+  type InsertDelivery,
   type User,
 } from "@shared/schema";
 import { 
   validateIMEI, 
   processTradeIn,
-  DEFAULT_CONDITION_QUESTIONS,
+  calculateConditionScore,
+  getConditionQuestionsForDeviceType,
   DEFAULT_BASE_VALUES,
 } from "./trade-in-scoring";
+import { getTradeInIdentifierType, inferTradeInDeviceType, type TradeInDeviceType } from "../shared/trade-in-profile";
 import { pbkdf2Sync, randomBytes, timingSafeEqual } from "crypto";
 import { z } from "zod";
-import { handleUpload } from "./uploads";
+import { handleUpload, removeUploadedFileByUrl } from "./uploads";
+import { asyncHandler } from "./middleware/async-handler";
+import { commerceService, ORDER_STATUSES } from "./services/commerce-service";
+import { HttpError, sendFailure, sendSuccess } from "./utils/api-response";
 
 declare module "express-session" {
   interface SessionData {
@@ -87,6 +93,131 @@ const baseValueUpsertSchema = z.object({
   shopId: z.string().optional(),
   isActive: z.boolean().optional(),
 });
+
+const conditionQuestionManageSchema = z.object({
+  id: z.string().optional(),
+  deviceType: z.enum(["phone", "tablet", "laptop", "other"]),
+  category: z.string().min(1),
+  question: z.string().min(1),
+  options: z.array(z.object({
+    value: z.string().min(1),
+    label: z.string().min(1),
+    deduction: z.number().min(0).max(100),
+    isRejection: z.boolean().optional(),
+  })).min(2),
+  sortOrder: z.number().int().min(0).default(0),
+  isRequired: z.boolean().default(true),
+  isCritical: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+  shopId: z.string().optional().nullable(),
+});
+
+function resolveTradeInDeviceType(payload: {
+  deviceType?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  storage?: string | null;
+}): TradeInDeviceType {
+  return inferTradeInDeviceType(payload);
+}
+
+function getTradeInQuestions(deviceType: TradeInDeviceType) {
+  return getConditionQuestionsForDeviceType(deviceType).map((question) => ({
+    id: question.id,
+    category: question.category,
+    question: question.question,
+    options: question.options as ConditionOption[],
+    sortOrder: question.sortOrder ?? 0,
+    isRequired: question.isRequired ?? true,
+    isCritical: question.isCritical ?? false,
+  }));
+}
+
+function validateSerialNumber(serialNumber?: string | null): { valid: boolean; value: string; error?: string } {
+  const value = (serialNumber ?? "").trim();
+  if (value.length < 4) {
+    return { valid: false, value, error: "Serial number must be at least 4 characters" };
+  }
+  if (value.length > 64) {
+    return { valid: false, value, error: "Serial number is too long" };
+  }
+  return { valid: true, value };
+}
+
+function validateTradeInIdentifier(payload: {
+  deviceType: TradeInDeviceType;
+  imei?: string | null;
+  serialNumber?: string | null;
+}): {
+  identifierType: "imei" | "serial";
+  identifierValue: string;
+  serialNumber: string | null;
+  valid: boolean;
+  error?: string;
+} {
+  const identifierType = getTradeInIdentifierType(payload.deviceType);
+  if (identifierType === "imei") {
+    const normalizedImei = (payload.imei ?? "").trim();
+    const validation = validateIMEI(normalizedImei);
+    return {
+      identifierType,
+      identifierValue: normalizedImei,
+      serialNumber: (payload.serialNumber ?? "").trim() || null,
+      valid: validation.valid,
+      error: validation.error,
+    };
+  }
+
+  const validation = validateSerialNumber(payload.serialNumber);
+  const identifierValue = validation.valid ? validation.value : (payload.serialNumber ?? "").trim();
+  return {
+    identifierType,
+    identifierValue,
+    serialNumber: validation.valid ? validation.value : identifierValue || null,
+    valid: validation.valid,
+    error: validation.error,
+  };
+}
+
+function normalizeBaseValueText(value: string | null | undefined) {
+  return (value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function normalizeBrandName(value: string | null | undefined) {
+  const normalized = normalizeBaseValueText(value).toLowerCase();
+  if (!normalized) return "";
+  return normalized
+    .split(" ")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizeStorageLabel(value: string | null | undefined) {
+  const normalized = normalizeBaseValueText(value);
+  if (!normalized) return "";
+  if (/^\d+$/.test(normalized)) {
+    return `${normalized}GB`;
+  }
+  return normalized.toUpperCase().replace(/\s+/g, "");
+}
+
+function normalizeBaseValuePayload(payload: {
+  brand: string;
+  model: string;
+  storage: string;
+  baseValue: number;
+  isActive?: boolean;
+  shopId?: string | null;
+}) {
+  return {
+    brand: normalizeBrandName(payload.brand),
+    model: normalizeBaseValueText(payload.model),
+    storage: normalizeStorageLabel(payload.storage),
+    baseValue: payload.baseValue,
+    isActive: payload.isActive ?? true,
+    shopId: payload.shopId || null,
+  };
+}
 
 const bootstrapOwnerSchema = z.object({
   username: z.string().min(3).max(64),
@@ -209,6 +340,48 @@ const closurePayloadSchema = z.object({
   repairs: z.array(z.any()).optional(),
 });
 
+const productUpsertSchema = z.object({
+  name: z.string().min(1, "Product name is required").max(200),
+  brand: z.string().trim().optional().nullable(),
+  model: z.string().trim().optional().nullable(),
+  category: z.string().min(1, "Category is required").max(120),
+  price: z.number().nonnegative(),
+  stock: z.number().int().nonnegative(),
+  costPrice: z.number().nonnegative(),
+  minStock: z.number().int().nonnegative(),
+  sku: z.string().trim().max(120).optional().nullable(),
+  barcode: z.string().trim().max(120).optional().nullable(),
+  imageUrl: z.string().trim().max(500).optional().nullable(),
+  shopId: z.string().optional().nullable(),
+});
+
+function normalizeProductText(value?: string | null) {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized ? normalized : undefined;
+}
+
+function normalizeProductBarcode(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function normalizeProductImageUrl(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function getProductValidationMessage(error: z.ZodError) {
+  const firstIssue = error.issues[0];
+  const field = firstIssue?.path?.[0];
+  if (field === "stock" || field === "minStock") {
+    return "Stock values cannot be negative";
+  }
+  if (field === "price" || field === "costPrice") {
+    return "Price values cannot be negative";
+  }
+  return firstIssue?.message || "Invalid product payload";
+}
+
 const closureStatusUpdateSchema = z.object({
   status: z.enum(["pending", "confirmed", "flagged"]),
 });
@@ -322,9 +495,7 @@ export async function registerRoutes(
     message: string,
     details?: unknown,
   ) => {
-    const payload: Record<string, unknown> = { message };
-    if (details !== undefined) payload.details = details;
-    return res.status(status).json(payload);
+    return sendFailure(res, status, message, details);
   };
 
   const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
@@ -468,8 +639,8 @@ export async function registerRoutes(
 
   // Require auth for all API routes except auth endpoints
   app.use("/api", (req, res, next) => {
-    // Allow unauthenticated access only to auth bootstrap/login endpoints.
-    if (req.path.startsWith("/auth")) return next();
+    // Public customer/storefront APIs must stay accessible without a session.
+    if (req.path.startsWith("/auth") || req.path.startsWith("/store")) return next();
     return requireAuth(req, res, next);
   });
 
@@ -1420,21 +1591,120 @@ export async function registerRoutes(
   // Get all condition questions for the wizard
   app.get("/api/trade-in/questions", async (req: Request, res: Response) => {
     try {
-      let questions = await storage.getConditionQuestions();
-      
-      // If no questions exist, seed with defaults
-      if (questions.length === 0) {
-        for (const q of DEFAULT_CONDITION_QUESTIONS) {
-          // Storage expects `options` as JSON; coerce here to satisfy the Insert schema
-          await storage.createConditionQuestion({ ...q, options: q.options as any });
-        }
-        questions = await storage.getConditionQuestions();
-      }
-      
+      const deviceType = resolveTradeInDeviceType({
+        deviceType: req.query.deviceType as string | undefined,
+        brand: req.query.brand as string | undefined,
+        model: req.query.model as string | undefined,
+        storage: req.query.storage as string | undefined,
+      });
+      const shopId = req.query.shopId as string | undefined;
+      const customQuestions = await storage.getConditionQuestions({ deviceType, shopId });
+      const questions = customQuestions.length > 0 ? customQuestions.map((question) => ({
+        ...question,
+        options: question.options as ConditionOption[],
+      })) : getTradeInQuestions(deviceType);
       res.json(questions);
     } catch (error) {
       console.error("Error fetching questions:", error);
       sendError(res, 500, "Failed to fetch questions");
+    }
+  });
+
+  app.post("/api/trade-in/questions/manage", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    try {
+      const parsed = conditionQuestionManageSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return sendError(res, 400, "Invalid question payload", parsed.error.errors);
+      }
+
+      const payload = parsed.data;
+      const values = {
+        deviceType: payload.deviceType,
+        category: payload.category,
+        question: payload.question,
+        options: payload.options as any,
+        sortOrder: payload.sortOrder,
+        isRequired: payload.isRequired,
+        isCritical: payload.isCritical,
+        isActive: payload.isActive,
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      };
+
+      const saved = payload.id
+        ? await storage.updateConditionQuestion(payload.id, values)
+        : await storage.createConditionQuestion(values);
+
+      if (!saved) {
+        return sendError(res, 404, "Condition question not found");
+      }
+
+      return sendSuccess(res, saved, payload.id ? 200 : 201);
+    } catch (error) {
+      console.error("Error saving trade-in question:", error);
+      sendError(res, 500, "Failed to save trade-in question");
+    }
+  });
+
+  app.patch("/api/trade-in/questions/:id", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    try {
+      const parsed = conditionQuestionManageSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return sendError(res, 400, "Invalid question update payload", parsed.error.errors);
+      }
+
+      const payload = parsed.data;
+      const updated = await storage.updateConditionQuestion(req.params.id, {
+        deviceType: payload.deviceType,
+        category: payload.category,
+        question: payload.question,
+        options: payload.options as any,
+        sortOrder: payload.sortOrder,
+        isRequired: payload.isRequired,
+        isCritical: payload.isCritical,
+        isActive: payload.isActive,
+        shopId: payload.shopId || req.currentUser?.shopId || null,
+      });
+
+      if (!updated) {
+        return sendError(res, 404, "Condition question not found");
+      }
+
+      return sendSuccess(res, updated);
+    } catch (error) {
+      console.error("Error updating trade-in question:", error);
+      sendError(res, 500, "Failed to update trade-in question");
+    }
+  });
+
+  app.post("/api/trade-in/questions/reset", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
+    try {
+      const parsed = z.object({
+        deviceType: z.enum(["phone", "tablet", "laptop", "other"]),
+        shopId: z.string().optional().nullable(),
+      }).safeParse(req.body);
+
+      if (!parsed.success) {
+        return sendError(res, 400, "Invalid reset payload", parsed.error.errors);
+      }
+
+      const targetShopId = parsed.data.shopId || req.currentUser?.shopId || undefined;
+      const existing = await storage.getConditionQuestions({
+        deviceType: parsed.data.deviceType,
+        shopId: targetShopId,
+      });
+
+      await Promise.all(existing.map((question) =>
+        storage.updateConditionQuestion(question.id, { isActive: false })
+      ));
+
+      return sendSuccess(res, {
+        reset: true,
+        deviceType: parsed.data.deviceType,
+        disabledCount: existing.length,
+      });
+    } catch (error) {
+      console.error("Error resetting trade-in profile:", error);
+      sendError(res, 500, "Failed to reset trade-in profile");
     }
   });
 
@@ -1487,15 +1757,8 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid payload", details: parsed.error.errors });
       }
-      const payload = parsed.data;
-      const upserted = await storage.upsertDeviceBaseValue({
-        brand: payload.brand,
-        model: payload.model,
-        storage: payload.storage,
-        baseValue: payload.baseValue,
-        isActive: payload.isActive ?? true,
-        shopId: payload.shopId || null,
-      });
+      const payload = normalizeBaseValuePayload(parsed.data);
+      const upserted = await storage.upsertDeviceBaseValue(payload);
       res.json(upserted);
     } catch (error) {
       console.error("Error upserting base value:", error);
@@ -1831,44 +2094,117 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/trade-in/validate-identifier", async (req: Request, res: Response) => {
+    try {
+      const deviceType = resolveTradeInDeviceType(req.body ?? {});
+      const identifier = validateTradeInIdentifier({
+        deviceType,
+        imei: req.body?.imei,
+        serialNumber: req.body?.serialNumber,
+      });
+
+      if (!identifier.valid) {
+        return res.json({
+          valid: false,
+          deviceType,
+          identifierType: identifier.identifierType,
+          message: identifier.error,
+          blocked: false,
+          duplicate: false,
+        });
+      }
+
+      const blocked = await storage.getBlockedImei(identifier.identifierValue);
+      if (blocked) {
+        return res.json({
+          valid: false,
+          deviceType,
+          identifierType: identifier.identifierType,
+          message: `${identifier.identifierType === "imei" ? "IMEI" : "Serial"} blocked: ${blocked.reason}`,
+          blocked: true,
+          duplicate: false,
+        });
+      }
+
+      const existing = await storage.getTradeInByImei(identifier.identifierValue);
+      const isDuplicate = !!existing && existing.status !== "rejected" && existing.status !== "cancelled";
+
+      return res.json({
+        valid: !isDuplicate,
+        deviceType,
+        identifierType: identifier.identifierType,
+        blocked: false,
+        duplicate: isDuplicate,
+        message: isDuplicate ? "This device has already been processed in trade-in / buyback" : undefined,
+        existingTradeIn: isDuplicate ? {
+          id: existing.id,
+          tradeInNumber: existing.tradeInNumber,
+          status: existing.status,
+        } : undefined,
+      });
+    } catch (error) {
+      console.error("Error validating identifier:", error);
+      sendError(res, 500, "Failed to validate device identifier");
+    }
+  });
+
   // Calculate trade-in offer (preview before submission)
   app.post("/api/trade-in/calculate", async (req: Request, res: Response) => {
     try {
-      const { brand, model, storage: storageSize, conditionAnswers, isIcloudLocked, isGoogleLocked, imei } = req.body;
-      
+      const { brand, model, storage: storageSize, conditionAnswers } = req.body;
+      const deviceType = resolveTradeInDeviceType(req.body ?? {});
+      const canFallbackToManualReview = req.currentUser?.role === "Owner" || req.currentUser?.role === "Manager";
+      const identifier = validateTradeInIdentifier({
+        deviceType,
+        imei: req.body?.imei,
+        serialNumber: req.body?.serialNumber,
+      });
+
+      // Get questions for scoring
+      const formattedQuestions = getTradeInQuestions(deviceType);
+      const scorePreview = calculateConditionScore(conditionAnswers || {}, formattedQuestions);
+
       // Get base value
       const baseValueRecord = await storage.getDeviceBaseValue(brand, model, storageSize);
       if (!baseValueRecord) {
-        return sendError(res, 404, "No base value found for this device configuration");
+        if (!canFallbackToManualReview) {
+          return sendError(res, 404, "No base value found for this device configuration");
+        }
+
+        return res.json({
+          deviceType,
+          identifierType: identifier.identifierType,
+          baseValue: 0,
+          conditionScore: scorePreview.score,
+          calculatedOffer: 0,
+          decision: "manual_review",
+          rejectionReasons: ["Missing pricing rule"],
+          deductionBreakdown: scorePreview.deductions,
+          requiresPricingRule: true,
+          reviewMessage: "Pricing rule missing. Intake can continue, but the final offer requires manager review.",
+        });
       }
-      
-      // Get questions for scoring
-      const questions = await storage.getConditionQuestions();
-      const formattedQuestions = questions.map(q => ({
-        id: q.id,
-        question: q.question,
-        options: q.options as ConditionOption[],
-      }));
-      
-      // Validate IMEI
-      const imeiValidation = validateIMEI(imei || "");
-      const blocked = imei ? await storage.getBlockedImei(imei) : null;
-      const existing = imei ? await storage.getTradeInByImei(imei) : null;
-      const isDuplicate = existing && existing.status !== 'rejected' && existing.status !== 'cancelled';
+
+      const blocked = identifier.valid ? await storage.getBlockedImei(identifier.identifierValue) : null;
+      const existing = identifier.valid ? await storage.getTradeInByImei(identifier.identifierValue) : null;
+      const isDuplicate = !!existing && existing.status !== "rejected" && existing.status !== "cancelled";
       
       // Process trade-in scoring
       const result = processTradeIn(
         baseValueRecord.baseValue,
         conditionAnswers || {},
         formattedQuestions,
-        isIcloudLocked || false,
-        isGoogleLocked || false,
+        false,
+        false,
         isDuplicate || false,
-        !imeiValidation.valid
+        !identifier.valid
       );
       
       res.json({
+        deviceType,
+        identifierType: identifier.identifierType,
         baseValue: baseValueRecord.baseValue,
+        requiresPricingRule: false,
         ...result,
       });
     } catch (error) {
@@ -1887,60 +2223,71 @@ export async function registerRoutes(
       
       const data = parsed.data;
       const attachments = Array.isArray(data.attachments) ? data.attachments : [];
+      const deviceType = resolveTradeInDeviceType(data);
+      const canFallbackToManualReview = req.currentUser?.role === "Owner" || req.currentUser?.role === "Manager";
+      const identifier = validateTradeInIdentifier({
+        deviceType,
+        imei: data.imei,
+        serialNumber: data.serialNumber,
+      });
       
-      // Validate IMEI
-      const imeiValidation = validateIMEI(data.imei);
-      if (!imeiValidation.valid) {
-        return sendError(res, 400, imeiValidation.error || "Invalid IMEI");
+      if (!identifier.valid) {
+        return sendError(res, 400, identifier.error || "Invalid device identifier");
       }
       
       // Check if blocked
-      const blocked = await storage.getBlockedImei(data.imei);
+      const blocked = await storage.getBlockedImei(identifier.identifierValue);
       if (blocked) {
-        return sendError(res, 400, `IMEI blocked: ${blocked.reason}`);
+        return sendError(res, 400, `${identifier.identifierType === "imei" ? "IMEI" : "Serial"} blocked: ${blocked.reason}`);
       }
       
       // Check duplicate
-      const existing = await storage.getTradeInByImei(data.imei);
-      const isDuplicate = existing && existing.status !== 'rejected' && existing.status !== 'cancelled';
+      const existing = await storage.getTradeInByImei(identifier.identifierValue);
+      const isDuplicate = !!existing && existing.status !== 'rejected' && existing.status !== 'cancelled';
       
       if (isDuplicate) {
         // Block the IMEI
         await storage.createBlockedImei({
-          imei: data.imei,
+          imei: identifier.identifierValue,
           reason: "duplicate",
           blockedBy: "system",
           notes: `Duplicate attempt. Original trade-in: ${existing.tradeInNumber}`,
         });
         return res.status(400).json({ 
-          message: "Duplicate IMEI - this device has already been traded in",
+          message: `Duplicate ${identifier.identifierType.toUpperCase()} - this device has already been traded in`,
           existingTradeIn: existing.tradeInNumber,
         });
       }
       
       // Get base value
       const baseValueRecord = await storage.getDeviceBaseValue(data.brand, data.model, data.storage || "Unknown");
-      if (!baseValueRecord) {
+      if (!baseValueRecord && !canFallbackToManualReview) {
         return sendError(res, 400, "No base value found for this device. Please contact manager.");
       }
       
       // Get questions and calculate score
-      const questions = await storage.getConditionQuestions();
-      const formattedQuestions = questions.map(q => ({
-        id: q.id,
-        question: q.question,
-        options: q.options as ConditionOption[],
-      }));
-      
-      const scoringResult = processTradeIn(
-        baseValueRecord.baseValue,
-        data.conditionAnswers,
-        formattedQuestions,
-        data.isIcloudLocked,
-        data.isGoogleLocked,
-        false,
-        false
-      );
+      const formattedQuestions = getTradeInQuestions(deviceType);
+
+      const scoringResult = baseValueRecord
+        ? processTradeIn(
+            baseValueRecord.baseValue,
+            data.conditionAnswers,
+            formattedQuestions,
+            false,
+            false,
+            false,
+            false
+          )
+        : (() => {
+            const preview = calculateConditionScore(data.conditionAnswers, formattedQuestions);
+            return {
+              conditionScore: preview.score,
+              calculatedOffer: 0,
+              decision: "manual_review" as const,
+              rejectionReasons: ["Missing pricing rule"],
+              deductionBreakdown: preview.deductions,
+            };
+          })();
       
       // Generate trade-in number
       const tradeInNumber = await storage.getNextTradeInNumber();
@@ -1965,18 +2312,19 @@ export async function registerRoutes(
         model: data.model,
         storage: data.storage,
         color: data.color,
-        imei: data.imei,
-        serialNumber: data.serialNumber,
+        imei: identifier.identifierValue,
+        serialNumber: identifier.serialNumber,
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         customerEmail: data.customerEmail || null,
-        baseValue: baseValueRecord.baseValue,
+        baseValue: baseValueRecord?.baseValue ?? 0,
         conditionAnswers: data.conditionAnswers,
         conditionScore: scoringResult.conditionScore,
         calculatedOffer: scoringResult.calculatedOffer,
         finalOffer: scoringResult.decision === "auto_accept" ? scoringResult.calculatedOffer : null,
         decision: scoringResult.decision,
         rejectionReasons: scoringResult.rejectionReasons.length > 0 ? scoringResult.rejectionReasons : null,
+        reviewNotes: baseValueRecord ? null : "Pricing rule missing at intake. Final offer pending manager review.",
         payoutMethod: data.payoutMethod || null,
         linkedSaleId: data.linkedSaleId || null,
         linkedRepairId: data.linkedRepairId || null,
@@ -1999,6 +2347,7 @@ export async function registerRoutes(
       res.json({
         assessment,
         scoring: scoringResult,
+        requiresPricingRule: !baseValueRecord,
       });
     } catch (error) {
       console.error("Error submitting trade-in:", error);
@@ -2042,12 +2391,31 @@ export async function registerRoutes(
 
   app.post("/api/products", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
     try {
-      const payload = req.body;
+      const parsed = productUpsertSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return sendError(res, 400, getProductValidationMessage(parsed.error));
+      }
+      const payload = {
+        ...parsed.data,
+        name: parsed.data.name.trim(),
+        brand: normalizeProductText(parsed.data.brand),
+        model: normalizeProductText(parsed.data.model),
+        category: parsed.data.category.trim(),
+        sku: normalizeProductText(parsed.data.sku),
+        barcode: normalizeProductBarcode(parsed.data.barcode),
+        imageUrl: normalizeProductImageUrl(parsed.data.imageUrl),
+      };
       if (Number(payload.stock) < 0 || Number(payload.minStock) < 0) {
         return sendError(res, 400, "Stock values cannot be negative");
       }
       if (Number(payload.price) < 0 || Number(payload.costPrice) < 0) {
         return sendError(res, 400, "Price values cannot be negative");
+      }
+      if (payload.barcode) {
+        const existing = await storage.getProductByBarcode(payload.barcode);
+        if (existing) {
+          return sendError(res, 409, "Barcode is already assigned to another product");
+        }
       }
       const created = await storage.createProduct({ ...payload, shopId: payload.shopId || req.currentUser?.shopId || null });
       await storage.createActivityLog({ action: "product_created", entity: "product", entityId: created.id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Created product ${created.name}`, metadata: { product: created } });
@@ -2061,20 +2429,46 @@ export async function registerRoutes(
   app.patch("/api/products/:id", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      if (req.body.stock !== undefined && Number(req.body.stock) < 0) {
+      const existingProduct = await storage.getProduct(id);
+      if (!existingProduct) return sendError(res, 404, "Product not found");
+      const parsed = productUpsertSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return sendError(res, 400, getProductValidationMessage(parsed.error));
+      }
+      const updates = {
+        ...parsed.data,
+        name: parsed.data.name?.trim(),
+        brand: parsed.data.brand === null ? null : normalizeProductText(parsed.data.brand),
+        model: parsed.data.model === null ? null : normalizeProductText(parsed.data.model),
+        category: parsed.data.category?.trim(),
+        sku: parsed.data.sku === null ? null : normalizeProductText(parsed.data.sku),
+        barcode: parsed.data.barcode === null ? null : normalizeProductBarcode(parsed.data.barcode),
+        imageUrl: parsed.data.imageUrl === null ? null : normalizeProductImageUrl(parsed.data.imageUrl),
+      };
+      if (updates.stock !== undefined && Number(updates.stock) < 0) {
         return sendError(res, 400, "Stock cannot be negative");
       }
-      if (req.body.minStock !== undefined && Number(req.body.minStock) < 0) {
+      if (updates.minStock !== undefined && Number(updates.minStock) < 0) {
         return sendError(res, 400, "Minimum stock cannot be negative");
       }
-      if (req.body.price !== undefined && Number(req.body.price) < 0) {
+      if (updates.price !== undefined && Number(updates.price) < 0) {
         return sendError(res, 400, "Price cannot be negative");
       }
-      if (req.body.costPrice !== undefined && Number(req.body.costPrice) < 0) {
+      if (updates.costPrice !== undefined && Number(updates.costPrice) < 0) {
         return sendError(res, 400, "Cost price cannot be negative");
       }
-      const updated = await storage.updateProduct(id, req.body);
+      if (updates.barcode) {
+        const barcodeOwner = await storage.getProductByBarcode(updates.barcode);
+        if (barcodeOwner && barcodeOwner.id !== id) {
+          return sendError(res, 409, "Barcode is already assigned to another product");
+        }
+      }
+      const previousImageUrl = existingProduct.imageUrl;
+      const updated = await storage.updateProduct(id, updates);
       if (!updated) return sendError(res, 404, "Product not found");
+      if (previousImageUrl && updated.imageUrl !== previousImageUrl) {
+        removeUploadedFileByUrl(previousImageUrl);
+      }
       await storage.createActivityLog({ action: "product_updated", entity: "product", entityId: id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Updated product ${updated.name}` });
       res.json(updated);
     } catch (err) {
@@ -2086,7 +2480,11 @@ export async function registerRoutes(
   app.delete("/api/products/:id", requireRole(["Owner", "Manager"]), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      const existingProduct = await storage.getProduct(id);
       await storage.deleteProduct(id);
+      if (existingProduct?.imageUrl) {
+        removeUploadedFileByUrl(existingProduct.imageUrl);
+      }
       await storage.createActivityLog({ action: "product_deleted", entity: "product", entityId: id, userId: req.currentUser?.id, userName: req.currentUser?.name, role: req.currentUser?.role, details: `Deleted product ${id}` });
       res.json({ success: true });
     } catch (err) {
@@ -2218,6 +2616,188 @@ export async function registerRoutes(
       sendError(res, 500, "Failed to fetch audit logs");
     }
   });
+
+  // ==================== STOREFRONT API ROUTES ====================
+
+  // Get products for storefront (public)
+  app.get("/api/store/products", asyncHandler(async (req: Request, res: Response) => {
+    const products = await commerceService.listStoreProducts({
+      shopId: req.query.shopId as string | undefined,
+      query: req.query.q as string | undefined,
+      sort: req.query.sort as string | undefined,
+      condition: req.query.condition as string | undefined,
+    });
+
+    return sendSuccess(res, products);
+  }));
+
+  // Get single product for storefront (public)
+  app.get("/api/store/products/:id", asyncHandler(async (req: Request, res: Response) => {
+    const product = await commerceService.getStoreProduct(req.params.id);
+    return sendSuccess(res, product);
+  }));
+
+  // Create order (checkout) - public but requires customer info
+  app.post("/api/store/checkout", asyncHandler(async (req: Request, res: Response) => {
+    const checkoutSchema = z.object({
+      shopId: z.string().optional(),
+      customerName: z.string().min(1),
+      customerPhone: z.string().min(1),
+      customerEmail: z.string().email().optional(),
+      items: z.array(z.object({
+        productId: z.string(),
+        quantity: z.number().int().positive(),
+      })).min(1),
+      paymentMethod: z.enum(["Cash", "Card", "Mobile Money"]),
+      deliveryType: z.enum(["PICKUP", "KAMPALA", "UPCOUNTRY"]).optional(),
+      deliveryAddress: z.string().optional(),
+      notes: z.string().optional(),
+    });
+
+    const order = await commerceService.createStoreOrder(checkoutSchema.parse(req.body));
+    return sendSuccess(res, order, 201);
+  }));
+
+  // Track order status (public)
+  app.get("/api/store/orders/:id/track", asyncHandler(async (req: Request, res: Response) => {
+    const order = await commerceService.trackOrder(req.params.id);
+    return sendSuccess(res, order);
+  }));
+
+  app.get("/api/store/orders/track/:orderNumber", asyncHandler(async (req: Request, res: Response) => {
+    const order = await commerceService.trackOrder(req.params.orderNumber);
+    return sendSuccess(res, order);
+  }));
+
+  // ==================== ADMIN ORDER MANAGEMENT ROUTES ====================
+
+  // Get orders (admin/staff)
+  app.get("/api/orders", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const orders = await commerceService.listOrders({
+      shopId: req.query.shopId as string | undefined,
+      status: req.query.status as string | undefined,
+      assignedStaffId: req.currentUser?.role === "Sales"
+        ? req.currentUser.id
+        : req.query.assignedStaffId as string | undefined,
+    });
+    return sendSuccess(res, orders);
+  }));
+
+  // Get single order (admin/staff)
+  app.get("/api/orders/:id", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const order = await commerceService.getOrderDetail(req.params.id);
+    if (req.currentUser?.role === "Sales" && order.assignedStaffId !== req.currentUser.id) {
+      throw new HttpError(403, "Forbidden");
+    }
+    return sendSuccess(res, order);
+  }));
+
+  // Update order status (admin/staff)
+  app.patch("/api/orders/:id/status", requireRole(["Owner", "Manager"]), asyncHandler(async (req: Request, res: Response) => {
+    const statusSchema = z.object({
+      status: z.enum(ORDER_STATUSES),
+      assignedStaffId: z.string().optional(),
+    });
+
+    const { status, assignedStaffId } = statusSchema.parse(req.body);
+    const order = await commerceService.updateOrderStatus(req.params.id, status, assignedStaffId);
+    return sendSuccess(res, order);
+  }));
+
+  // ==================== DELIVERY MANAGEMENT ROUTES ====================
+
+  // Get deliveries (admin/staff)
+  app.get("/api/deliveries", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const deliveries = await commerceService.listDeliveries({
+      status: req.query.status as string | undefined,
+      assignedRiderId: req.currentUser?.role === "Sales"
+        ? req.currentUser.id
+        : req.query.assignedRiderId as string | undefined,
+    });
+    return sendSuccess(res, deliveries);
+  }));
+
+  // Create delivery for order (admin/staff)
+  app.post("/api/deliveries", requireRole(["Owner", "Manager"]), asyncHandler(async (req: Request, res: Response) => {
+    const deliverySchema = z.object({
+      orderId: z.string(),
+      address: z.string().min(1).optional(),
+      assignedRiderId: z.string().optional(),
+      scheduledAt: z.coerce.date().optional(),
+      notes: z.string().optional(),
+    });
+
+    const delivery = await commerceService.createDelivery(deliverySchema.parse(req.body));
+    return sendSuccess(res, delivery, 201);
+  }));
+
+  // Update delivery status (admin/staff)
+  app.patch("/api/deliveries/:id/status", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const statusSchema = z.object({
+      status: z.enum(["PENDING", "ASSIGNED", "PICKED UP", "IN TRANSIT", "DELIVERED", "FAILED"]),
+      riderId: z.string().optional(),
+      notes: z.string().optional(),
+    });
+
+    if (req.currentUser?.role === "Sales") {
+      const delivery = await storage.getDelivery(req.params.id);
+      if (!delivery || delivery.assignedRiderId !== req.currentUser.id) {
+        throw new HttpError(403, "Forbidden");
+      }
+    }
+
+    const delivery = await commerceService.updateDeliveryStatus(req.params.id, statusSchema.parse(req.body));
+    return sendSuccess(res, delivery);
+  }));
+
+  // ==================== RECEIPT MANAGEMENT ROUTES ====================
+
+  // Get receipts for order (admin/staff)
+  app.get("/api/receipts", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const receipts = await commerceService.listReceipts(req.query.orderId as string | undefined);
+    return sendSuccess(res, receipts);
+  }));
+
+  // Generate receipt for order (admin/staff)
+  app.post("/api/receipts", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const receiptSchema = z.object({
+      orderId: z.string(),
+      pdfUrl: z.string().optional(),
+      sentVia: z.array(z.string()).optional(),
+    });
+
+    const receipt = await commerceService.createReceipt(receiptSchema.parse(req.body));
+    return sendSuccess(res, receipt, 201);
+  }));
+
+  // ==================== NOTIFICATION ROUTES ====================
+
+  // Get notifications (admin/staff)
+  app.get("/api/notifications", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const availableShops = await storage.getShops();
+    const defaultShopId = (availableShops.find((shop) => shop.isMain) ?? availableShops[0])?.id;
+    const shopId = req.currentUser?.shopId || req.query.shopId as string | undefined || defaultShopId;
+    const notifications = await commerceService.listNotifications(shopId);
+    return sendSuccess(res, notifications);
+  }));
+
+  // Mark notification as read (admin/staff)
+  app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const notification = await commerceService.markNotificationRead(req.params.id);
+    return sendSuccess(res, notification);
+  }));
+
+  // Get unread notification count (admin/staff)
+  app.get("/api/notifications/unread-count", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const availableShops = await storage.getShops();
+    const defaultShopId = (availableShops.find((shop) => shop.isMain) ?? availableShops[0])?.id;
+    const shopId = req.currentUser?.shopId || req.query.shopId as string | undefined || defaultShopId;
+    if (!shopId) {
+      throw new HttpError(400, "Shop ID required");
+    }
+    const count = await commerceService.getUnreadNotificationCount(shopId);
+    return sendSuccess(res, { count });
+  }));
 
   return httpServer;
 }

@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useLocation } from "wouter";
 import { useData } from "@/lib/data-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
   CheckCircle2, Smartphone, DollarSign, User, AlertCircle, RefreshCw, Scan, 
   ChevronRight, ChevronLeft, AlertTriangle, XCircle, Clock, Shield, 
-  Cpu, Battery, Camera, Volume2, Fingerprint, Package, Lock, CheckCircle,
+  Cpu, Battery, Camera, Volume2, Fingerprint, Package, Lock, CheckCircle, Laptop, Monitor,
   Eye, Edit, FileText
 } from "lucide-react";
 import { Scanner } from "@/components/scanner";
@@ -27,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { getTradeInIdentifierLabel, getTradeInIdentifierType, inferTradeInDeviceType, type TradeInDeviceType } from "@shared/trade-in-profile";
 
 interface ConditionOption {
   value: string;
@@ -75,12 +77,16 @@ interface TradeInAssessment {
 }
 
 interface ScoringResult {
+  deviceType?: TradeInDeviceType;
+  identifierType?: "imei" | "serial";
   baseValue: number;
   conditionScore: number;
   calculatedOffer: number;
   decision: "auto_accept" | "auto_reject" | "manual_review";
   rejectionReasons: string[];
   deductionBreakdown: { question: string; deduction: number }[];
+  requiresPricingRule?: boolean;
+  reviewMessage?: string;
 }
 
 const WIZARD_STEPS = [
@@ -93,29 +99,173 @@ const WIZARD_STEPS = [
 
 const CATEGORY_ICONS: Record<string, any> = {
   security: Shield,
-  screen: Smartphone,
+  display: Monitor,
   body: Package,
   functionality: Cpu,
   accessories: Package,
+};
+
+const TRADE_IN_DRAFT_STORAGE_KEY = "trade-in-draft";
+
+const normalizeLookupText = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[_-]+/g, " ");
+
+const toTitleCase = (value: string) =>
+  value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+
+const BRAND_ALIASES: Record<string, string> = {
+  apple: "Apple",
+  iphone: "Apple",
+  ipad: "Apple",
+  macbook: "Apple",
+  imac: "Apple",
+  samsung: "Samsung",
+  galaxy: "Samsung",
+  google: "Google",
+  pixel: "Google",
+  xiaomi: "Xiaomi",
+  redmi: "Xiaomi",
+  poco: "Xiaomi",
+  mi: "Xiaomi",
+  hp: "HP",
+  dell: "Dell",
+  lenovo: "Lenovo",
+  acer: "Acer",
+  asus: "ASUS",
+  microsoft: "Microsoft",
+  surface: "Microsoft",
+};
+
+const normalizeStorageValue = (value: string) => {
+  const raw = value.trim();
+  if (!raw) return "";
+
+  const compact = raw.replace(/\s+/g, "");
+  if (/^\d+$/.test(compact)) {
+    return `${compact}GB`;
+  }
+  if (/^\d+gb$/i.test(compact)) {
+    return `${compact.slice(0, -2)}GB`;
+  }
+  if (/^\d+tb$/i.test(compact)) {
+    return `${compact.slice(0, -2)}TB`;
+  }
+
+  return raw
+    .replace(/\bgb\b/gi, "GB")
+    .replace(/\btb\b/gi, "TB")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const resolveCanonicalBrand = (
+  input: string,
+  availableBrands: Array<{ id: string; name: string }>,
+  baseValues: DeviceBaseValue[]
+) => {
+  const normalizedInput = normalizeLookupText(input);
+  if (!normalizedInput) return "";
+
+  const allBrandCandidates = [
+    ...availableBrands.map((brand) => brand.name),
+    ...baseValues.map((value) => value.brand),
+  ];
+
+  const exactMatch = allBrandCandidates.find(
+    (candidate) => normalizeLookupText(candidate) === normalizedInput
+  );
+  if (exactMatch) return exactMatch;
+
+  const aliasedBrand = BRAND_ALIASES[normalizedInput];
+  if (aliasedBrand) {
+    const canonicalMatch = allBrandCandidates.find(
+      (candidate) => normalizeLookupText(candidate) === normalizeLookupText(aliasedBrand)
+    );
+    return canonicalMatch ?? aliasedBrand;
+  }
+
+  return toTitleCase(input);
+};
+
+const resolveCanonicalModel = (
+  input: string,
+  canonicalBrand: string,
+  availableModels: Array<{ id: string; name: string }>,
+  baseValues: DeviceBaseValue[]
+) => {
+  const normalizedInput = normalizeLookupText(input);
+  if (!normalizedInput) return "";
+
+  const brandKey = normalizeLookupText(canonicalBrand);
+  const modelCandidates = [
+    ...availableModels.map((model) => model.name),
+    ...baseValues
+      .filter((value) => normalizeLookupText(value.brand) === brandKey)
+      .map((value) => value.model),
+  ];
+
+  const exactMatch = modelCandidates.find(
+    (candidate) => normalizeLookupText(candidate) === normalizedInput
+  );
+  return exactMatch ?? toTitleCase(input);
+};
+
+const resolveCanonicalStorage = (
+  input: string,
+  canonicalBrand: string,
+  canonicalModel: string,
+  availableStorages: string[],
+  baseValues: DeviceBaseValue[]
+) => {
+  const normalizedInput = normalizeLookupText(normalizeStorageValue(input));
+  if (!normalizedInput) return "";
+
+  const brandKey = normalizeLookupText(canonicalBrand);
+  const modelKey = normalizeLookupText(canonicalModel);
+  const storageCandidates = [
+    ...availableStorages,
+    ...baseValues
+      .filter(
+        (value) =>
+          normalizeLookupText(value.brand) === brandKey &&
+          normalizeLookupText(value.model) === modelKey
+      )
+      .map((value) => value.storage),
+  ];
+
+  const exactMatch = storageCandidates.find(
+    (candidate) => normalizeLookupText(normalizeStorageValue(candidate)) === normalizedInput
+  );
+  return exactMatch ?? normalizeStorageValue(input);
 };
 
 export default function TradeInPage() {
   const { activeShop, currentUser } = useData();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [location, setLocation] = useLocation();
   
   // Wizard state
   const [step, setStep] = useState(1);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   
   // Form state
+  const [deviceType, setDeviceType] = useState<TradeInDeviceType | "auto">("auto");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [storage, setStorage] = useState("");
   const [color, setColor] = useState("");
   const [imei, setImei] = useState("");
-  const [isIcloudLocked, setIsIcloudLocked] = useState<boolean | null>(null);
-  const [isGoogleLocked, setIsGoogleLocked] = useState<boolean | null>(null);
+  const [serialNumber, setSerialNumber] = useState("");
   const [conditionAnswers, setConditionAnswers] = useState<Record<string, string>>({});
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -124,9 +274,12 @@ export default function TradeInPage() {
   
   // Calculated offer state
   const [scoringResult, setScoringResult] = useState<ScoringResult | null>(null);
+  const [calculateError, setCalculateError] = useState<string | null>(null);
   
   // UI state
-  const [imeiValidation, setImeiValidation] = useState<{ valid: boolean; message?: string; error?: string; blocked?: boolean; duplicate?: boolean } | null>(null);
+  const [identifierValidation, setIdentifierValidation] = useState<{ valid: boolean; message?: string; error?: string; blocked?: boolean; duplicate?: boolean } | null>(null);
+  const [identifierTouched, setIdentifierTouched] = useState(false);
+  const [isIdentifierValidating, setIsIdentifierValidating] = useState(false);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<TradeInAssessment | null>(null);
   
@@ -136,10 +289,88 @@ export default function TradeInPage() {
   const [ownerOverrideReason, setOwnerOverrideReason] = useState("");
   const [scanDetectedDevice, setScanDetectedDevice] = useState<{ brand?: string; model?: string } | null>(null);
   const [attachments, setAttachments] = useState<UploadedFileMeta[]>([]);
+  const lastValidationKeyRef = useRef<string | null>(null);
+
+  const resolvedDeviceType = useMemo(
+    () =>
+      inferTradeInDeviceType({
+        deviceType: deviceType === "auto" ? undefined : deviceType,
+        brand,
+        model,
+        storage,
+      }),
+    [deviceType, brand, model, storage]
+  );
+  const identifierType = getTradeInIdentifierType(resolvedDeviceType);
+  const identifierLabel = getTradeInIdentifierLabel(resolvedDeviceType);
+  const identifierValue = identifierType === "imei" ? imei : serialNumber.trim();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("resumeTradeIn") !== "1") {
+      return;
+    }
+
+    const savedDraft = window.sessionStorage.getItem(TRADE_IN_DRAFT_STORAGE_KEY);
+    if (!savedDraft) {
+      setLocation("/trade-in", { replace: true });
+      return;
+    }
+
+    try {
+      const draft = JSON.parse(savedDraft) as {
+        step?: number;
+        deviceType?: TradeInDeviceType | "auto";
+        brand?: string;
+        model?: string;
+        storage?: string;
+        color?: string;
+        imei?: string;
+        serialNumber?: string;
+        conditionAnswers?: Record<string, string>;
+        customerName?: string;
+        customerPhone?: string;
+        customerEmail?: string;
+        payoutMethod?: "Cash" | "MTN" | "Airtel" | "Credit";
+      };
+
+      setStep(draft.step && draft.step >= 1 && draft.step <= 5 ? draft.step : 1);
+      setDeviceType(draft.deviceType ?? "auto");
+      setBrand(draft.brand ?? "");
+      setModel(draft.model ?? "");
+      setStorage(draft.storage ?? "");
+      setColor(draft.color ?? "");
+      setImei(draft.imei ?? "");
+      setSerialNumber(draft.serialNumber ?? "");
+      setConditionAnswers(draft.conditionAnswers ?? {});
+      setCustomerName(draft.customerName ?? "");
+      setCustomerPhone(draft.customerPhone ?? "");
+      setCustomerEmail(draft.customerEmail ?? "");
+      setPayoutMethod(draft.payoutMethod ?? "Cash");
+
+      toast({
+        title: "Trade-in draft restored",
+        description: "Your device details were restored after saving the base value.",
+      });
+      window.sessionStorage.removeItem(TRADE_IN_DRAFT_STORAGE_KEY);
+    } catch {
+      window.sessionStorage.removeItem(TRADE_IN_DRAFT_STORAGE_KEY);
+    } finally {
+      setLocation("/trade-in", { replace: true });
+    }
+  }, [location, setLocation, toast]);
 
   // Fetch condition questions
   const { data: questions = [] } = useQuery<ConditionQuestion[]>({
-    queryKey: ["/api/trade-in/questions"],
+    queryKey: ["/api/trade-in/questions", resolvedDeviceType],
+    queryFn: async () => {
+      const response = await fetch(`/api/trade-in/questions?deviceType=${resolvedDeviceType}`, { credentials: "include" });
+      if (!response.ok) {
+        throw new Error("Failed to load trade-in questions");
+      }
+      return response.json();
+    },
   });
 
   // Fetch base values (include shopId so shop-specific values load)
@@ -231,30 +462,57 @@ export default function TradeInPage() {
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b)).map(n => ({ id: n, name: n }));
   }, [baseValues]);
 
+  const brandsList = (apiBrands && apiBrands.length > 0) ? apiBrands : fallbackBrands;
+
+  const canonicalBrand = useMemo(
+    () => resolveCanonicalBrand(brand, brandsList, baseValues),
+    [brand, brandsList, baseValues]
+  );
+
   const fallbackModels = useMemo(() => {
     const set = new Map<string, string>();
     baseValues
-      .filter((v) => v.brand.toLowerCase() === (brand || "").toLowerCase())
+      .filter((v) => normalizeLookupText(v.brand) === normalizeLookupText(canonicalBrand))
       .forEach((v) => set.set(v.model.toLowerCase(), v.model));
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b)).map(n => ({ id: n, name: n }));
-  }, [baseValues, brand]);
+  }, [baseValues, canonicalBrand]);
+
+  const modelsList = (apiModels && apiModels.length > 0) ? apiModels : fallbackModels;
+
+  const canonicalModel = useMemo(
+    () => resolveCanonicalModel(model, canonicalBrand, modelsList, baseValues),
+    [model, canonicalBrand, modelsList, baseValues]
+  );
 
   const fallbackStorages = useMemo(() => {
     const set = new Map<string, string>();
     baseValues
-      .filter((v) => v.brand.toLowerCase() === (brand || "").toLowerCase() && v.model.toLowerCase() === (model || "").toLowerCase())
+      .filter(
+        (v) =>
+          normalizeLookupText(v.brand) === normalizeLookupText(canonicalBrand) &&
+          normalizeLookupText(v.model) === normalizeLookupText(canonicalModel)
+      )
       .forEach((v) => set.set(v.storage.toLowerCase(), v.storage));
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
-  }, [baseValues, brand, model]);
+  }, [baseValues, canonicalBrand, canonicalModel]);
 
-  const brandsList = (apiBrands && apiBrands.length > 0) ? apiBrands : fallbackBrands;
-  const modelsList = (apiModels && apiModels.length > 0) ? apiModels : fallbackModels;
   const storages = (apiStorages && apiStorages.length > 0) ? apiStorages : fallbackStorages;
+  const canonicalStorage = useMemo(
+    () => resolveCanonicalStorage(storage, canonicalBrand, canonicalModel, storages, baseValues),
+    [storage, canonicalBrand, canonicalModel, storages, baseValues]
+  );
+  const hasBrandOptions = brandsList.length > 0;
+  const hasModelOptions = modelsList.length > 0;
+  const hasStorageOptions = storages.length > 0;
 
   // Get current base value
   const currentBaseValue = useMemo(() => {
-    return baseValues.find(v => v.brand === brand && v.model === model && v.storage === storage);
-  }, [baseValues, brand, model, storage]);
+    return baseValues.find((value) =>
+      normalizeLookupText(value.brand) === normalizeLookupText(canonicalBrand) &&
+      normalizeLookupText(value.model) === normalizeLookupText(canonicalModel) &&
+      normalizeLookupText(normalizeStorageValue(value.storage)) === normalizeLookupText(canonicalStorage)
+    );
+  }, [baseValues, canonicalBrand, canonicalModel, canonicalStorage]);
 
   // Group questions by category
   const questionsByCategory = useMemo(() => {
@@ -266,33 +524,105 @@ export default function TradeInPage() {
     return grouped;
   }, [questions]);
 
-  // Validate IMEI mutation
-  const validateImeiMutation = useMutation({
-    mutationFn: async (imei: string) => {
-      const res = await fetch(`/api/trade-in/validate-imei/${imei}`);
+  const securityQuestions = questionsByCategory.security ?? [];
+  const assessmentCategories = Object.entries(questionsByCategory).filter(([category]) => category !== "security");
+  const requiredSecurityQuestions = securityQuestions.filter((question) => question.isRequired);
+  const requiredAssessmentQuestions = questions.filter((question) => question.isRequired && question.category !== "security");
+
+  const validateIdentifierMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/trade-in/validate-identifier", {
+        deviceType: resolvedDeviceType,
+        imei,
+        serialNumber,
+      });
       return res.json();
     },
+    onMutate: () => {
+      setIsIdentifierValidating(true);
+    },
     onSuccess: (data) => {
-      setImeiValidation(data);
+      setIdentifierValidation(data);
+      setIsIdentifierValidating(false);
+    },
+    onError: (error: any) => {
+      setIdentifierValidation({
+        valid: false,
+        message: error?.message || `Unable to validate ${identifierLabel.toLowerCase()}.`,
+      });
+      setIsIdentifierValidating(false);
     },
   });
+
+  const requestIdentifierValidation = (force = false) => {
+    setIdentifierTouched(true);
+
+    if (identifierType === "imei") {
+      if (imei.length === 0) {
+        setIdentifierValidation(null);
+        return;
+      }
+
+      if (imei.length < 15) {
+        if (force) {
+          setIdentifierValidation({ valid: false, message: "IMEI must be 15 digits." });
+        }
+        return;
+      }
+    } else {
+      if (serialNumber.trim().length === 0) {
+        setIdentifierValidation(null);
+        return;
+      }
+
+      if (serialNumber.trim().length < 4) {
+        if (force) {
+          setIdentifierValidation({ valid: false, message: "Serial number must be at least 4 characters." });
+        }
+        return;
+      }
+    }
+
+    const nextKey = `${resolvedDeviceType}:${identifierType}:${identifierValue}`;
+    if (!force && lastValidationKeyRef.current === nextKey) {
+      return;
+    }
+
+    lastValidationKeyRef.current = nextKey;
+    validateIdentifierMutation.mutate();
+  };
 
   // Calculate offer mutation
   const calculateOfferMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/trade-in/calculate", {
-        brand,
-        model,
-        storage,
+        deviceType: resolvedDeviceType,
+        brand: canonicalBrand,
+        model: canonicalModel,
+        storage: canonicalStorage,
+        serialNumber,
         conditionAnswers,
-        isIcloudLocked: !!isIcloudLocked,
-        isGoogleLocked: brand === "Apple" ? false : !!isGoogleLocked,
         imei,
       });
       return res.json();
     },
+    onMutate: () => {
+      setCalculateError(null);
+      setScoringResult(null);
+    },
     onSuccess: (data) => {
       setScoringResult(data);
+      setCalculateError(null);
+    },
+    onError: (error: any) => {
+      const message = error?.message || "Failed to calculate offer";
+      setCalculateError(message);
+      setScoringResult(null);
+      toast({
+        title: "Unable to calculate offer",
+        description: message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -300,13 +630,13 @@ export default function TradeInPage() {
   const submitTradeInMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/trade-in/submit", {
-        brand,
-        model,
-        storage,
+        deviceType: resolvedDeviceType,
+        brand: canonicalBrand,
+        model: canonicalModel,
+        storage: canonicalStorage,
         color,
         imei,
-        isIcloudLocked: !!isIcloudLocked,
-        isGoogleLocked: brand === "Apple" ? false : !!isGoogleLocked,
+        serialNumber,
         conditionAnswers,
         customerName,
         customerPhone,
@@ -354,38 +684,40 @@ export default function TradeInPage() {
     },
   });
 
-  // Validate IMEI when it changes
   useEffect(() => {
-    if (imei.length === 15) {
-      validateImeiMutation.mutate(imei);
-    } else {
-      setImeiValidation(null);
+    if (!identifierTouched) {
+      return;
     }
-  }, [imei]);
+    requestIdentifierValidation(false);
+  }, [imei, serialNumber, identifierType, resolvedDeviceType]);
 
   // Calculate offer when moving to step 4
   useEffect(() => {
-    if (step === 4 && brand && model && storage) {
+    if (step === 4 && canonicalBrand && canonicalModel && canonicalStorage) {
       calculateOfferMutation.mutate();
     }
-  }, [step]);
+  }, [step, canonicalBrand, canonicalModel, canonicalStorage, serialNumber, resolvedDeviceType]);
 
   const resetForm = () => {
     setStep(1);
+    setDeviceType("auto");
     setBrand("");
     setModel("");
     setStorage("");
     setColor("");
     setImei("");
-    setIsIcloudLocked(null);
-    setIsGoogleLocked(null);
+    setSerialNumber("");
     setConditionAnswers({});
     setCustomerName("");
     setCustomerPhone("");
     setCustomerEmail("");
     setPayoutMethod("Cash");
     setScoringResult(null);
-    setImeiValidation(null);
+    setCalculateError(null);
+    setIdentifierValidation(null);
+    setIdentifierTouched(false);
+    setIsIdentifierValidating(false);
+    lastValidationKeyRef.current = null;
     setFakeDeviceWarning(null);
     setScanDetectedDevice(null);
     setOwnerOverrideReason("");
@@ -394,20 +726,24 @@ export default function TradeInPage() {
 
   // Validation helper before allowing submit
   const ensureWizardValid = () => {
-    if (!brand || !model || !storage) {
+    if (!canonicalBrand || !canonicalModel || !canonicalStorage) {
       toast({ title: "Select device", description: "Choose brand, model, and storage.", variant: "destructive" });
       return false;
     }
-    if (imei.length !== 15) {
+    if (!currentBaseValue) {
+      toast({
+        title: "Missing base value",
+        description: "Add a matching trade-in base value before continuing with this buyout.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (identifierType === "imei" && imei.length !== 15) {
       toast({ title: "Invalid IMEI", description: "IMEI must be 15 digits.", variant: "destructive" });
       return false;
     }
-    if (isIcloudLocked === null) {
-      toast({ title: "Answer iCloud question", description: "Select Yes or No for iCloud/Find My.", variant: "destructive" });
-      return false;
-    }
-    if (brand !== "Apple" && isGoogleLocked === null) {
-      toast({ title: "Answer Google FRP question", description: "Select Yes or No for FRP.", variant: "destructive" });
+    if (identifierType === "serial" && serialNumber.trim().length < 4) {
+      toast({ title: "Invalid serial number", description: "Enter a usable serial number.", variant: "destructive" });
       return false;
     }
     const missingRequired = questions
@@ -433,7 +769,10 @@ export default function TradeInPage() {
     const deviceInfo = detection.type === "imei" ? extractDeviceFromTAC(imeiValue) : undefined;
 
     if (detection.type === "imei" && imeiValue.length === 15) {
+      setDeviceType("phone");
       setImei(imeiValue);
+      setIdentifierTouched(true);
+      lastValidationKeyRef.current = null;
 
       if (deviceInfo?.brand) {
         setScanDetectedDevice({
@@ -481,10 +820,13 @@ export default function TradeInPage() {
     }
 
     if (detection.type === "serial") {
+      setDeviceType("laptop");
+      setSerialNumber(detection.value.trim());
+      setIdentifierTouched(true);
+      lastValidationKeyRef.current = null;
       toast({
         title: "Serial Number Scanned",
-        description: "This looks like a serial number. Please scan or enter the IMEI to proceed.",
-        variant: "destructive",
+        description: "Serial number captured for laptop or non-phone intake.",
       });
       return;
     }
@@ -497,8 +839,8 @@ export default function TradeInPage() {
   };
 
   const checkFakeDevice = () => {
-    if (imei && brand && model) {
-      const result = checkForFakeDevice(imei, undefined, brand, model);
+    if (imei && canonicalBrand && canonicalModel) {
+      const result = checkForFakeDevice(imei, undefined, canonicalBrand, canonicalModel);
       setFakeDeviceWarning(result);
       if (result.isSuspicious && result.severity !== "low") {
         setShowFakeDeviceDialog(true);
@@ -516,18 +858,103 @@ export default function TradeInPage() {
     nextStep();
   };
 
-  const canProceedStep1 = brand && model && storage && imei.length === 15 && imeiValidation?.valid;
-  const canProceedStep2 = isIcloudLocked !== null && (brand !== "Apple" || isGoogleLocked !== null || isIcloudLocked === false);
-  const canProceedStep3 = Object.keys(conditionAnswers).length >= questions.filter(q => q.isRequired).length;
+  const deviceBasicsReady = !!canonicalBrand && !!canonicalModel && !!canonicalStorage;
+  const identifierEntered = identifierType === "imei" ? imei.length > 0 : serialNumber.trim().length > 0;
+  const hasValidIdentifier = identifierType === "imei"
+    ? imei.length === 15 && !!identifierValidation?.valid
+    : serialNumber.trim().length >= 4 && !!identifierValidation?.valid;
+  const pricingReady = !!currentBaseValue;
+  const canManageBaseValues = currentUser?.role === "Owner" || currentUser?.role === "Manager";
+  const canContinueWithoutPricing = canManageBaseValues && deviceBasicsReady && hasValidIdentifier;
+  const canProceedStep1 = deviceBasicsReady && hasValidIdentifier && (pricingReady || canContinueWithoutPricing);
+  const canProceedStep2 = requiredSecurityQuestions.every((question) => !!conditionAnswers[question.id]);
+  const canProceedStep3 = requiredAssessmentQuestions.every((question) => !!conditionAnswers[question.id]);
   const canProceedStep4 = scoringResult !== null;
   const canProceedStep5 = customerName && customerPhone;
+  const showCatalogHelper = !hasBrandOptions && !brand;
+  const showPricingReadiness = deviceBasicsReady;
+  const showIdentifierHint = identifierTouched || identifierEntered;
+  const shouldShowFakeWarning = !!fakeDeviceWarning?.isSuspicious && step > 1;
+
+  const step1HelperText = (() => {
+    if (!canonicalBrand || !canonicalModel || !canonicalStorage) {
+      return "Complete the device basics first.";
+    }
+    if (!hasValidIdentifier) {
+      return `Validate the ${identifierLabel.toLowerCase()} to continue.`;
+    }
+    if (!currentBaseValue) {
+      return canManageBaseValues
+        ? "Pricing rule is missing. You can continue to intake and send this device for manual review, or save the pricing rule now."
+        : "Ask a manager to add the missing pricing rule before continuing.";
+    }
+    return "Device intake is ready for assessment.";
+  })();
+
+  const ruleStatuses = [
+    {
+      label: "Ownership or management lock",
+      status: securityQuestions.length === 0 ? "pending" : securityQuestions.some((question) => {
+        const answer = conditionAnswers[question.id];
+        return !!question.options.find((option) => option.value === answer && option.isRejection);
+      }) ? "failed" : requiredSecurityQuestions.every((question) => !!conditionAnswers[question.id]) ? "passed" : "pending",
+    },
+    {
+      label: "Primary identifier valid",
+      status: !identifierEntered ? "pending" : hasValidIdentifier ? "passed" : (identifierTouched ? "failed" : "pending"),
+    },
+    {
+      label: "Duplicate identifier check",
+      status: !identifierEntered || !identifierValidation ? "pending" : (identifierValidation.duplicate || identifierValidation.blocked) ? "failed" : identifierValidation.valid ? "passed" : "pending",
+    },
+    {
+      label: "Pricing rule ready",
+      status: !deviceBasicsReady ? "pending" : currentBaseValue ? "passed" : "failed",
+    },
+    {
+      label: "Condition threshold met",
+      status: !scoringResult ? "pending" : scoringResult.decision === "auto_reject" ? "failed" : "passed",
+    },
+  ] as const;
+
+  const openBaseValueShortcut = () => {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(
+        TRADE_IN_DRAFT_STORAGE_KEY,
+        JSON.stringify({
+          step,
+          deviceType,
+          brand,
+          model,
+          storage,
+          color,
+          imei,
+          serialNumber,
+          conditionAnswers,
+          customerName,
+          customerPhone,
+          customerEmail,
+          payoutMethod,
+        })
+      );
+    }
+
+    const params = new URLSearchParams({
+      brand: canonicalBrand,
+      model: canonicalModel,
+      storage: canonicalStorage,
+      deviceType: resolvedDeviceType,
+      returnTo: "/trade-in",
+    });
+    setLocation(`/base-values?${params.toString()}`);
+  };
 
   const nextStep = () => {
     if (step < 5) setStep(step + 1);
   };
 
   const handleStep1Next = () => {
-    const fakeCheck = checkForFakeDevice(imei, undefined, brand, model);
+    const fakeCheck = checkForFakeDevice(imei, undefined, canonicalBrand, canonicalModel);
     setFakeDeviceWarning(fakeCheck);
     
     if (fakeCheck.isSuspicious && fakeCheck.severity !== "low") {
@@ -614,9 +1041,9 @@ export default function TradeInPage() {
             })}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.45fr)_340px]">
             {/* Main Wizard Card */}
-            <Card className="lg:col-span-2 surface-panel">
+            <Card className="surface-panel">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
@@ -631,125 +1058,271 @@ export default function TradeInPage() {
                 {/* Step 1: Device Selection */}
                 {step === 1 && (
                   <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Brand</Label>
-                        <SearchableSelect
-                          options={brandsList.map(b => ({ value: b.name, label: b.name }))}
-                          value={brand}
-                          onValueChange={(v) => { setBrand(v); setModel(""); setStorage(""); }}
-                          placeholder="Select brand"
-                          searchPlaceholder="Search brands..."
-                          emptyMessage="No brands found."
-                          data-testid="select-brand"
-                        />
+                    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-900">Step 1. Device basics</h3>
+                        <p className="mt-1 text-sm text-slate-500">Choose the device profile, then enter the exact brand, model, and storage for intake.</p>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Model</Label>
-                        <SearchableSelect
-                          options={modelsList.map(m => ({ value: m.name, label: m.name }))}
-                          value={model}
-                          onValueChange={(v) => { setModel(v); setStorage(""); }}
-                          placeholder="Select model"
-                          searchPlaceholder="Search models..."
-                          emptyMessage="No models found."
-                          disabled={!brand}
-                          data-testid="select-model"
-                        />
-                      </div>
-                    </div>
-                    
-                    {brandsList.length === 0 && (
-                      <div className="tone-warning p-4 rounded-lg">
-                        <div>
-                          <p className="font-semibold text-amber-800">No brands available</p>
-                          <p className="text-sm text-amber-700">Add brands and models from the admin catalog, then set device base values before processing trade-ins.</p>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Device Type</Label>
+                          <Select value={deviceType} onValueChange={(value) => setDeviceType(value as TradeInDeviceType | "auto")}>
+                            <SelectTrigger data-testid="select-device-type">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="auto">Auto detect</SelectItem>
+                              <SelectItem value="phone">Phone</SelectItem>
+                              <SelectItem value="tablet">Tablet</SelectItem>
+                              <SelectItem value="laptop">Laptop</SelectItem>
+                              <SelectItem value="other">Other device</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                            {resolvedDeviceType === "laptop" ? <Laptop className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
+                            Assessment profile
+                          </div>
+                          <p className="mt-1 text-sm capitalize text-slate-600">{resolvedDeviceType} workflow</p>
+                          <p className="mt-1 text-xs text-slate-500">Identifier checks and question sets adjust automatically for this device type.</p>
                         </div>
                       </div>
-                    )}
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Storage</Label>
-                        <SearchableSelect
-                          options={storages.map(s => ({ value: s, label: s }))}
-                          value={storage}
-                          onValueChange={setStorage}
-                          placeholder="Select storage"
-                          searchPlaceholder="Search storage..."
-                          emptyMessage="No storage options."
-                          disabled={!model}
-                          data-testid="select-storage"
-                        />
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Brand</Label>
+                          {hasBrandOptions ? (
+                            <SearchableSelect
+                              options={brandsList.map((b) => ({ value: b.name, label: b.name }))}
+                              value={brand}
+                              onValueChange={(v) => { setBrand(v); setModel(""); setStorage(""); }}
+                              placeholder="Select brand"
+                              searchPlaceholder="Search brands..."
+                              emptyMessage="Brand not listed? Enter it manually."
+                              data-testid="select-brand"
+                            />
+                          ) : (
+                            <Input
+                              placeholder="Enter brand, e.g. Apple, Dell, HP"
+                              value={brand}
+                              onChange={(e) => { setBrand(e.target.value); setModel(""); setStorage(""); }}
+                              onBlur={() => {
+                                if (canonicalBrand && canonicalBrand !== brand) {
+                                  setBrand(canonicalBrand);
+                                }
+                              }}
+                              data-testid="input-brand"
+                            />
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Model</Label>
+                          {hasModelOptions ? (
+                            <SearchableSelect
+                              options={modelsList.map((m) => ({ value: m.name, label: m.name }))}
+                              value={model}
+                              onValueChange={(v) => { setModel(v); setStorage(""); }}
+                              placeholder="Select model"
+                              searchPlaceholder="Search models..."
+                              emptyMessage="Model not listed? Enter it manually."
+                              disabled={!brand}
+                              data-testid="select-model"
+                            />
+                          ) : (
+                            <Input
+                              placeholder="Enter model, e.g. MacBook Pro 14, Latitude 5420"
+                              value={model}
+                              onChange={(e) => { setModel(e.target.value); setStorage(""); }}
+                              onBlur={() => {
+                                if (canonicalModel && canonicalModel !== model) {
+                                  setModel(canonicalModel);
+                                }
+                              }}
+                              disabled={!brand}
+                              data-testid="input-model"
+                            />
+                          )}
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Color (Optional)</Label>
-                        <Input 
-                          placeholder="e.g. Space Gray" 
-                          value={color} 
-                          onChange={(e) => setColor(e.target.value)}
-                          data-testid="input-color"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>IMEI Number</Label>
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Input 
-                            placeholder="Enter 15-digit IMEI" 
-                            value={imei} 
-                            onChange={(e) => setImei(e.target.value.replace(/\D/g, "").slice(0, 15))}
-                            className={imeiValidation ? (imeiValidation.valid ? "border-green-500" : "border-red-500") : ""}
-                            data-testid="input-imei"
+
+                      {showCatalogHelper && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-sm font-medium text-slate-900">Brand not found in saved catalog?</p>
+                          <p className="mt-1 text-sm text-slate-600">Manual entry is available here. Enter the brand and model directly, then continue to pricing readiness.</p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Storage</Label>
+                          {hasStorageOptions ? (
+                            <SearchableSelect
+                              options={storages.map((s) => ({ value: s, label: s }))}
+                              value={storage}
+                              onValueChange={setStorage}
+                              placeholder="Select storage"
+                              searchPlaceholder="Search storage..."
+                              emptyMessage="Storage not listed? Enter it manually."
+                              disabled={!model}
+                              data-testid="select-storage"
+                            />
+                          ) : (
+                            <Input
+                              placeholder="Enter storage/spec, e.g. 256GB, 16GB/512GB"
+                              value={storage}
+                              onChange={(e) => setStorage(e.target.value)}
+                              onBlur={() => {
+                                if (canonicalStorage && canonicalStorage !== storage) {
+                                  setStorage(canonicalStorage);
+                                }
+                              }}
+                              disabled={!model}
+                              data-testid="input-storage"
+                            />
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Color (Optional)</Label>
+                          <Input
+                            placeholder="e.g. Space Gray"
+                            value={color}
+                            onChange={(e) => setColor(e.target.value)}
+                            data-testid="input-color"
                           />
-                          {imeiValidation && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                              {imeiValidation.valid ? (
-                                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                              ) : (
-                                <XCircle className="w-5 h-5 text-red-500" />
-                              )}
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-900">Step 2. Identification</h3>
+                        <p className="mt-1 text-sm text-slate-500">Scan or enter the main identifier. Validation runs after scan, Enter, blur, or when the entry is complete.</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>{identifierLabel}</Label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            {identifierType === "imei" ? (
+                              <Input
+                                placeholder="Enter 15-digit IMEI"
+                                value={imei}
+                                onChange={(e) => {
+                                  const nextValue = e.target.value.replace(/\D/g, "").slice(0, 15);
+                                  setImei(nextValue);
+                                  setIdentifierTouched((prev) => prev || nextValue.length === 15);
+                                  lastValidationKeyRef.current = null;
+                                }}
+                                onBlur={() => requestIdentifierValidation(true)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    requestIdentifierValidation(true);
+                                  }
+                                }}
+                                className={showIdentifierHint && identifierValidation ? (identifierValidation.valid ? "border-green-500" : "border-red-500") : ""}
+                                data-testid="input-imei"
+                              />
+                            ) : (
+                              <Input
+                                placeholder="Enter serial number"
+                                value={serialNumber}
+                                onChange={(e) => {
+                                  const nextValue = e.target.value.trimStart();
+                                  setSerialNumber(nextValue);
+                                  setIdentifierTouched((prev) => prev || nextValue.trim().length >= 4);
+                                  lastValidationKeyRef.current = null;
+                                }}
+                                onBlur={() => requestIdentifierValidation(true)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    requestIdentifierValidation(true);
+                                  }
+                                }}
+                                className={showIdentifierHint && identifierValidation ? (identifierValidation.valid ? "border-green-500" : "border-red-500") : ""}
+                                data-testid="input-serial-number"
+                              />
+                            )}
+                            {isIdentifierValidating ? (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <RefreshCw className="h-4 w-4 animate-spin text-slate-400" />
+                              </div>
+                            ) : showIdentifierHint && identifierValidation ? (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                {identifierValidation.valid ? (
+                                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                ) : (
+                                  <XCircle className="h-5 w-5 text-red-500" />
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                          <Button type="button" variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} data-testid="btn-scan-imei">
+                            <Scan className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {showIdentifierHint && identifierValidation && !identifierValidation.valid ? (
+                          <p className="flex items-center gap-1 text-sm text-red-500">
+                            <AlertCircle className="h-4 w-4" />
+                            {identifierValidation.message ?? identifierValidation.error}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-500">Scanner and manual entry follow the same validation path.</p>
+                        )}
+                      </div>
+                    </section>
+
+                    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-900">Step 3. Pricing readiness</h3>
+                        <p className="mt-1 text-sm text-slate-500">The system checks for a pricing rule only after the device basics are complete.</p>
+                      </div>
+
+                      {!showPricingReadiness ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                          Complete brand, model, and storage to check pricing readiness.
+                        </div>
+                      ) : currentBaseValue ? (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                          <p className="text-sm font-medium text-emerald-900">Pricing rule found</p>
+                          <p className="mt-1 text-sm text-emerald-700">{canonicalBrand} {canonicalModel} {canonicalStorage} is ready for assessment.</p>
+                          <p className="mt-2 text-sm text-emerald-800">Base value: <strong>UGX {currentBaseValue.baseValue.toLocaleString()}</strong></p>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                          <p className="text-sm font-medium text-amber-900">Pricing rule missing</p>
+                          <p className="mt-1 text-sm text-amber-700">No pricing rule is saved yet for {canonicalBrand} {canonicalModel} {canonicalStorage}.</p>
+                          <p className="mt-1 text-xs text-amber-700">
+                            {canManageBaseValues
+                              ? "You can continue this intake as manual review, or open Base Values and save the missing combination now."
+                              : "Ask a manager to add the missing pricing rule before continuing."}
+                          </p>
+                          {canManageBaseValues && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={openBaseValueShortcut}>
+                                Add base value for this device
+                              </Button>
+                              <Badge variant="secondary">Manual review allowed</Badge>
                             </div>
                           )}
                         </div>
-                        <Button type="button" variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} data-testid="btn-scan-imei">
-                          <Scan className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      {imeiValidation && !imeiValidation.valid && (
-                        <p className="text-sm text-red-500 flex items-center gap-1">
-                          <AlertCircle className="w-4 h-4" />
-                          {imeiValidation.message ?? imeiValidation.error}
-                        </p>
                       )}
-                    </div>
-
-                    {currentBaseValue && (
-                      <div className="tone-info p-4 rounded-lg">
-                        <p className="text-sm">
-                          <strong>Base Value:</strong> UGX {currentBaseValue.baseValue.toLocaleString()}
-                        </p>
-                        <p className="text-xs mt-1">
-                          Final offer depends on condition assessment
-                        </p>
-                      </div>
-                    )}
+                    </section>
 
                     {scanDetectedDevice && (
                       <div className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-4 text-indigo-700" data-testid="detected-device-autofill">
                         <p className="text-sm">
-                          <strong>Scan Detection:</strong> {scanDetectedDevice.brand}
+                          <strong>Scan detection:</strong> {scanDetectedDevice.brand}
                           {scanDetectedDevice.model && ` ${scanDetectedDevice.model}`}
                         </p>
-                        <p className="text-xs mt-1">
-                          Device info auto-filled from IMEI scan
-                        </p>
+                        <p className="mt-1 text-xs">Device details were pre-filled from the scanned identifier.</p>
                       </div>
                     )}
 
-                    {fakeDeviceWarning?.isSuspicious && (
+                    {shouldShowFakeWarning && (
                       <div className={`p-4 rounded-lg border ${
                         fakeDeviceWarning.severity === "high" ? "bg-rose-50 border-rose-200" :
                         fakeDeviceWarning.severity === "medium" ? "bg-amber-50 border-amber-200" :
@@ -795,74 +1368,49 @@ export default function TradeInPage() {
                 {/* Step 2: Security Checks */}
                 {step === 2 && (
                   <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-                    <div className="tone-danger p-6 rounded-lg">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
                       <div className="flex items-start gap-3">
-                        <AlertTriangle className="w-6 h-6 text-red-600 mt-0.5" />
+                        <Shield className="w-6 h-6 text-slate-600 mt-0.5" />
                         <div>
-                          <h3 className="font-semibold text-red-800">Critical Security Checks</h3>
-                          <p className="text-sm text-red-600 mt-1">
-                            Devices with active locks will be automatically rejected.
+                          <h3 className="font-semibold text-slate-900">Security checks</h3>
+                          <p className="text-sm text-slate-600 mt-1">
+                            Confirm ownership and lock status before the condition assessment.
                           </p>
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-6">
-                      <div className="surface-muted p-4">
-                        <div className="flex items-center gap-3 mb-4">
-                          <Lock className="w-5 h-5 text-slate-600" />
-                          <span className="font-medium">Is iCloud / Find My iPhone enabled?</span>
-                        </div>
-                        <RadioGroup 
-                          value={isIcloudLocked === null ? "" : isIcloudLocked ? "yes" : "no"}
-                          onValueChange={(v) => setIsIcloudLocked(v === "yes")}
-                          className="flex gap-4"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="no" id="icloud-no" data-testid="radio-icloud-no" />
-                            <Label htmlFor="icloud-no" className="text-green-700 font-medium">No - Signed Out</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="yes" id="icloud-yes" data-testid="radio-icloud-yes" />
-                            <Label htmlFor="icloud-yes" className="text-red-700 font-medium">Yes - Still Active</Label>
-                          </div>
-                        </RadioGroup>
-                        {isIcloudLocked === true && (
-                          <p className="mt-3 text-sm text-red-600 flex items-center gap-1">
-                            <XCircle className="w-4 h-4" />
-                            Device will be automatically rejected
-                          </p>
-                        )}
-                      </div>
-
-                      {brand !== "Apple" && (
-                      <div className="surface-muted p-4">
+                      {securityQuestions.map((question) => (
+                        <div key={question.id} className="surface-muted p-4">
                           <div className="flex items-center gap-3 mb-4">
                             <Lock className="w-5 h-5 text-slate-600" />
-                            <span className="font-medium">Is Google FRP (Factory Reset Protection) enabled?</span>
+                            <span className="font-medium">{question.question}</span>
                           </div>
-                          <RadioGroup 
-                            value={isGoogleLocked === null ? "" : isGoogleLocked ? "yes" : "no"}
-                            onValueChange={(v) => setIsGoogleLocked(v === "yes")}
-                            className="flex gap-4"
+                          <RadioGroup
+                            value={conditionAnswers[question.id] || ""}
+                            onValueChange={(value) => setConditionAnswers({ ...conditionAnswers, [question.id]: value })}
+                            className="space-y-2"
                           >
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="no" id="google-no" data-testid="radio-google-no" />
-                              <Label htmlFor="google-no" className="text-green-700 font-medium">No - Account Removed</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <RadioGroupItem value="yes" id="google-yes" data-testid="radio-google-yes" />
-                              <Label htmlFor="google-yes" className="text-red-700 font-medium">Yes - Still Linked</Label>
-                            </div>
+                            {question.options.map((option) => (
+                              <div key={option.value} className="flex items-center space-x-2">
+                                <RadioGroupItem
+                                  value={option.value}
+                                  id={`${question.id}-${option.value}`}
+                                  data-testid={`radio-${question.id}-${option.value}`}
+                                />
+                                <Label
+                                  htmlFor={`${question.id}-${option.value}`}
+                                  className={option.isRejection ? "text-red-700 font-medium" : "text-slate-700"}
+                                >
+                                  {option.label}
+                                  {option.isRejection && <span className="ml-2 text-xs text-red-500">(Auto-reject)</span>}
+                                </Label>
+                              </div>
+                            ))}
                           </RadioGroup>
-                          {isGoogleLocked === true && (
-                            <p className="mt-3 text-sm text-red-600 flex items-center gap-1">
-                              <XCircle className="w-4 h-4" />
-                              Device will be automatically rejected
-                            </p>
-                          )}
                         </div>
-                      )}
+                      ))}
                     </div>
                   </div>
                 )}
@@ -871,7 +1419,7 @@ export default function TradeInPage() {
                 {step === 3 && (
                   <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                     <ScrollArea className="h-[400px] pr-4">
-                      {Object.entries(questionsByCategory).map(([category, categoryQuestions]) => {
+                      {assessmentCategories.map(([category, categoryQuestions]) => {
                         const Icon = CATEGORY_ICONS[category] || Cpu;
                         return (
                           <div key={category} className="mb-6">
@@ -921,10 +1469,10 @@ export default function TradeInPage() {
                     
                     <div className="surface-muted flex items-center justify-between p-4">
                       <span className="text-sm text-muted-foreground">
-                        Questions answered: {Object.keys(conditionAnswers).length} / {questions.filter(q => q.isRequired).length}
+                        Questions answered: {requiredAssessmentQuestions.filter((question) => !!conditionAnswers[question.id]).length} / {requiredAssessmentQuestions.length}
                       </span>
                       <Progress 
-                        value={(Object.keys(conditionAnswers).length / Math.max(1, questions.filter(q => q.isRequired).length)) * 100} 
+                        value={(requiredAssessmentQuestions.filter((question) => !!conditionAnswers[question.id]).length / Math.max(1, requiredAssessmentQuestions.length)) * 100} 
                         className="w-32"
                       />
                     </div>
@@ -963,7 +1511,7 @@ export default function TradeInPage() {
                               <p className="text-sm mt-1">
                                 {scoringResult.decision === "auto_accept" && "Device meets our quality standards."}
                                 {scoringResult.decision === "auto_reject" && scoringResult.rejectionReasons.join(", ")}
-                                {scoringResult.decision === "manual_review" && "A manager will review this trade-in."}
+                                {scoringResult.decision === "manual_review" && (scoringResult.reviewMessage || "A manager will review this trade-in.")}
                               </p>
                             </div>
                           </div>
@@ -971,15 +1519,26 @@ export default function TradeInPage() {
 
                         {/* Offer Amount */}
                         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-                          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Trade-In Value</p>
-                          <div className="mb-2 text-5xl font-bold text-slate-900">
-                            UGX {scoringResult.calculatedOffer.toLocaleString()}
-                          </div>
-                          <div className="flex items-center justify-center gap-4 text-sm text-slate-500">
-                            <span>Base: UGX {scoringResult.baseValue.toLocaleString()}</span>
-                            <span>|</span>
-                            <span>Score: {scoringResult.conditionScore}%</span>
-                          </div>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            {scoringResult.requiresPricingRule ? "Pricing Review" : "Trade-In Value"}
+                          </p>
+                          {scoringResult.requiresPricingRule ? (
+                            <>
+                              <div className="mb-2 text-3xl font-bold text-slate-900">Offer pending manual review</div>
+                              <div className="text-sm text-slate-500">Condition score recorded. A manager needs to set pricing before approval.</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="mb-2 text-5xl font-bold text-slate-900">
+                                UGX {scoringResult.calculatedOffer.toLocaleString()}
+                              </div>
+                              <div className="flex items-center justify-center gap-4 text-sm text-slate-500">
+                                <span>Base: UGX {scoringResult.baseValue.toLocaleString()}</span>
+                                <span>|</span>
+                                <span>Score: {scoringResult.conditionScore}%</span>
+                              </div>
+                            </>
+                          )}
                         </div>
 
                         {/* Deduction Breakdown */}
@@ -1001,16 +1560,32 @@ export default function TradeInPage() {
                         <div className="p-4 bg-slate-50 rounded-lg">
                           <h4 className="font-medium mb-3">Device Summary</h4>
                           <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div><span className="text-slate-500">Type:</span> <span className="capitalize">{resolvedDeviceType}</span></div>
                             <div><span className="text-slate-500">Brand:</span> {brand}</div>
                             <div><span className="text-slate-500">Model:</span> {model}</div>
                             <div><span className="text-slate-500">Storage:</span> {storage}</div>
-                            <div><span className="text-slate-500">IMEI:</span> {imei}</div>
+                            <div><span className="text-slate-500">{identifierType === "imei" ? "IMEI" : "Serial"}:</span> {identifierType === "imei" ? imei : serialNumber}</div>
                           </div>
                         </div>
                       </>
                     ) : (
-                      <div className="text-center text-slate-500">
-                        Unable to calculate offer. Please go back and complete all steps.
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+                        <p className="font-semibold text-amber-800">Unable to calculate offer</p>
+                        <p className="mt-2 text-sm text-amber-700">
+                          {calculateError || "Add a matching base value and complete the required checks before continuing."}
+                        </p>
+                        {!currentBaseValue && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs text-amber-700">
+                              This device does not have a saved base value yet.
+                            </p>
+                            {canManageBaseValues && (
+                              <Button type="button" variant="outline" size="sm" onClick={openBaseValueShortcut}>
+                                Add base value for this device
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1083,8 +1658,8 @@ export default function TradeInPage() {
                           <p className="font-medium">{brand} {model} ({storage})</p>
                         </div>
                         <div>
-                          <p className="text-slate-500">IMEI</p>
-                          <p className="font-medium">{imei}</p>
+                          <p className="text-slate-500">{identifierType === "imei" ? "IMEI" : "Serial"}</p>
+                          <p className="font-medium">{identifierType === "imei" ? imei : serialNumber}</p>
                         </div>
                         <div>
                           <p className="text-slate-500">Condition Score</p>
@@ -1093,7 +1668,7 @@ export default function TradeInPage() {
                         <div>
                           <p className="text-slate-500">Offer Amount</p>
                           <p className="font-bold text-green-700 text-lg">
-                            UGX {scoringResult?.calculatedOffer.toLocaleString()}
+                            {scoringResult?.requiresPricingRule ? "Manual review" : `UGX ${scoringResult?.calculatedOffer.toLocaleString()}`}
                           </p>
                         </div>
                       </div>
@@ -1114,19 +1689,24 @@ export default function TradeInPage() {
                 </Button>
                 
                 {step < 5 ? (
-                  <Button 
-                    onClick={step === 1 ? handleStep1Next : nextStep}
-                    disabled={
-                      (step === 1 && !canProceedStep1) ||
-                      (step === 2 && !canProceedStep2) ||
-                      (step === 3 && !canProceedStep3) ||
-                      (step === 4 && !canProceedStep4)
-                    }
-                    data-testid="btn-next-step"
-                  >
-                    Next
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
+                  <div className="flex flex-col items-end gap-2">
+                    {step === 1 && !canProceedStep1 && (
+                      <p className="text-xs text-slate-500">{step1HelperText}</p>
+                    )}
+                    <Button 
+                      onClick={step === 1 ? handleStep1Next : nextStep}
+                      disabled={
+                        (step === 1 && !canProceedStep1) ||
+                        (step === 2 && !canProceedStep2) ||
+                        (step === 3 && !canProceedStep3) ||
+                        (step === 4 && !canProceedStep4)
+                      }
+                      data-testid="btn-next-step"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
                 ) : (
                   <Button 
                     onClick={handleSubmit}
@@ -1142,7 +1722,37 @@ export default function TradeInPage() {
             </Card>
 
             {/* Sidebar */}
-            <div className="space-y-6">
+            <div className="space-y-4">
+              <Card className="border-slate-200 bg-white shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    {resolvedDeviceType === "laptop" ? <Laptop className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
+                    Intake readiness
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Device basics</span>
+                    <Badge variant={deviceBasicsReady ? "default" : "outline"}>{deviceBasicsReady ? "Ready" : "Pending"}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">{identifierLabel}</span>
+                    <Badge variant={hasValidIdentifier ? "default" : "outline"}>
+                      {hasValidIdentifier ? "Validated" : identifierEntered ? "Needs check" : "Pending"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Pricing rule</span>
+                    <Badge variant={pricingReady ? "default" : "secondary"}>
+                      {pricingReady ? "Found" : showPricingReadiness ? "Missing" : "Pending"}
+                    </Badge>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                    {step1HelperText}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Recent Trade-Ins */}
               <Card>
                 <CardHeader>
@@ -1191,26 +1801,25 @@ export default function TradeInPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm text-slate-900">
                     <AlertCircle className="w-4 h-4" />
-                    Auto-Rejection Rules
+                    Rule Status
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 text-sm text-slate-600">
-                  <p className="flex items-center gap-2">
-                    <XCircle className="w-4 h-4 text-red-500" />
-                    iCloud / Google lock enabled
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <XCircle className="w-4 h-4 text-red-500" />
-                    Invalid IMEI number
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <XCircle className="w-4 h-4 text-red-500" />
-                    Duplicate IMEI (already traded)
-                  </p>
-                  <p className="flex items-center gap-2">
-                    <XCircle className="w-4 h-4 text-red-500" />
-                    Condition score below 30%
-                  </p>
+                <CardContent className="space-y-3 text-sm text-slate-600">
+                  {ruleStatuses.map((rule) => (
+                    <div key={rule.label} className="flex items-center justify-between gap-3">
+                      <span>{rule.label}</span>
+                      <div className="flex items-center gap-2">
+                        {rule.status === "pending" && <Clock className="w-4 h-4 text-slate-400" />}
+                        {rule.status === "passed" && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                        {rule.status === "failed" && <XCircle className="w-4 h-4 text-rose-500" />}
+                        <span className={`text-xs font-medium ${
+                          rule.status === "failed" ? "text-rose-600" : rule.status === "passed" ? "text-emerald-600" : "text-slate-500"
+                        }`}>
+                          {rule.status === "pending" ? "Pending" : rule.status === "passed" ? "Clear" : "Triggered"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
             </div>
@@ -1344,7 +1953,7 @@ export default function TradeInPage() {
                   <p className="text-sm text-slate-500">{selectedAssessment.customerPhone}</p>
                 </div>
                 <div className="p-4 bg-slate-50 rounded-lg">
-                  <p className="text-sm text-slate-500">IMEI</p>
+                  <p className="text-sm text-slate-500">{/^\d{15}$/.test(selectedAssessment.imei) ? "IMEI" : "Serial"}</p>
                   <p className="font-mono">{selectedAssessment.imei}</p>
                 </div>
                 <div className="p-4 bg-slate-50 rounded-lg">
