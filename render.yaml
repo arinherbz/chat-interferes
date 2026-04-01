@@ -4,8 +4,8 @@ services:
     runtime: node
     plan: free
     branch: main
-    buildCommand: npm ci && if [ -n "$DATABASE_URL" ]; then npm run db:push; fi && npm run build
-    startCommand: npm run start
+    buildCommand: npm ci && npm run build
+    startCommand: sh -c 'if [ -n "$DATABASE_URL" ]; then npm run db:push; fi && npm run start'
     autoDeploy: true
     envVars:
       - key: NODE_ENV
