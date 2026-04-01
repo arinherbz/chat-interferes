@@ -10,8 +10,8 @@ vite.config.ts.*
 storage.db*
 uploads/
 .vscode/settings.json.data/
-chat-interferes/
 .data/
 chat-interferes/
-.data/
-chat-interferes/
+.vscode/
+coverage/
+*.log
