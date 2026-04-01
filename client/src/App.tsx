@@ -105,7 +105,7 @@ function ProtectedRoute({ component: Component, roles }: { component: React.Comp
 
 function Router() {
   const [location] = useLocation();
-  const isCustomerRoute = location.startsWith("/store");
+  const isCustomerRoute = location.startsWith("/store") || location === "/track-order";
   const isAuthRoute = location === "/" || location === "/login";
 
   const routes = (
@@ -113,14 +113,17 @@ function Router() {
       <Switch>
         <Route path="/" component={Login} />
         <Route path="/login" component={Login} />
+        <Route path="/admin" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={Dashboard} />} />
         <Route path="/dashboard" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={Dashboard} />} />
         <Route path="/pos" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={POSPage} />} />
         <Route path="/daily-close" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DailyClose} />} />
         <Route path="/closures" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ClosuresPage} />} />
         <Route path="/trade-in" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={TradeInPage} />} />
         <Route path="/products" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ProductsPage} />} />
+        <Route path="/admin/products" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ProductsPage} />} />
         <Route path="/devices" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DevicesPage} />} />
         <Route path="/customers" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={CustomersPage} />} />
+        <Route path="/admin/customers" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={CustomersPage} />} />
         <Route path="/repairs" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={RepairsPage} />} />
         <Route path="/leads" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={LeadsPage} />} />
         <Route path="/expenses" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ExpensesPage} />} />
@@ -138,8 +141,11 @@ function Router() {
         <Route path="/store/confirmation" component={StoreConfirmationPage} />
         <Route path="/store/account" component={StoreAccountPage} />
         <Route path="/store/track" component={StoreOrderTrackingPage} />
+        <Route path="/track-order" component={StoreOrderTrackingPage} />
         <Route path="/orders" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={OrdersPage} />} />
         <Route path="/deliveries" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DeliveriesPage} />} />
+        <Route path="/admin/orders" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={OrdersPage} />} />
+        <Route path="/admin/deliveries" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DeliveriesPage} />} />
         <Route path="/management/orders" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={OrdersPage} />} />
         <Route path="/management/deliveries" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={DeliveriesPage} />} />
         <Route component={NotFound} />

@@ -3,7 +3,8 @@ services:
     name: ariostore-gadgets
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
+    branch: main
+    buildCommand: npm ci && if [ -n "$DATABASE_URL" ]; then npm run db:push; fi && npm run build
     startCommand: npm run start
     autoDeploy: true
     envVars:
