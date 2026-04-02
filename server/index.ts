@@ -5,6 +5,7 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { errorHandler } from "./middleware/error-handler";
+import { databaseReady } from "./db";
 
 function loadEnvFile() {
   const envPath = path.resolve(process.cwd(), ".env");
@@ -109,6 +110,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await databaseReady;
   await registerRoutes(httpServer, app);
 
   app.use(errorHandler);
