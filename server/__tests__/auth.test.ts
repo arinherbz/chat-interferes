@@ -429,7 +429,6 @@ describe("authentication", () => {
       }),
     });
     expect(checkoutRes.status).toBe(201);
-
     const checkoutBody = await checkoutRes.json();
     expect(checkoutBody.success).toBe(true);
     expect(checkoutBody.data.orderNumber).toMatch(/^ORD-/);

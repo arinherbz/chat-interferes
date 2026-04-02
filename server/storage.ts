@@ -176,6 +176,10 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private booleanWriteValue(value: boolean) {
+    return pool ? value : value ? 1 : 0;
+  }
+
   private stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
     const cleaned: Partial<T> = {};
     for (const [key, value] of Object.entries(obj)) {
@@ -944,13 +948,13 @@ export class DatabaseStorage implements IStorage {
       type: notification.type,
       targetId: notification.targetId,
       message: notification.message,
-      read: sqlFn`0` as any,
+      read: this.booleanWriteValue(false) as any,
     }).returning();
     return newNotification;
   }
 
   async markNotificationRead(id: string): Promise<Notification | undefined> {
-    const [notification] = await db.update(notifications).set({ read: sqlFn`1` as any }).where(eq(notifications.id, id)).returning();
+    const [notification] = await db.update(notifications).set({ read: this.booleanWriteValue(true) as any }).where(eq(notifications.id, id)).returning();
     return notification;
   }
 
