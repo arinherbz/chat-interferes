@@ -14,6 +14,7 @@ interface ScannerProps {
 export function Scanner({ open, onClose, onDetected, title = "Scan barcode" }: ScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const lastDetectedRef = useRef<{ value: string; ts: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,19 +22,40 @@ export function Scanner({ open, onClose, onDetected, title = "Scan barcode" }: S
       stopReader();
       return;
     }
+    setError(null);
     startReader();
     return () => stopReader();
   }, [open]);
 
   const startReader = async () => {
     try {
+      setError(null);
+      stopReader();
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+      if (!videoRef.current) {
+        setError("Scanner preview could not start. Please reopen the scanner.");
+        return;
+      }
+      if (devices.length === 0) {
+        setError("No camera was found on this device.");
+        return;
+      }
       const preferred = devices.find((d) => /back|rear|environment/i.test(d.label))?.deviceId || devices[0]?.deviceId;
       await reader.decodeFromVideoDevice(preferred || undefined, videoRef.current!, (result, err) => {
         if (result) {
-          onDetected(result.getText());
+          const value = result.getText().trim();
+          const now = Date.now();
+          if (
+            lastDetectedRef.current &&
+            lastDetectedRef.current.value === value &&
+            now - lastDetectedRef.current.ts < 750
+          ) {
+            return;
+          }
+          lastDetectedRef.current = { value, ts: now };
+          onDetected(value);
           onClose();
         }
         if (err && (err as any).name && (err as any).name !== "NotFoundException") {
@@ -58,7 +80,9 @@ export function Scanner({ open, onClose, onDetected, title = "Scan barcode" }: S
       const url = URL.createObjectURL(file);
       const result = await reader.decodeFromImageUrl(url);
       URL.revokeObjectURL(url);
-      onDetected(result.getText());
+      const value = result.getText().trim();
+      lastDetectedRef.current = { value, ts: Date.now() };
+      onDetected(value);
       onClose();
     } catch (err: any) {
       setError("Could not decode that image. Try another photo.");

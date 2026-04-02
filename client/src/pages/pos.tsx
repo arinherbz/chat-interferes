@@ -24,7 +24,7 @@ import {
   UserRound,
   Wrench,
 } from "lucide-react";
-import { BarcodeScanner } from "@/components/barcode-scanner";
+import { Scanner } from "@/components/scanner";
 import { ProductImage } from "@/components/product-image";
 import { Receipt, generateSaleReceipt, type ReceiptData } from "@/components/receipt";
 import { useToast } from "@/hooks/use-toast";
@@ -482,7 +482,12 @@ export default function POSPage() {
           </Tabs>
         </div>
 
-        <BarcodeScanner isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} onScan={handleScanResult} />
+        <Scanner
+          open={isScannerOpen}
+          onClose={() => setIsScannerOpen(false)}
+          onDetected={handleScanResult}
+          title="Scan barcode"
+        />
 
         <ScrollArea className="h-[calc(100vh-13rem)] px-4 pb-5 md:px-5">
           {visibleItems.length === 0 ? (
