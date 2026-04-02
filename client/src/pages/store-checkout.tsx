@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
+import { MessageCircle } from "lucide-react";
 import { StoreShell } from "@/components/store-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/api";
 import { formatUGX } from "@/lib/formatters";
-import { readLastStoreOrder, saveLastStoreOrder, useStoreCart } from "@/lib/store-cart";
+import { saveLastStoreOrder, useStoreCart } from "@/lib/store-cart";
+import { createWhatsAppUrl, isValidStorePhoneInput, normalizeStorePhoneInput } from "@/lib/store-support";
 import { useToast } from "@/hooks/use-toast";
 
 export default function StoreCheckoutPage() {
@@ -30,13 +32,29 @@ export default function StoreCheckoutPage() {
   const total = subtotal + deliveryFee;
 
   async function submitOrder() {
+    const trimmedName = customerName.trim();
+    const normalizedPhone = normalizeStorePhoneInput(customerPhone);
+    const trimmedEmail = customerEmail.trim();
+    const trimmedAddress = deliveryAddress.trim();
+    const trimmedNotes = notes.trim();
+
     if (items.length === 0) {
       toast({ title: "Cart is empty", description: "Add at least one item before checkout.", variant: "destructive" });
       return;
     }
 
-    if (!customerName.trim() || !customerPhone.trim()) {
+    if (!trimmedName || !normalizedPhone) {
       toast({ title: "Missing details", description: "Customer name and phone are required.", variant: "destructive" });
+      return;
+    }
+
+    if (!isValidStorePhoneInput(normalizedPhone)) {
+      toast({ title: "Invalid phone number", description: "Use a phone number in the +256 format so we can confirm your order.", variant: "destructive" });
+      return;
+    }
+
+    if (deliveryType !== "PICKUP" && !trimmedAddress) {
+      toast({ title: "Delivery address required", description: "Add your delivery address before placing this order.", variant: "destructive" });
       return;
     }
 
@@ -51,14 +69,14 @@ export default function StoreCheckoutPage() {
         whatsappUrl?: string;
       }>("POST", "/api/store/checkout", {
         shopId: shopId ?? undefined,
-        customerName,
-        customerPhone,
-        customerEmail: customerEmail || undefined,
+        customerName: trimmedName,
+        customerPhone: normalizedPhone,
+        customerEmail: trimmedEmail || undefined,
         items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
         paymentMethod,
         deliveryType,
-        deliveryAddress: deliveryType === "PICKUP" ? undefined : deliveryAddress,
-        notes: [notes, deliveryType !== "PICKUP" ? `Delivery type: ${deliveryType}` : ""].filter(Boolean).join(" | "),
+        deliveryAddress: deliveryType === "PICKUP" ? undefined : trimmedAddress,
+        notes: [trimmedNotes, deliveryType !== "PICKUP" ? `Delivery type: ${deliveryType}` : ""].filter(Boolean).join(" | "),
       });
 
       saveLastStoreOrder(response);
@@ -89,6 +107,7 @@ export default function StoreCheckoutPage() {
               <div className="grid gap-2">
                 <Label>Phone Number</Label>
                 <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="+2567..." />
+                <p className="text-xs text-muted-foreground">We use this number to confirm delivery and payment details.</p>
               </div>
               <div className="grid gap-2">
                 <Label>Email</Label>
@@ -120,11 +139,24 @@ export default function StoreCheckoutPage() {
                 <div className="grid gap-2">
                   <Label>Delivery Address</Label>
                   <Textarea value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Street, area, landmark" />
+                  <p className="text-xs text-muted-foreground">Include the area and a nearby landmark for faster delivery coordination.</p>
                 </div>
               ) : null}
               <div className="grid gap-2">
                 <Label>Notes</Label>
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional order notes" />
+              </div>
+              <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-secondary/35 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium text-slate-950">Need help finishing your order?</p>
+                  <p className="text-sm text-muted-foreground">Our team can confirm delivery options and payment details on WhatsApp.</p>
+                </div>
+                <a href={createWhatsAppUrl("Hello Ario Store, I need help completing my order.")} target="_blank" rel="noreferrer">
+                  <Button variant="outline" className="gap-2">
+                    <MessageCircle className="h-4 w-4" />
+                    Chat on WhatsApp
+                  </Button>
+                </a>
               </div>
             </div>
 

@@ -114,8 +114,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className={cn(
           "group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 cursor-pointer",
           active 
-            ? "bg-accent text-primary font-semibold border border-primary/10 shadow-sm" 
-            : "text-slate-600 hover:bg-secondary hover:text-foreground"
+            ? "bg-primary/10 text-primary font-semibold border border-primary/10 shadow-[0_10px_22px_rgba(63,121,92,0.08)]" 
+            : "text-slate-600 hover:bg-secondary/80 hover:text-foreground"
         )}
         title={sidebarCollapsed ? label : undefined}
         aria-current={active ? "page" : undefined}>
@@ -126,10 +126,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     );
   };
 
+  if (isPOSRoute) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="mx-auto w-full max-w-[1800px] px-3 py-3 md:px-4 md:py-4 xl:px-5 xl:py-5">
+          {children}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className={cn("md:hidden border-b bg-white flex items-center justify-between gap-3 sticky top-0 z-50", isPOSRoute ? "p-3" : "p-4")}>
+      <div className={cn("md:hidden border-b border-border/70 bg-white/92 flex items-center justify-between gap-3 sticky top-0 z-50 backdrop-blur", isPOSRoute ? "p-3" : "p-4")}>
         <Link href={`/shop-settings/${activeShop?.id || "shop1"}`}> 
             <div className="flex min-w-0 items-center gap-2 font-bold text-foreground" aria-label="Edit shop settings">
             <img src="/ariostore-logo.png" className="h-8 w-8 object-contain" alt="Ariostore" />
@@ -154,11 +164,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar Navigation */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] border-r bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen md:max-w-none flex flex-col overflow-hidden",
+        "fixed inset-y-0 left-0 z-40 w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] border-r border-border/70 bg-white/94 shadow-[0_18px_40px_rgba(24,38,31,0.08)] transform transition-all duration-200 ease-in-out md:translate-x-0 md:static md:h-screen md:max-w-none flex flex-col overflow-hidden backdrop-blur",
         (sidebarCollapsed || isPOSRoute) ? "md:w-[96px]" : "md:w-72",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="hidden md:flex items-center justify-between border-b px-4 py-5">
+        <div className="hidden md:flex items-center justify-between border-b border-border/70 px-4 py-5">
           <Link href={`/shop-settings/${activeShop?.id || "shop1"}`} className="flex items-center gap-3 min-w-0" aria-label="Edit shop settings">
            <img src="/ariostore-logo.png" className="h-8 w-8 object-contain" alt="Ariostore" />
            {!(sidebarCollapsed || isPOSRoute) && (
@@ -208,7 +218,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
 
           {isPOSRoute && (
-            <details className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2">
+            <details className="mt-3 rounded-[1.25rem] border border-border/70 bg-secondary/80 px-2 py-2">
               <summary className="cursor-pointer list-none text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                 More
               </summary>
@@ -220,9 +230,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </details>
           )}
 
-          <div className="mt-auto pt-8 border-t">
+          <div className="mt-auto border-t border-border/70 pt-8">
              <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground font-bold">
+              <div className="w-8 h-8 rounded-full bg-secondary/90 flex items-center justify-center text-muted-foreground font-bold">
                 {user.name.charAt(0)}
               </div>
               {!(sidebarCollapsed || isPOSRoute) && (
@@ -235,7 +245,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             
             <Button 
               variant="ghost" 
-              className={cn("w-full text-rose-600 hover:text-rose-700 hover:bg-rose-50/80", (sidebarCollapsed || isPOSRoute) ? "justify-center" : "justify-start")}
+              className={cn("w-full text-rose-600 hover:text-rose-700 hover:bg-rose-50/70", (sidebarCollapsed || isPOSRoute) ? "justify-center" : "justify-start")}
               onClick={logout}
             >
               <LogOut className={cn("h-4 w-4", (sidebarCollapsed || isPOSRoute) ? "" : "mr-2")} />
@@ -257,7 +267,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/20 z-30 md:hidden"
+          className="fixed inset-0 bg-[rgba(24,38,31,0.16)] z-30 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}

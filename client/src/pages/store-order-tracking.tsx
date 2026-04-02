@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/api";
 import { formatUGX } from "@/lib/formatters";
+import { createWhatsAppUrl, formatStoreStatus } from "@/lib/store-support";
 
 export default function StoreOrderTrackingPage() {
   const [orderNumber, setOrderNumber] = useState("");
@@ -58,17 +59,24 @@ export default function StoreOrderTrackingPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Status</p>
-                    <p className="text-lg font-semibold">{data.status}</p>
+                    <p className="text-lg font-semibold">{formatStoreStatus(data.status)}</p>
                   </div>
                 </div>
                 <div className="grid gap-2 text-sm text-muted-foreground">
                   <div>Total: {formatUGX(data.totalAmount)}</div>
                   <div>Payment: {data.paymentMethod}</div>
                   <div>Items: {data.items.map((item) => `${item.productName} x${item.quantity}`).join(", ")}</div>
-                  {data.delivery ? <div>Delivery: {data.delivery.status} to {data.delivery.address}</div> : <div>Delivery: awaiting assignment</div>}
+                  {data.delivery ? <div>Delivery: {formatStoreStatus(data.delivery.status)} to {data.delivery.address}</div> : <div>Delivery: Awaiting assignment</div>}
                 </div>
               </div>
             ) : null}
+            <div className="rounded-[1rem] border border-border/70 bg-white/90 p-4 text-sm text-muted-foreground">
+              Need help with this order?{" "}
+              <a className="font-medium text-primary" href={createWhatsAppUrl("Hello Ario Store, I need help with my order.")} target="_blank" rel="noreferrer">
+                Chat with us on WhatsApp
+              </a>
+              .
+            </div>
           </CardContent>
         </Card>
       </div>

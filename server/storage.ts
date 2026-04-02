@@ -17,6 +17,7 @@ import {
   type Product, type InsertProduct, products,
   type Device, type InsertDevice, devices,
   type Customer, type InsertCustomer, customers,
+  type CustomerAccount, type InsertCustomerAccount, customerAccounts,
   type Sale, type InsertSale, sales,
   type Repair, type InsertRepair, repairs,
   type Expense, type InsertExpense, expenses,
@@ -106,8 +107,18 @@ export interface IStorage {
 
   // Customers
   getCustomers(shopId?: string): Promise<Customer[]>;
+  getCustomer(id: string): Promise<Customer | undefined>;
+  getCustomerByEmail(email: string): Promise<Customer | undefined>;
+  getCustomerByPhone(phone: string): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
+  updateCustomer(id: string, data: Partial<InsertCustomer>): Promise<Customer | undefined>;
   incrementCustomerPurchases(id: string): Promise<void>;
+  getCustomerAccount(id: string): Promise<CustomerAccount | undefined>;
+  getCustomerAccountByEmail(email: string): Promise<CustomerAccount | undefined>;
+  getCustomerAccountByPhone(phone: string): Promise<CustomerAccount | undefined>;
+  getCustomerAccountByCustomerId(customerId: string): Promise<CustomerAccount | undefined>;
+  createCustomerAccount(account: InsertCustomerAccount): Promise<CustomerAccount>;
+  updateCustomerAccount(id: string, data: Partial<InsertCustomerAccount>): Promise<CustomerAccount | undefined>;
 
   // Devices
   getDevices(shopId?: string): Promise<Device[]>;
@@ -673,9 +684,33 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(customers).orderBy(customers.name);
   }
 
+  async getCustomer(id: string): Promise<Customer | undefined> {
+    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
+    return customer;
+  }
+
+  async getCustomerByEmail(email: string): Promise<Customer | undefined> {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return undefined;
+    const list = await this.getCustomers();
+    return list.find((customer) => customer.email?.trim().toLowerCase() === normalized);
+  }
+
+  async getCustomerByPhone(phone: string): Promise<Customer | undefined> {
+    const normalized = phone.trim();
+    if (!normalized) return undefined;
+    const list = await this.getCustomers();
+    return list.find((customer) => customer.phone?.trim() === normalized);
+  }
+
   async createCustomer(customer: InsertCustomer): Promise<Customer> {
     const [created] = await db.insert(customers).values(customer).returning();
     return created;
+  }
+
+  async updateCustomer(id: string, data: Partial<InsertCustomer>): Promise<Customer | undefined> {
+    const [updated] = await db.update(customers).set({ ...data, updatedAt: new Date() }).where(eq(customers.id, id)).returning();
+    return updated;
   }
 
   async incrementCustomerPurchases(id: string): Promise<void> {
@@ -686,6 +721,44 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(customers.id, id));
+  }
+
+  async getCustomerAccount(id: string): Promise<CustomerAccount | undefined> {
+    const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, id));
+    return account;
+  }
+
+  async getCustomerAccountByEmail(email: string): Promise<CustomerAccount | undefined> {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return undefined;
+    const list: CustomerAccount[] = await db.select().from(customerAccounts);
+    return list.find((account) => account.email?.trim().toLowerCase() === normalized);
+  }
+
+  async getCustomerAccountByPhone(phone: string): Promise<CustomerAccount | undefined> {
+    const normalized = phone.trim();
+    if (!normalized) return undefined;
+    const list: CustomerAccount[] = await db.select().from(customerAccounts);
+    return list.find((account) => account.phone?.trim() === normalized);
+  }
+
+  async getCustomerAccountByCustomerId(customerId: string): Promise<CustomerAccount | undefined> {
+    const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.customerId, customerId));
+    return account;
+  }
+
+  async createCustomerAccount(account: InsertCustomerAccount): Promise<CustomerAccount> {
+    const [created] = await db.insert(customerAccounts).values(account).returning();
+    return created;
+  }
+
+  async updateCustomerAccount(id: string, data: Partial<InsertCustomerAccount>): Promise<CustomerAccount | undefined> {
+    const [updated] = await db
+      .update(customerAccounts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(customerAccounts.id, id))
+      .returning();
+    return updated;
   }
 
   // ==================== SALES ====================

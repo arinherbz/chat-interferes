@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  ChevronDown,
   ClipboardList,
   CreditCard,
   Minus,
@@ -16,7 +17,6 @@ import {
   RefreshCw,
   Scan,
   Search,
-  Settings2,
   ShoppingCart,
   Smartphone,
   Trash2,
@@ -385,19 +385,19 @@ export default function POSPage() {
   };
 
   return (
-    <div className="grid min-h-[calc(100vh-2rem)] gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_440px]">
-      <aside className="rounded-[28px] border border-slate-200 bg-white p-3 xl:max-w-[220px]">
-        <div className="border-b border-slate-200 pb-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-            {isAdminView ? "Admin POS" : "Staff POS"}
-          </p>
-          <h1 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">Point of Sale</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            {isAdminView ? "Fast selling with light oversight." : "Fast selling with fewer decisions."}
-          </p>
-        </div>
+    <div className="grid min-h-[calc(100vh-2rem)] gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_420px]">
+      <aside className="flex flex-col rounded-[2rem] bg-white/98 p-3.5 shadow-[0_18px_42px_rgba(24,38,31,0.06)] xl:max-w-[220px]">
+        <Link href="/pos">
+          <div className="flex cursor-pointer items-center gap-3 rounded-[1.35rem] px-2 py-2.5">
+            <img src="/ariostore-logo.png" alt="Ariostore" className="h-11 w-11 object-contain" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Ariostore</p>
+              <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950">Point of Sale</h1>
+            </div>
+          </div>
+        </Link>
 
-        <nav className="mt-3 space-y-1">
+        <nav className="mt-4 space-y-1.5">
           {POS_PRIMARY_LINKS.map((item) => {
             const active = location === item.href;
             const Icon = item.icon;
@@ -405,8 +405,8 @@ export default function POSPage() {
               <Link key={item.href} href={item.href}>
                 <div
                   className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-colors",
-                    active ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                    "flex cursor-pointer items-center gap-3 rounded-[1.1rem] px-3.5 py-3 text-sm transition-colors",
+                    active ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -417,19 +417,17 @@ export default function POSPage() {
           })}
         </nav>
 
-        <details className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <summary className="cursor-pointer list-none text-sm font-medium text-slate-700">
-            <div className="flex items-center justify-between">
-              <span>More</span>
-              <Settings2 className="h-4 w-4 text-slate-400" />
-            </div>
+        <details className="mt-2 rounded-[1.25rem] bg-slate-50/90 px-3 py-2.5">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-slate-700">
+            <span>More</span>
+            <ChevronDown className="h-4 w-4 text-slate-400" />
           </summary>
           <div className="mt-2 space-y-1">
             {POS_MORE_LINKS.map((item) => {
               const Icon = item.icon;
               return (
                 <Link key={item.href} href={item.href}>
-                  <div className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-600 hover:bg-white hover:text-slate-950">
+                  <div className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 hover:bg-white hover:text-slate-950">
                     <Icon className="h-4 w-4" />
                     <span>{item.label}</span>
                   </div>
@@ -438,25 +436,17 @@ export default function POSPage() {
             })}
           </div>
         </details>
-
-        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-          <p className="truncate text-sm font-medium text-slate-900">{currentUser?.name}</p>
-          <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-            <span>{currentUser?.role}</span>
-            <span>{cartItemsCount} items</span>
-          </div>
-        </div>
       </aside>
 
-      <section className="min-w-0 rounded-[28px] border border-slate-200 bg-white">
-        <div className="sticky top-0 z-10 rounded-t-[28px] border-b border-slate-200 bg-white/95 px-5 py-5 backdrop-blur">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+      <section className="min-w-0 rounded-[2rem] bg-white/98 shadow-[0_20px_48px_rgba(24,38,31,0.06)]">
+        <div className="sticky top-0 z-10 rounded-t-[2rem] bg-white/96 px-5 py-5 backdrop-blur">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 ref={searchRef}
-                placeholder="Search or scan product…"
-                className="h-12 rounded-2xl border-slate-200 pl-11 text-base shadow-none focus-visible:ring-slate-300"
+                placeholder="Search or scan product..."
+                className="h-14 rounded-[1.3rem] border-border/70 bg-white pl-11 text-base shadow-[0_10px_22px_rgba(24,38,31,0.04)] focus-visible:ring-primary/20"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={handleSearchKeyDown}
@@ -466,7 +456,7 @@ export default function POSPage() {
             <Button
               type="button"
               variant="outline"
-              className="h-12 rounded-2xl border-slate-200 px-4 text-sm font-medium xl:min-w-[152px]"
+              className="h-14 rounded-[1.3rem] border-border/70 px-5 text-sm font-medium lg:min-w-[160px]"
               onClick={() => setIsScannerOpen(true)}
             >
               <Scan className="mr-2 h-4 w-4" />
@@ -474,12 +464,18 @@ export default function POSPage() {
             </Button>
           </div>
 
-          <Tabs value={catalogTab} onValueChange={(value) => setCatalogTab(value as CatalogTab)} className="mt-4">
-            <TabsList className="h-10 rounded-2xl bg-slate-100 p-1">
-              <TabsTrigger value="products" className="rounded-xl px-3 text-sm">
+          <Tabs value={catalogTab} onValueChange={(value) => setCatalogTab(value as CatalogTab)} className="mt-5">
+            <TabsList className="h-auto gap-6 rounded-none border-0 bg-transparent p-0 shadow-none">
+              <TabsTrigger
+                value="products"
+                className="rounded-none border-b-2 border-transparent px-0 pb-2 pt-0 text-sm text-slate-400 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
+              >
                 Products
               </TabsTrigger>
-              <TabsTrigger value="devices" className="rounded-xl px-3 text-sm">
+              <TabsTrigger
+                value="devices"
+                className="rounded-none border-b-2 border-transparent px-0 pb-2 pt-0 text-sm text-slate-400 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
+              >
                 Devices
               </TabsTrigger>
             </TabsList>
@@ -488,16 +484,16 @@ export default function POSPage() {
 
         <BarcodeScanner isOpen={isScannerOpen} onClose={() => setIsScannerOpen(false)} onScan={handleScanResult} />
 
-        <ScrollArea className="h-[calc(100vh-14rem)] px-4 py-4 md:px-5">
+        <ScrollArea className="h-[calc(100vh-13rem)] px-4 pb-5 md:px-5">
           {visibleItems.length === 0 ? (
-            <div className="flex min-h-[360px] items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-8 text-center">
+            <div className="flex min-h-[360px] items-center justify-center rounded-[1.8rem] bg-slate-50 px-8 text-center">
               <div>
                 <p className="text-base font-medium text-slate-900">Nothing matches this search.</p>
                 <p className="mt-1 text-sm text-slate-500">Try another term or use barcode scan for instant add.</p>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 pb-6 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 pt-1 pb-6 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
               {catalogTab === "products"
                 ? filteredProducts.map((product) => {
                     const isLowStock = product.stock <= product.minStock;
@@ -513,12 +509,12 @@ export default function POSPage() {
                         }}
                         role="button"
                         tabIndex={0}
-                        className="group relative rounded-[22px] border border-slate-200 bg-white p-3 text-left transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_26px_rgba(15,23,42,0.07)]"
+                        className="group relative rounded-[1.65rem] bg-white p-3.5 text-left shadow-[0_12px_26px_rgba(24,38,31,0.045)] transition duration-200 hover:scale-[1.02] hover:shadow-[0_18px_36px_rgba(24,38,31,0.08)]"
                       >
                         {isAdminView && (
                           <button
                             type="button"
-                            className="absolute right-3 top-3 rounded-full border border-slate-200 bg-white p-1.5 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-slate-900"
+                            className="absolute right-3 top-3 rounded-full bg-white/96 p-1.5 text-slate-400 opacity-0 shadow-[0_6px_18px_rgba(24,38,31,0.08)] transition group-hover:opacity-100 hover:text-slate-900"
                             onClick={(event) => {
                               event.stopPropagation();
                               setLocation("/products");
@@ -536,10 +532,10 @@ export default function POSPage() {
                         />
                         <div className="pr-8 pt-3">
                           <p className="line-clamp-2 text-sm font-medium text-slate-950">{product.name}</p>
-                          <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-                            <span>{product.stock} in stock</span>
+                          <div className="mt-2 flex items-center gap-2 text-xs">
+                            <span className="text-slate-500">{product.stock} in stock</span>
                             {isAdminView && isLowStock ? (
-                              <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+                              <span className="rounded-full bg-orange-50 px-2 py-0.5 font-medium text-orange-700">
                                 Low
                               </span>
                             ) : null}
@@ -563,9 +559,9 @@ export default function POSPage() {
                       }}
                       role="button"
                       tabIndex={0}
-                      className="rounded-[22px] border border-slate-200 bg-white p-3 text-left transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_26px_rgba(15,23,42,0.07)]"
+                      className="rounded-[1.65rem] bg-white p-3.5 text-left shadow-[0_12px_26px_rgba(24,38,31,0.045)] transition duration-200 hover:scale-[1.02] hover:shadow-[0_18px_36px_rgba(24,38,31,0.08)]"
                     >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                      <div className="flex aspect-square w-full items-center justify-center rounded-[1.2rem] bg-slate-100 text-slate-400">
                         <Smartphone className="h-5 w-5" />
                       </div>
                       <p className="mt-3 line-clamp-2 text-sm font-medium text-slate-950">
@@ -574,7 +570,6 @@ export default function POSPage() {
                       <p className="mt-2 text-xs text-slate-500">
                         {device.storage} • {device.color || "Available now"}
                       </p>
-                      <p className="mt-1 text-xs text-slate-400">IMEI {device.imei.slice(-6)}</p>
                       <p className="mt-4 text-lg font-semibold tracking-tight text-slate-950">
                         {formatUGX(device.price)}
                       </p>
@@ -585,18 +580,17 @@ export default function POSPage() {
         </ScrollArea>
       </section>
 
-      <section className="flex min-h-0 flex-col rounded-[28px] border border-slate-200 bg-white lg:col-span-2 xl:col-span-1">
-        <div className="border-b border-slate-200 px-5 py-5">
+      <section className="flex min-h-0 flex-col rounded-[2rem] bg-white/98 shadow-[0_24px_56px_rgba(24,38,31,0.085)] lg:col-span-2 xl:col-span-1">
+        <div className="px-5 py-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Cart</p>
               <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Current sale</h2>
             </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="rounded-full text-slate-400 hover:bg-slate-100 hover:text-rose-600"
+              className="rounded-full text-slate-400 hover:bg-secondary/80 hover:text-rose-600"
               onClick={clearCart}
               disabled={cart.length === 0}
             >
@@ -616,7 +610,7 @@ export default function POSPage() {
                 setSelectedCustomer(customer ?? null);
               }}
             >
-              <SelectTrigger className="h-12 rounded-2xl border-slate-200">
+              <SelectTrigger className="h-12 rounded-[1.25rem] border-border/80">
                 <div className="flex items-center gap-2">
                   <UserRound className="h-4 w-4 text-slate-400" />
                   <SelectValue placeholder="Select customer" />
@@ -634,18 +628,18 @@ export default function POSPage() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 px-5 py-5">
+        <ScrollArea className="flex-1 px-5 pb-5">
           {cart.length === 0 ? (
             <div className="flex min-h-[320px] items-center justify-center text-center">
               <div>
-                <p className="text-base font-medium text-slate-900">Cart is empty.</p>
+                <p className="text-base font-medium text-slate-900">Current sale is empty.</p>
                 <p className="mt-1 text-sm text-slate-500">Start by scanning or selecting a product.</p>
               </div>
             </div>
           ) : (
             <div className="space-y-3 pb-24">
               {cart.map((item) => (
-                <div key={item.id} className="rounded-[24px] bg-slate-50 px-4 py-4">
+                <div key={item.id} className="rounded-[1.45rem] bg-slate-50/90 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-slate-950">{item.name}</p>
@@ -663,7 +657,7 @@ export default function POSPage() {
                   </div>
 
                   <div className="mt-4 flex items-center justify-between">
-                    <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-1">
+                    <div className="inline-flex items-center rounded-full bg-white p-1 shadow-[0_6px_16px_rgba(24,38,31,0.04)]">
                       <Button
                         type="button"
                         variant="ghost"
@@ -693,7 +687,7 @@ export default function POSPage() {
           )}
         </ScrollArea>
 
-        <div className="sticky bottom-0 mt-auto border-t border-slate-200 bg-white px-5 py-5">
+        <div className="sticky bottom-0 mt-auto bg-white/98 px-5 py-5 backdrop-blur">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm text-slate-500">
               <span>Subtotal</span>
@@ -703,7 +697,7 @@ export default function POSPage() {
               <span>Tax</span>
               <span className="font-medium text-slate-900">0 UGX</span>
             </div>
-            <div className="flex items-center justify-between border-t border-slate-200 pt-3">
+            <div className="flex items-center justify-between pt-3">
               <span className="text-base font-medium text-slate-600">Total</span>
               <span className="text-4xl font-semibold tracking-tight text-slate-950">{formatUGX(cartTotal)}</span>
             </div>
@@ -711,7 +705,7 @@ export default function POSPage() {
 
           <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
             <DialogTrigger asChild>
-              <Button className="mt-4 h-14 w-full rounded-2xl text-base font-semibold" disabled={cart.length === 0}>
+              <Button className="mt-4 h-14 w-full rounded-[1.25rem] text-base font-semibold" disabled={cart.length === 0}>
                 Checkout
               </Button>
             </DialogTrigger>
@@ -721,7 +715,7 @@ export default function POSPage() {
               </DialogHeader>
 
               <div className="space-y-4 py-4">
-                <div className="rounded-2xl bg-slate-50 p-5 text-center">
+                <div className="rounded-[1.4rem] bg-secondary/72 p-5 text-center">
                   <p className="text-sm text-slate-500">Amount to pay</p>
                   <p className="mt-2 text-4xl font-semibold tracking-tight text-slate-950">{formatUGX(cartTotal)}</p>
                 </div>
@@ -729,7 +723,7 @@ export default function POSPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Payment method</label>
                   <Select onValueChange={setPaymentMethod} defaultValue={paymentMethod}>
-                    <SelectTrigger className="h-12 rounded-2xl border-slate-200">
+                    <SelectTrigger className="h-12 rounded-[1.25rem] border-border/80">
                       <div className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4 text-slate-400" />
                         <SelectValue placeholder="Select payment method" />

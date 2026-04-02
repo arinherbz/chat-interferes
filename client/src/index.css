@@ -7,9 +7,9 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --radius-sm: 0.3rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-sm: 0.45rem;
+  --radius-md: 0.85rem;
+  --radius-lg: 1.25rem;
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -53,49 +53,49 @@
 }
 
 :root {
-  --background: 210 40% 98%;
-  --foreground: 222 47% 11%;
+  --background: 120 20% 99%;
+  --foreground: 155 18% 14%;
 
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
+  --card-foreground: 155 18% 14%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
+  --popover-foreground: 155 18% 14%;
 
-  --primary: 220 83% 53%;
+  --primary: 151 28% 37%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 210 40% 96%;
-  --secondary-foreground: 222 47% 11%;
+  --secondary: 140 16% 96%;
+  --secondary-foreground: 155 18% 14%;
 
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
+  --muted: 140 14% 96%;
+  --muted-foreground: 156 9% 42%;
 
-  --accent: 214 95% 93%;
-  --accent-foreground: 220 83% 40%;
+  --accent: 146 27% 92%;
+  --accent-foreground: 151 28% 32%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --success: 142 72% 37%;
+  --success: 151 28% 37%;
   --success-foreground: 0 0% 100%;
   
-  --warning: 38 92% 50%;
-  --warning-foreground: 0 0% 100%;
+  --warning: 24 86% 56%;
+  --warning-foreground: 24 38% 18%;
 
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 220 83% 53%;
-  --button-outline: hsl(220 13% 91%);
-  --secondary-border: hsl(220 13% 91%);
+  --border: 145 13% 90%;
+  --input: 145 13% 90%;
+  --ring: 151 28% 37%;
+  --button-outline: hsl(145 13% 89%);
+  --secondary-border: hsl(145 12% 90%);
 
-  --radius: 0.75rem;
+  --radius: 1.25rem;
 
-  --chart-1: 220 83% 53%;
-  --chart-2: 196 74% 45%;
-  --chart-3: 214 18% 38%;
-  --chart-4: 155 58% 39%;
-  --chart-5: 32 85% 58%;
+  --chart-1: 151 28% 37%;
+  --chart-2: 182 37% 40%;
+  --chart-3: 155 14% 42%;
+  --chart-4: 24 74% 55%;
+  --chart-5: 210 18% 66%;
 }
 
 @layer base {
@@ -108,8 +108,9 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
     background-image:
-      radial-gradient(circle at top left, rgba(255, 255, 255, 0.98), transparent 28%),
-      linear-gradient(180deg, #ffffff 0%, #f8fafc 32%, #f8fafc 100%);
+      radial-gradient(circle at top left, rgba(220, 242, 233, 0.32), transparent 24%),
+      radial-gradient(circle at top right, rgba(255, 245, 238, 0.4), transparent 18%),
+      linear-gradient(180deg, #fefefe 0%, #f7f8f6 34%, #f6f7f4 100%);
   }
   #root {
     min-height: 100vh;
@@ -121,34 +122,34 @@
     @apply space-y-8 animate-in fade-in duration-500;
   }
   .page-hero {
-    @apply rounded-[1.25rem] border bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)];
+    @apply rounded-[1.75rem] border border-border/70 bg-white/96 p-6 shadow-[0_18px_45px_rgba(24,38,31,0.06)] backdrop-blur-sm;
   }
   .page-kicker {
     @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
   }
   .page-title {
-    @apply text-3xl font-bold tracking-tight text-foreground sm:text-4xl;
+    @apply text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-4xl;
   }
   .page-subtitle {
     @apply max-w-2xl text-sm text-muted-foreground sm:text-base;
   }
   .surface-panel {
-    @apply rounded-xl border bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)];
+    @apply rounded-[1.5rem] border border-border/70 bg-white/96 shadow-[0_18px_40px_rgba(24,38,31,0.06)] backdrop-blur-sm;
   }
   .surface-muted {
-    @apply rounded-xl border border-border bg-secondary;
+    @apply rounded-[1.25rem] border border-border/70 bg-secondary/88;
   }
   .stat-card {
-    @apply rounded-xl border bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)];
+    @apply rounded-[1.5rem] border border-border/70 bg-white/96 shadow-[0_16px_34px_rgba(24,38,31,0.055)];
   }
   .tone-info {
-    @apply border border-sky-200 bg-sky-50 text-sky-700;
+    @apply border border-slate-200 bg-slate-50 text-slate-700;
   }
   .tone-success {
-    @apply border border-emerald-200 bg-emerald-50 text-emerald-700;
+    @apply border border-primary/20 bg-primary/8 text-primary;
   }
   .tone-warning {
-    @apply border border-amber-200 bg-amber-50 text-amber-700;
+    @apply border border-orange-200 bg-orange-50 text-orange-700;
   }
   .tone-danger {
     @apply border border-rose-200 bg-rose-50 text-rose-700;
@@ -158,10 +159,10 @@
   }
   .card-lift:hover {
     transform: translateY(-1px);
-    box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 16px 32px rgba(24, 38, 31, 0.08);
   }
   .section-card {
-    @apply rounded-xl border bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)];
+    @apply rounded-[1.5rem] border border-border/70 bg-white shadow-[0_16px_34px_rgba(24,38,31,0.055)];
   }
   .section-label {
     @apply text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground;

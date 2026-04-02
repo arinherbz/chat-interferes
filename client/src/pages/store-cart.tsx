@@ -1,4 +1,4 @@
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { MessageCircle, Minus, Plus, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { StoreShell } from "@/components/store-shell";
 import { ProductImage } from "@/components/product-image";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatUGX } from "@/lib/formatters";
 import { useStoreCart } from "@/lib/store-cart";
+import { createWhatsAppUrl } from "@/lib/store-support";
 
 export default function StoreCartPage() {
   const { items, subtotal, updateQuantity, remove } = useStoreCart();
@@ -77,6 +78,19 @@ export default function StoreCartPage() {
                       <Button>Proceed to Checkout</Button>
                     </Link>
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-white/90 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium text-slate-950">Need help before checkout?</p>
+                    <p className="text-sm text-muted-foreground">Chat with Ariostore on WhatsApp for delivery, stock, or payment questions.</p>
+                  </div>
+                  <a href={createWhatsAppUrl("Hello Ario Store, I need help with my cart.")} target="_blank" rel="noreferrer">
+                    <Button variant="outline" className="gap-2">
+                      <MessageCircle className="h-4 w-4" />
+                      Contact support
+                    </Button>
+                  </a>
                 </div>
               </div>
             )}

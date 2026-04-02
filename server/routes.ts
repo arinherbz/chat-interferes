@@ -25,18 +25,28 @@ import { handleUpload, removeUploadedFileByUrl } from "./uploads";
 import { asyncHandler } from "./middleware/async-handler";
 import { commerceService, ORDER_STATUSES } from "./services/commerce-service";
 import { HttpError, sendFailure, sendSuccess } from "./utils/api-response";
+import { normalizeUgPhoneNumber } from "./utils/phone";
 
 declare module "express-session" {
   interface SessionData {
     userId?: string;
     role?: User["role"];
     shopId?: string | null;
+    customerAccountId?: string;
+    customerId?: string;
   }
 }
 
 declare module "express-serve-static-core" {
   interface Request {
     currentUser?: User;
+    currentStoreCustomer?: {
+      accountId: string;
+      customerId: string;
+      name: string;
+      email?: string | null;
+      phone: string;
+    };
   }
 }
 
@@ -83,6 +93,18 @@ const staffSchema = z.object({
   shopId: z.string().optional(),
   pin: z.string().min(4).max(12),
   status: z.enum(["active", "disabled"]).default("active"),
+});
+
+const storeSignupSchema = z.object({
+  name: z.string().min(1, "Full name is required"),
+  phone: z.string().min(1, "Phone number is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+const storeLoginSchema = z.object({
+  identifier: z.string().min(1, "Email or phone is required"),
+  password: z.string().min(6, "Password is required"),
 });
 
 const baseValueUpsertSchema = z.object({
@@ -634,8 +656,30 @@ export async function registerRoutes(
         req.currentUser = user;
       }
     }
+    if (req.session?.customerAccountId && req.session?.customerId) {
+      const [account, customer] = await Promise.all([
+        storage.getCustomerAccount(req.session.customerAccountId),
+        storage.getCustomer(req.session.customerId),
+      ]);
+      if (account && customer) {
+        req.currentStoreCustomer = {
+          accountId: account.id,
+          customerId: customer.id,
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+        };
+      }
+    }
     next();
   });
+
+  const requireStoreCustomer = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.currentStoreCustomer) {
+      return res.status(401).json({ message: "Store customer authentication required" });
+    }
+    next();
+  };
 
   // Require auth for all API routes except auth endpoints
   app.use("/api", (req, res, next) => {
@@ -799,6 +843,160 @@ export async function registerRoutes(
     const preferences = await storage.upsertUserPreferences(user.id, {});
     res.json({ user: sanitizeUser(user), preferences });
   });
+
+  app.post("/api/store/auth/signup", asyncHandler(async (req: Request, res: Response) => {
+    const payload = storeSignupSchema.parse(req.body);
+    const email = payload.email?.trim().toLowerCase() || null;
+    const phone = normalizeUgPhoneNumber(payload.phone);
+
+    if (email) {
+      const existingEmailAccount = await storage.getCustomerAccountByEmail(email);
+      if (existingEmailAccount) {
+        throw new HttpError(409, "An account with this email already exists");
+      }
+    }
+
+    const existingPhoneAccount = await storage.getCustomerAccountByPhone(phone);
+    if (existingPhoneAccount) {
+      throw new HttpError(409, "An account with this phone number already exists");
+    }
+
+    let customer =
+      (email ? await storage.getCustomerByEmail(email) : undefined) ??
+      (await storage.getCustomerByPhone(phone));
+
+    if (customer) {
+      customer =
+        (await storage.updateCustomer(customer.id, {
+          name: payload.name.trim(),
+          email,
+          phone,
+        })) ?? customer;
+    } else {
+      customer = await storage.createCustomer({
+        name: payload.name.trim(),
+        phone,
+        email,
+        shopId: null,
+      });
+    }
+
+    const existingLinkedAccount = await storage.getCustomerAccountByCustomerId(customer.id);
+    if (existingLinkedAccount) {
+      throw new HttpError(409, "This customer already has an account");
+    }
+
+    const account = await storage.createCustomerAccount({
+      customerId: customer.id,
+      email,
+      phone,
+      password: hashSecret(payload.password),
+    });
+
+    req.session.customerAccountId = account.id;
+    req.session.customerId = customer.id;
+    await new Promise<void>((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
+
+    return sendSuccess(res, {
+      customer: {
+        accountId: account.id,
+        customerId: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
+    }, 201);
+  }));
+
+  app.post("/api/store/auth/login", asyncHandler(async (req: Request, res: Response) => {
+    const payload = storeLoginSchema.parse(req.body);
+    const identifier = payload.identifier.trim();
+    const normalizedEmail = identifier.includes("@") ? identifier.toLowerCase() : null;
+    const normalizedPhone = normalizedEmail ? null : normalizeUgPhoneNumber(identifier);
+
+    const account = normalizedEmail
+      ? await storage.getCustomerAccountByEmail(normalizedEmail)
+      : await storage.getCustomerAccountByPhone(normalizedPhone!);
+
+    if (!account || !verifySecret(payload.password, account.password)) {
+      throw new HttpError(401, "Incorrect email/phone or password");
+    }
+
+    const customer = await storage.getCustomer(account.customerId);
+    if (!customer) {
+      throw new HttpError(404, "Customer account is not linked correctly");
+    }
+
+    req.session.customerAccountId = account.id;
+    req.session.customerId = customer.id;
+    await new Promise<void>((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
+
+    return sendSuccess(res, {
+      customer: {
+        accountId: account.id,
+        customerId: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
+    });
+  }));
+
+  app.post("/api/store/auth/logout", asyncHandler(async (req: Request, res: Response) => {
+    if (req.session) {
+      delete req.session.customerAccountId;
+      delete req.session.customerId;
+      await new Promise<void>((resolve, reject) => req.session.save((err) => (err ? reject(err) : resolve())));
+    }
+    return sendSuccess(res, { success: true });
+  }));
+
+  app.get("/api/store/auth/me", asyncHandler(async (req: Request, res: Response) => {
+    if (!req.currentStoreCustomer) {
+      throw new HttpError(401, "Store customer authentication required");
+    }
+    return sendSuccess(res, { customer: req.currentStoreCustomer });
+  }));
+
+  app.get("/api/store/account", requireStoreCustomer, asyncHandler(async (req: Request, res: Response) => {
+    const currentCustomer = req.currentStoreCustomer!;
+    const [orders, tradeIns] = await Promise.all([
+      storage.getOrders(),
+      storage.getTradeInAssessments(),
+    ]);
+
+    const customerOrders = orders
+      .filter((order) =>
+        order.customerId === currentCustomer.customerId ||
+        order.customerPhone === currentCustomer.phone ||
+        (!!currentCustomer.email && order.customerEmail?.trim().toLowerCase() === currentCustomer.email?.trim().toLowerCase()),
+      )
+      .sort((a, b) => new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime());
+
+    const savedAddresses = Array.from(new Set(
+      customerOrders
+        .map((order) => order.deliveryAddress?.trim())
+        .filter((address): address is string => !!address),
+    ));
+
+    const customerTradeIns = tradeIns
+      .filter((assessment) =>
+        assessment.customerId === currentCustomer.customerId ||
+        assessment.customerPhone === currentCustomer.phone ||
+        (!!currentCustomer.email && assessment.customerEmail?.trim().toLowerCase() === currentCustomer.email?.trim().toLowerCase()),
+      )
+      .sort((a, b) => new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime());
+
+    return sendSuccess(res, {
+      customer: currentCustomer,
+      orders: customerOrders,
+      tradeIns: customerTradeIns,
+      savedAddresses,
+      support: {
+        whatsappUrl: `https://wa.me/256756524407?text=${encodeURIComponent("Hello Ario Store, I need help with my account.")}`,
+      },
+    });
+  }));
 
   app.get("/api/staff", requireRole(["Owner", "Manager"]), async (_req: Request, res: Response) => {
     const staff = await storage.listUsers();

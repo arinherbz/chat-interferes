@@ -4,6 +4,7 @@ import { StoreShell } from "@/components/store-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatUGX } from "@/lib/formatters";
+import { formatStoreStatus } from "@/lib/store-support";
 
 export default function StoreConfirmationPage() {
   const order = readLastStoreOrder();
@@ -19,7 +20,7 @@ export default function StoreConfirmationPage() {
             <Card className="mt-6 text-left">
               <CardContent className="space-y-2 p-5">
                 <p className="text-sm"><span className="text-muted-foreground">Order Number:</span> <span className="font-medium">{order.orderNumber}</span></p>
-                <p className="text-sm"><span className="text-muted-foreground">Status:</span> <span className="font-medium">{order.status}</span></p>
+                <p className="text-sm"><span className="text-muted-foreground">Status:</span> <span className="font-medium">{formatStoreStatus(order.status)}</span></p>
                 <p className="text-sm"><span className="text-muted-foreground">Total:</span> <span className="font-medium">{formatUGX(order.totalAmount)}</span></p>
                 {order.estimatedDelivery ? <p className="text-sm"><span className="text-muted-foreground">Estimate:</span> <span className="font-medium">{order.estimatedDelivery}</span></p> : null}
               </CardContent>

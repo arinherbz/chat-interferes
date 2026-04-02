@@ -104,7 +104,7 @@ export default function StoreHomePage() {
               <Card key={product.id} className="overflow-hidden">
                 <CardContent className="space-y-3 p-5">
                   <div className="flex items-center justify-between">
-                    <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600">Flash Deal</span>
+                    <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Flash Deal</span>
                     <span className="text-xs text-muted-foreground">{product.flashDealEndsAt ? `Ends ${new Date(product.flashDealEndsAt).toLocaleDateString()}` : "Limited time"}</span>
                   </div>
                   <div>

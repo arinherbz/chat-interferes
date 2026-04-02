@@ -6,11 +6,20 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth, type UserRole } from "@/lib/auth-context";
 import { DataProvider } from "@/lib/data-context";
+import { StoreCustomerAuthProvider, useStoreCustomerAuth } from "@/lib/store-customer-auth";
 import Layout from "@/components/layout";
 import { Loader2 } from "lucide-react";
+import Login from "@/pages/login";
+import POSPage from "@/pages/pos";
+import StoreAccountPage from "@/pages/store-account";
+import StoreAuthPage from "@/pages/store-auth";
+import StoreCartPage from "@/pages/store-cart";
+import StoreCheckoutPage from "@/pages/store-checkout";
+import StoreHomePage from "@/pages/store-home";
+import StoreOrderTrackingPage from "@/pages/store-order-tracking";
+import StoreProductDetailPage from "@/pages/store-product-detail";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
-const Login = lazy(() => import("@/pages/login"));
 const DailyClose = lazy(() => import("@/pages/daily-close"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const ProductsPage = lazy(() => import("@/pages/products"));
@@ -18,7 +27,6 @@ const CustomersPage = lazy(() => import("@/pages/customers"));
 const RepairsPage = lazy(() => import("@/pages/repairs"));
 const DevicesPage = lazy(() => import("@/pages/devices"));
 const ExpensesPage = lazy(() => import("@/pages/expenses"));
-const POSPage = lazy(() => import("@/pages/pos"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const StaffPage = lazy(() => import("@/pages/staff"));
 const ClosuresPage = lazy(() => import("@/pages/closures"));
@@ -28,14 +36,8 @@ const BaseValuesPage = lazy(() => import("@/pages/base-values"));
 const BrandsPage = lazy(() => import("@/pages/brands"));
 const LeadsPage = lazy(() => import("@/pages/leads"));
 const ShopSettingsPage = lazy(() => import("@/pages/shop-settings/[id]"));
-const StoreHomePage = lazy(() => import("@/pages/store-home"));
 const StoreProductsPage = lazy(() => import("@/pages/store-products"));
-const StoreProductDetailPage = lazy(() => import("@/pages/store-product-detail"));
-const StoreCartPage = lazy(() => import("@/pages/store-cart"));
-const StoreCheckoutPage = lazy(() => import("@/pages/store-checkout"));
 const StoreConfirmationPage = lazy(() => import("@/pages/store-confirmation"));
-const StoreAccountPage = lazy(() => import("@/pages/store-account"));
-const StoreOrderTrackingPage = lazy(() => import("@/pages/store-order-tracking"));
 const OrdersPage = lazy(() => import("@/pages/orders"));
 const DeliveriesPage = lazy(() => import("@/pages/deliveries"));
 
@@ -103,6 +105,24 @@ function ProtectedRoute({ component: Component, roles }: { component: React.Comp
   return <Component />;
 }
 
+function StoreProtectedRoute({ component: Component }: { component: React.ComponentType<any> }) {
+  const { customer, loading } = useStoreCustomerAuth();
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!loading && !customer) {
+      setLocation(`/store/login?redirect=${encodeURIComponent(location)}`);
+    }
+  }, [customer, loading, location, setLocation]);
+
+  if (loading) {
+    return <AppShellFallback />;
+  }
+
+  if (!customer) return null;
+  return <Component />;
+}
+
 function Router() {
   const [location] = useLocation();
   const isCustomerRoute = location.startsWith("/store") || location === "/track-order";
@@ -134,12 +154,14 @@ function Router() {
         <Route path="/base-values" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={BaseValuesPage} />} />
         <Route path="/shop-settings/:id" component={() => <ProtectedRoute roles={["Owner", "Manager"]} component={ShopSettingsPage} />} />
         <Route path="/store" component={StoreHomePage} />
+        <Route path="/store/login" component={StoreAuthPage} />
+        <Route path="/store/signup" component={StoreAuthPage} />
         <Route path="/store/products" component={StoreProductsPage} />
         <Route path="/store/products/:id" component={StoreProductDetailPage} />
         <Route path="/store/cart" component={StoreCartPage} />
         <Route path="/store/checkout" component={StoreCheckoutPage} />
         <Route path="/store/confirmation" component={StoreConfirmationPage} />
-        <Route path="/store/account" component={StoreAccountPage} />
+        <Route path="/store/account" component={() => <StoreProtectedRoute component={StoreAccountPage} />} />
         <Route path="/store/track" component={StoreOrderTrackingPage} />
         <Route path="/track-order" component={StoreOrderTrackingPage} />
         <Route path="/orders" component={() => <ProtectedRoute roles={["Owner", "Manager", "Sales"]} component={OrdersPage} />} />
@@ -168,14 +190,16 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <DataProvider>
-          <TooltipProvider>
-            <Toaster />
-            <ErrorBoundary>
-              <Router />
-            </ErrorBoundary>
-          </TooltipProvider>
-        </DataProvider>
+        <StoreCustomerAuthProvider>
+          <DataProvider>
+            <TooltipProvider>
+              <Toaster />
+              <ErrorBoundary>
+                <Router />
+              </ErrorBoundary>
+            </TooltipProvider>
+          </DataProvider>
+        </StoreCustomerAuthProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

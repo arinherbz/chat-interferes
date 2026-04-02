@@ -229,6 +229,28 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
 
+export const customerAccounts = pgTable("customer_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  password: text("password").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  customerIdUniqueIdx: uniqueIndex("customer_accounts_customer_id_unique_idx").on(table.customerId),
+  emailUniqueIdx: uniqueIndex("customer_accounts_email_unique_idx").on(table.email),
+  phoneUniqueIdx: uniqueIndex("customer_accounts_phone_unique_idx").on(table.phone),
+}));
+
+export const insertCustomerAccountSchema = createInsertSchema(customerAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertCustomerAccount = z.infer<typeof insertCustomerAccountSchema>;
+export type CustomerAccount = typeof customerAccounts.$inferSelect;
+
 // ===================== SALES =====================
 export const sales = pgTable("sales", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

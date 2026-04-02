@@ -191,6 +191,16 @@ if (usePostgres) {
       updated_at TIMESTAMP DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS customer_accounts (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      customer_id VARCHAR NOT NULL,
+      email TEXT,
+      phone TEXT,
+      password TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS sales (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
       sale_number TEXT NOT NULL UNIQUE,
@@ -442,6 +452,9 @@ if (usePostgres) {
       ADD COLUMN IF NOT EXISTS barcode TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_idx ON products(barcode);
     CREATE INDEX IF NOT EXISTS products_shop_idx ON products(shop_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_customer_id_unique_idx ON customer_accounts(customer_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_email_unique_idx ON customer_accounts(email);
+    CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_phone_unique_idx ON customer_accounts(phone);
   `).then(() => undefined).catch((err) => {
     console.warn("[db] Unable to bootstrap Postgres schema:", err?.message || err);
   });
@@ -562,6 +575,16 @@ if (usePostgres) {
         joined_at TEXT,
         total_purchases INTEGER DEFAULT 0,
         shop_id TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS customer_accounts (
+        id TEXT PRIMARY KEY,
+        customer_id TEXT NOT NULL,
+        email TEXT,
+        phone TEXT,
+        password TEXT NOT NULL,
         created_at TEXT,
         updated_at TEXT
       );
@@ -805,6 +828,9 @@ if (usePostgres) {
     try { sqlite.exec(`ALTER TABLE products ADD COLUMN barcode TEXT`); } catch {}
     try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_idx ON products(barcode)`); } catch {}
     try { sqlite.exec(`CREATE INDEX IF NOT EXISTS products_shop_idx ON products(shop_id)`); } catch {}
+    try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_customer_id_unique_idx ON customer_accounts(customer_id)`); } catch {}
+    try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_email_unique_idx ON customer_accounts(email)`); } catch {}
+    try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_phone_unique_idx ON customer_accounts(phone)`); } catch {}
     try { sqlite.exec(`ALTER TABLE condition_questions ADD COLUMN device_type TEXT DEFAULT 'phone'`); } catch {}
     try { sqlite.exec(`ALTER TABLE condition_questions ADD COLUMN shop_id TEXT`); } catch {}
   } catch (err) {

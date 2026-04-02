@@ -18,6 +18,15 @@ function uniqueUsername(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function uniqueCustomerEmail(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+}
+
+function uniqueCustomerPhone() {
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-8);
+  return `+2567${suffix}`;
+}
+
 function uniqueValidImei() {
   const prefix14 = String(Date.now()).replace(/\D/g, "").slice(-14).padStart(14, "4");
   let sum = 0;
@@ -218,6 +227,223 @@ describe("authentication", () => {
 
     const shops = await shopsRes.json();
     expect(Array.isArray(shops)).toBe(true);
+  });
+
+  it("supports storefront customer signup, protected account access, and logout", async () => {
+    const email = uniqueCustomerEmail("store-signup");
+    const phone = uniqueCustomerPhone();
+    const password = "StorePass!123";
+
+    const unauthenticatedAccountRes = await fetch(`${baseUrl}/api/store/account`);
+    expect(unauthenticatedAccountRes.status).toBe(401);
+
+    const signupRes = await fetch(`${baseUrl}/api/store/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Store Customer",
+        email,
+        phone,
+        password,
+      }),
+    });
+
+    expect(signupRes.status).toBe(201);
+    const signupCookie = signupRes.headers.get("set-cookie");
+    expect(signupCookie).toContain("connect.sid=");
+
+    const signupBody = await signupRes.json();
+    expect(signupBody.success).toBe(true);
+    expect(signupBody.data.customer.phone).toBe(phone);
+    expect(signupBody.data.customer.email).toBe(email);
+
+    const customerId = signupBody.data.customer.customerId as string;
+    const shop = (await storage.getShops())[0] ?? await storage.createShop({ name: "Main Shop", location: "Kampala", isActive: true });
+
+    await storage.createOrder({
+      orderNumber: `ORD-TEST-${Date.now()}`,
+      shopId: shop.id,
+      customerId,
+      customerName: "Store Customer",
+      customerPhone: phone,
+      customerEmail: email,
+      subtotal: 120000,
+      deliveryFee: 10000,
+      total: 130000,
+      paymentMethod: "Cash on delivery",
+      paymentStatus: "PENDING",
+      channel: "ONLINE",
+      status: "PENDING",
+      deliveryType: "KAMPALA",
+      deliveryAddress: "Kampala Road",
+      notes: "Storefront account test",
+    });
+
+    await storage.createTradeInAssessment({
+      tradeInNumber: `TI-TEST-${Date.now()}`,
+      brand: "Apple",
+      model: "iPhone 13",
+      storage: "128GB",
+      color: "Blue",
+      imei: uniqueValidImei(),
+      customerId,
+      customerName: "Store Customer",
+      customerPhone: phone,
+      customerEmail: email,
+      baseValue: 900000,
+      conditionAnswers: { screen: "good" },
+      conditionScore: 88,
+      calculatedOffer: 792000,
+      decision: "manual_review",
+      payoutMethod: "Cash",
+      status: "pending",
+      shopId: shop.id,
+    });
+
+    const meRes = await fetch(`${baseUrl}/api/store/auth/me`, {
+      headers: { Cookie: signupCookie! },
+    });
+    expect(meRes.status).toBe(200);
+    const meBody = await meRes.json();
+    expect(meBody.data.customer.customerId).toBe(customerId);
+
+    const accountRes = await fetch(`${baseUrl}/api/store/account`, {
+      headers: { Cookie: signupCookie! },
+    });
+    expect(accountRes.status).toBe(200);
+    const accountBody = await accountRes.json();
+    expect(accountBody.success).toBe(true);
+    expect(accountBody.data.orders).toHaveLength(1);
+    expect(accountBody.data.tradeIns).toHaveLength(1);
+    expect(accountBody.data.savedAddresses).toContain("Kampala Road");
+    expect(accountBody.data.support.whatsappUrl).toContain("wa.me/256756524407");
+
+    const logoutRes = await fetch(`${baseUrl}/api/store/auth/logout`, {
+      method: "POST",
+      headers: { Cookie: signupCookie! },
+    });
+    expect(logoutRes.status).toBe(200);
+
+    const meAfterLogoutRes = await fetch(`${baseUrl}/api/store/auth/me`, {
+      headers: { Cookie: signupCookie! },
+    });
+    expect(meAfterLogoutRes.status).toBe(401);
+  });
+
+  it("supports storefront customer login by email or phone", async () => {
+    const email = uniqueCustomerEmail("store-login");
+    const phone = uniqueCustomerPhone();
+    const password = "AnotherStorePass!123";
+
+    const customer = await storage.createCustomer({
+      name: "Returning Customer",
+      email,
+      phone,
+      shopId: null,
+    });
+
+    await storage.createCustomerAccount({
+      customerId: customer.id,
+      email,
+      phone,
+      password: hashSecret(password),
+    });
+
+    const emailLoginRes = await fetch(`${baseUrl}/api/store/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        identifier: email.toUpperCase(),
+        password,
+      }),
+    });
+    expect(emailLoginRes.status).toBe(200);
+    const emailCookie = emailLoginRes.headers.get("set-cookie");
+    expect(emailCookie).toContain("connect.sid=");
+
+    const emailLoginBody = await emailLoginRes.json();
+    expect(emailLoginBody.data.customer.email).toBe(email);
+
+    await fetch(`${baseUrl}/api/store/auth/logout`, {
+      method: "POST",
+      headers: { Cookie: emailCookie! },
+    });
+
+    const phoneLoginRes = await fetch(`${baseUrl}/api/store/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        identifier: phone,
+        password,
+      }),
+    });
+    expect(phoneLoginRes.status).toBe(200);
+
+    const phoneLoginBody = await phoneLoginRes.json();
+    expect(phoneLoginBody.data.customer.phone).toBe(phone);
+    expect(phoneLoginBody.data.customer.customerId).toBe(customer.id);
+  });
+
+  it("links storefront checkout orders back into the signed-in customer account", async () => {
+    const email = uniqueCustomerEmail("store-checkout");
+    const phone = uniqueCustomerPhone();
+    const password = "CheckoutStorePass!123";
+
+    const product = await storage.createProduct({
+      name: "Account Flow Charger",
+      category: "Accessories",
+      price: 45000,
+      costPrice: 25000,
+      stock: 4,
+      minStock: 1,
+      shopId: null,
+    });
+
+    const signupRes = await fetch(`${baseUrl}/api/store/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Checkout Customer",
+        email,
+        phone,
+        password,
+      }),
+    });
+    expect(signupRes.status).toBe(201);
+
+    const signupCookie = signupRes.headers.get("set-cookie");
+    expect(signupCookie).toContain("connect.sid=");
+
+    const checkoutRes = await fetch(`${baseUrl}/api/store/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Checkout Customer",
+        customerPhone: phone,
+        customerEmail: email,
+        items: [{ productId: product.id, quantity: 1 }],
+        paymentMethod: "Mobile Money",
+        deliveryType: "KAMPALA",
+        deliveryAddress: "Ntinda, Kampala",
+        notes: "Account linkage test",
+      }),
+    });
+    expect(checkoutRes.status).toBe(201);
+
+    const checkoutBody = await checkoutRes.json();
+    expect(checkoutBody.success).toBe(true);
+    expect(checkoutBody.data.orderNumber).toMatch(/^ORD-/);
+
+    const accountRes = await fetch(`${baseUrl}/api/store/account`, {
+      headers: { Cookie: signupCookie! },
+    });
+    expect(accountRes.status).toBe(200);
+
+    const accountBody = await accountRes.json();
+    expect(accountBody.success).toBe(true);
+    expect(accountBody.data.orders.length).toBeGreaterThan(0);
+    expect(accountBody.data.orders[0].orderNumber).toBe(checkoutBody.data.orderNumber);
+    expect(accountBody.data.savedAddresses).toContain("Ntinda, Kampala");
   });
 
   it("creates customers and sales through authenticated API routes", async () => {

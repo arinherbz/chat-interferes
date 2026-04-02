@@ -1010,7 +1010,7 @@ export default function TradeInPage() {
 
         <TabsContent value="new" className="space-y-6">
           {/* Progress Steps */}
-          <div className="surface-panel flex items-center justify-between mb-8 p-5">
+          <div className="surface-panel mb-8 flex items-center justify-between p-6">
             {WIZARD_STEPS.map((s, i) => {
               const Icon = s.icon;
               const isActive = step === s.id;
@@ -1021,9 +1021,9 @@ export default function TradeInPage() {
                   <div className="flex flex-col items-center">
                     <div 
                       className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                        isCompleted ? "bg-emerald-500 text-white" :
+                        isCompleted ? "bg-primary text-white" :
                         isActive ? "bg-primary text-white" :
-                        "bg-secondary text-muted-foreground"
+                        "bg-secondary/85 text-muted-foreground"
                       }`}
                       data-testid={`step-indicator-${s.id}`}
                     >
@@ -1034,7 +1034,7 @@ export default function TradeInPage() {
                     </span>
                   </div>
                   {i < WIZARD_STEPS.length - 1 && (
-                    <div className={`w-16 h-0.5 mx-2 ${step > s.id ? "bg-emerald-400" : "bg-border"}`} />
+                    <div className={`mx-2 h-0.5 w-16 ${step > s.id ? "bg-primary/60" : "bg-border"}`} />
                   )}
                 </div>
               );
@@ -1058,7 +1058,7 @@ export default function TradeInPage() {
                 {/* Step 1: Device Selection */}
                 {step === 1 && (
                   <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+                    <section className="space-y-4 rounded-[1.5rem] border border-border/70 bg-white/98 p-5 shadow-[0_16px_32px_rgba(24,38,31,0.04)]">
                       <div>
                         <h3 className="text-base font-semibold text-slate-900">Step 1. Device basics</h3>
                         <p className="mt-1 text-sm text-slate-500">Choose the device profile, then enter the exact brand, model, and storage for intake.</p>
@@ -1080,7 +1080,7 @@ export default function TradeInPage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <div className="rounded-[1.15rem] border border-border/70 bg-secondary/72 p-4">
                           <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
                             {resolvedDeviceType === "laptop" ? <Laptop className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
                             Assessment profile
@@ -1148,7 +1148,7 @@ export default function TradeInPage() {
                       </div>
 
                       {showCatalogHelper && (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="rounded-[1.15rem] border border-border/70 bg-secondary/72 p-4">
                           <p className="text-sm font-medium text-slate-900">Brand not found in saved catalog?</p>
                           <p className="mt-1 text-sm text-slate-600">Manual entry is available here. Enter the brand and model directly, then continue to pricing readiness.</p>
                         </div>
@@ -1195,7 +1195,7 @@ export default function TradeInPage() {
                       </div>
                     </section>
 
-                    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+                    <section className="space-y-4 rounded-[1.5rem] border border-border/70 bg-white/98 p-5 shadow-[0_16px_32px_rgba(24,38,31,0.04)]">
                       <div>
                         <h3 className="text-base font-semibold text-slate-900">Step 2. Identification</h3>
                         <p className="mt-1 text-sm text-slate-500">Scan or enter the main identifier. Validation runs after scan, Enter, blur, or when the entry is complete.</p>
@@ -1275,27 +1275,27 @@ export default function TradeInPage() {
                       </div>
                     </section>
 
-                    <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+                    <section className="space-y-4 rounded-[1.5rem] border border-border/70 bg-white/98 p-5 shadow-[0_16px_32px_rgba(24,38,31,0.04)]">
                       <div>
                         <h3 className="text-base font-semibold text-slate-900">Step 3. Pricing readiness</h3>
                         <p className="mt-1 text-sm text-slate-500">The system checks for a pricing rule only after the device basics are complete.</p>
                       </div>
 
                       {!showPricingReadiness ? (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                        <div className="rounded-[1.15rem] border border-border/70 bg-secondary/72 p-4 text-sm text-slate-600">
                           Complete brand, model, and storage to check pricing readiness.
                         </div>
                       ) : currentBaseValue ? (
-                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                          <p className="text-sm font-medium text-emerald-900">Pricing rule found</p>
-                          <p className="mt-1 text-sm text-emerald-700">{canonicalBrand} {canonicalModel} {canonicalStorage} is ready for assessment.</p>
-                          <p className="mt-2 text-sm text-emerald-800">Base value: <strong>UGX {currentBaseValue.baseValue.toLocaleString()}</strong></p>
+                        <div className="rounded-[1.15rem] border border-primary/20 bg-primary/8 p-4">
+                          <p className="text-sm font-medium text-primary">Pricing rule found</p>
+                          <p className="mt-1 text-sm text-primary/85">{canonicalBrand} {canonicalModel} {canonicalStorage} is ready for assessment.</p>
+                          <p className="mt-2 text-sm text-primary">Base value: <strong>UGX {currentBaseValue.baseValue.toLocaleString()}</strong></p>
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                          <p className="text-sm font-medium text-amber-900">Pricing rule missing</p>
-                          <p className="mt-1 text-sm text-amber-700">No pricing rule is saved yet for {canonicalBrand} {canonicalModel} {canonicalStorage}.</p>
-                          <p className="mt-1 text-xs text-amber-700">
+                        <div className="rounded-[1.15rem] border border-orange-200 bg-orange-50/85 p-4">
+                          <p className="text-sm font-medium text-orange-900">Pricing rule missing</p>
+                          <p className="mt-1 text-sm text-orange-700">No pricing rule is saved yet for {canonicalBrand} {canonicalModel} {canonicalStorage}.</p>
+                          <p className="mt-1 text-xs text-orange-700">
                             {canManageBaseValues
                               ? "You can continue this intake as manual review, or open Base Values and save the missing combination now."
                               : "Ask a manager to add the missing pricing rule before continuing."}
@@ -1313,7 +1313,7 @@ export default function TradeInPage() {
                     </section>
 
                     {scanDetectedDevice && (
-                      <div className="rounded-lg border border-indigo-200 bg-indigo-50/90 p-4 text-indigo-700" data-testid="detected-device-autofill">
+                      <div className="rounded-[1.15rem] border border-slate-200 bg-slate-50 p-4 text-slate-700" data-testid="detected-device-autofill">
                         <p className="text-sm">
                           <strong>Scan detection:</strong> {scanDetectedDevice.brand}
                           {scanDetectedDevice.model && ` ${scanDetectedDevice.model}`}
@@ -1368,7 +1368,7 @@ export default function TradeInPage() {
                 {/* Step 2: Security Checks */}
                 {step === 2 && (
                   <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                    <div className="rounded-[1.5rem] border border-border/70 bg-secondary/72 p-6">
                       <div className="flex items-start gap-3">
                         <Shield className="w-6 h-6 text-slate-600 mt-0.5" />
                         <div>
@@ -1401,10 +1401,10 @@ export default function TradeInPage() {
                                 />
                                 <Label
                                   htmlFor={`${question.id}-${option.value}`}
-                                  className={option.isRejection ? "text-red-700 font-medium" : "text-slate-700"}
+                          className={option.isRejection ? "text-rose-700 font-medium" : "text-slate-700"}
                                 >
                                   {option.label}
-                                  {option.isRejection && <span className="ml-2 text-xs text-red-500">(Auto-reject)</span>}
+                                  {option.isRejection && <span className="ml-2 text-xs text-rose-500">(Auto-reject)</span>}
                                 </Label>
                               </div>
                             ))}
@@ -1445,14 +1445,14 @@ export default function TradeInPage() {
                                         />
                                         <Label 
                                           htmlFor={`${q.id}-${opt.value}`}
-                                          className={`text-sm ${opt.isRejection ? "text-red-700" : opt.deduction > 20 ? "text-amber-700" : ""}`}
+                                          className={`text-sm ${opt.isRejection ? "text-rose-700" : opt.deduction > 20 ? "text-orange-700" : ""}`}
                                         >
                                           {opt.label}
                                           {opt.deduction > 0 && !opt.isRejection && (
                                             <span className="text-xs text-slate-500 ml-2">(-{opt.deduction}%)</span>
                                           )}
                                           {opt.isRejection && (
-                                            <span className="text-xs text-red-500 ml-2">(Auto-reject)</span>
+                                            <span className="text-xs text-rose-500 ml-2">(Auto-reject)</span>
                                           )}
                                         </Label>
                                       </div>
@@ -1489,20 +1489,20 @@ export default function TradeInPage() {
                     ) : scoringResult ? (
                       <>
                         {/* Decision Banner */}
-                        <div className={`p-6 rounded-lg border-2 ${
-                          scoringResult.decision === "auto_accept" ? "bg-emerald-50 border-emerald-300" :
+                        <div className={`rounded-[1.35rem] border p-6 ${
+                          scoringResult.decision === "auto_accept" ? "border-primary/20 bg-primary/8" :
                           scoringResult.decision === "auto_reject" ? "bg-rose-50 border-rose-300" :
-                          "bg-amber-50 border-amber-300"
+                          "bg-orange-50 border-orange-200"
                         }`}>
                           <div className="flex items-center gap-4">
-                            {scoringResult.decision === "auto_accept" && <CheckCircle2 className="w-12 h-12 text-green-600" />}
+                            {scoringResult.decision === "auto_accept" && <CheckCircle2 className="w-12 h-12 text-primary" />}
                             {scoringResult.decision === "auto_reject" && <XCircle className="w-12 h-12 text-red-600" />}
-                            {scoringResult.decision === "manual_review" && <Clock className="w-12 h-12 text-amber-600" />}
+                            {scoringResult.decision === "manual_review" && <Clock className="w-12 h-12 text-orange-600" />}
                             <div>
                               <h3 className={`text-xl font-bold ${
-                                scoringResult.decision === "auto_accept" ? "text-green-800" :
+                                scoringResult.decision === "auto_accept" ? "text-primary" :
                                 scoringResult.decision === "auto_reject" ? "text-red-800" :
-                                "text-amber-800"
+                                "text-orange-800"
                               }`}>
                                 {scoringResult.decision === "auto_accept" && "Trade-In Approved!"}
                                 {scoringResult.decision === "auto_reject" && "Trade-In Rejected"}
@@ -1518,7 +1518,7 @@ export default function TradeInPage() {
                         </div>
 
                         {/* Offer Amount */}
-                        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                        <div className="rounded-[1.35rem] border border-border/70 bg-white p-8 text-center shadow-[0_16px_32px_rgba(24,38,31,0.04)]">
                           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
                             {scoringResult.requiresPricingRule ? "Pricing Review" : "Trade-In Value"}
                           </p>
@@ -1543,7 +1543,7 @@ export default function TradeInPage() {
 
                         {/* Deduction Breakdown */}
                         {scoringResult.deductionBreakdown.length > 0 && (
-                          <div className="p-4 border rounded-lg">
+                          <div className="rounded-[1.1rem] border border-border/70 p-4">
                             <h4 className="font-medium mb-3">Condition Deductions</h4>
                             <div className="space-y-2">
                               {scoringResult.deductionBreakdown.map((d, i) => (
@@ -1557,7 +1557,7 @@ export default function TradeInPage() {
                         )}
 
                         {/* Device Summary */}
-                        <div className="p-4 bg-slate-50 rounded-lg">
+                        <div className="rounded-[1.1rem] bg-secondary/72 p-4">
                           <h4 className="font-medium mb-3">Device Summary</h4>
                           <div className="grid grid-cols-2 gap-2 text-sm">
                             <div><span className="text-slate-500">Type:</span> <span className="capitalize">{resolvedDeviceType}</span></div>
@@ -1569,14 +1569,14 @@ export default function TradeInPage() {
                         </div>
                       </>
                     ) : (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-                        <p className="font-semibold text-amber-800">Unable to calculate offer</p>
+                      <div className="rounded-[1.35rem] border border-orange-200 bg-orange-50/85 p-6 text-center">
+                        <p className="font-semibold text-orange-800">Unable to calculate offer</p>
                         <p className="mt-2 text-sm text-amber-700">
                           {calculateError || "Add a matching base value and complete the required checks before continuing."}
                         </p>
                         {!currentBaseValue && (
                           <div className="mt-3 space-y-2">
-                            <p className="text-xs text-amber-700">
+                            <p className="text-xs text-orange-700">
                               This device does not have a saved base value yet.
                             </p>
                             {canManageBaseValues && (
@@ -1650,8 +1650,8 @@ export default function TradeInPage() {
                     </div>
 
                     {/* Final Summary */}
-                    <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
-                      <h4 className="font-semibold text-green-800 mb-4">Trade-In Summary</h4>
+                    <div className="rounded-[1.35rem] border border-primary/20 bg-primary/8 p-6">
+                      <h4 className="mb-4 font-semibold text-primary">Trade-In Summary</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="text-slate-500">Device</p>
@@ -1667,7 +1667,7 @@ export default function TradeInPage() {
                         </div>
                         <div>
                           <p className="text-slate-500">Offer Amount</p>
-                          <p className="font-bold text-green-700 text-lg">
+                          <p className="text-lg font-bold text-primary">
                             {scoringResult?.requiresPricingRule ? "Manual review" : `UGX ${scoringResult?.calculatedOffer.toLocaleString()}`}
                           </p>
                         </div>
@@ -1677,7 +1677,7 @@ export default function TradeInPage() {
                 )}
               </CardContent>
 
-              <CardFooter className="flex justify-between border-t pt-6">
+              <CardFooter className="flex justify-between border-t border-border/70 pt-6">
                 <Button 
                   variant="outline" 
                   onClick={prevStep} 
@@ -1711,7 +1711,6 @@ export default function TradeInPage() {
                   <Button 
                     onClick={handleSubmit}
                     disabled={!canProceedStep5 || submitTradeInMutation.isPending}
-                    className="bg-green-600 hover:bg-green-700"
                     data-testid="btn-submit-tradein"
                   >
                     {submitTradeInMutation.isPending ? "Processing..." : "Complete Trade-In"}
@@ -1723,7 +1722,7 @@ export default function TradeInPage() {
 
             {/* Sidebar */}
             <div className="space-y-4">
-              <Card className="border-slate-200 bg-white shadow-sm">
+              <Card className="border-border/70 bg-white/96 shadow-[0_16px_34px_rgba(24,38,31,0.055)]">
                 <CardHeader>
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
                     {resolvedDeviceType === "laptop" ? <Laptop className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
@@ -1747,7 +1746,7 @@ export default function TradeInPage() {
                       {pricingReady ? "Found" : showPricingReadiness ? "Missing" : "Pending"}
                     </Badge>
                   </div>
-                  <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                  <div className="rounded-[1rem] bg-secondary/72 p-3 text-xs text-slate-600">
                     {step1HelperText}
                   </div>
                 </CardContent>
@@ -1797,7 +1796,7 @@ export default function TradeInPage() {
               </Card>
 
               {/* Policy Reminder */}
-              <Card className="border-slate-200 bg-white shadow-sm">
+              <Card className="border-border/70 bg-white/96 shadow-[0_16px_34px_rgba(24,38,31,0.055)]">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm text-slate-900">
                     <AlertCircle className="w-4 h-4" />

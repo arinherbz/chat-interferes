@@ -22,6 +22,7 @@ export default function StoreProductDetailPage() {
     queryFn: () => apiRequest("GET", `/api/store/products/${productId}`),
     enabled: Boolean(productId),
   });
+  const isAvailable = (product?.stock ?? 0) > 0;
 
   return (
     <StoreShell>
@@ -56,7 +57,9 @@ export default function StoreProductDetailPage() {
                 </div>
                 <div className="rounded-2xl bg-secondary p-4">
                   <p className="text-2xl font-semibold">{formatUGX(product.price)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{product.stock} unit(s) in stock</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {isAvailable ? `${product.stock} unit(s) in stock` : "Currently out of stock"}
+                  </p>
                 </div>
                 <div className="grid gap-3 text-sm text-muted-foreground">
                   <div>Category: {product.category || "Devices"}</div>
@@ -65,16 +68,20 @@ export default function StoreProductDetailPage() {
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <Button
+                    disabled={!isAvailable}
                     onClick={() => {
+                      if (!isAvailable) return;
                       addToStoreCart(product);
                       toast({ title: "Added to cart", description: `${product.name} is ready for checkout.` });
                     }}
                   >
-                    Add to cart
+                    {isAvailable ? "Add to cart" : "Out of stock"}
                   </Button>
                   <Button
                     variant="secondary"
+                    disabled={!isAvailable}
                     onClick={() => {
+                      if (!isAvailable) return;
                       addToStoreCart(product);
                       navigate("/store/cart");
                     }}

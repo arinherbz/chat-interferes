@@ -22,9 +22,19 @@ export function StaffLayout({ children }: { children: ReactNode }) {
   const primaryNav = isPOSRoute ? staffNav.slice(0, 3) : staffNav;
   const secondaryNav = isPOSRoute ? staffNav.slice(3) : [];
 
+  if (isPOSRoute) {
+    return (
+      <div className="min-h-screen bg-background">
+        <main className="mx-auto w-full max-w-[1800px] px-3 py-3 md:px-4 md:py-4 xl:px-5 xl:py-5">
+          {children}
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] text-foreground">
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#fefefe_0%,#f7f8f6_42%,#f4f6f3_100%)] text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-white/92 backdrop-blur">
         <div className={cn("mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8", isPOSRoute ? "max-w-[1600px] py-3" : "max-w-7xl py-4")}>
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">{isPOSRoute ? "Sales Desk" : "Staff Workspace"}</p>
@@ -46,7 +56,7 @@ export function StaffLayout({ children }: { children: ReactNode }) {
       </header>
 
       <div className={cn("mx-auto grid gap-6 px-4 py-6 sm:px-6 lg:px-8", isPOSRoute ? "max-w-[1600px] lg:grid-cols-[112px_minmax(0,1fr)]" : "max-w-7xl lg:grid-cols-[240px_minmax(0,1fr)]")}>
-        <aside className={cn("hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:block", isPOSRoute ? "p-3" : "p-4")}>
+        <aside className={cn("hidden rounded-[1.75rem] border border-border/70 bg-white/96 shadow-[0_18px_40px_rgba(24,38,31,0.06)] lg:block", isPOSRoute ? "p-3" : "p-4")}>
           <nav className="space-y-2">
             {primaryNav.map((item) => {
               const active = location === item.href;
@@ -57,7 +67,7 @@ export function StaffLayout({ children }: { children: ReactNode }) {
                     className={cn(
                       "flex cursor-pointer rounded-2xl text-sm transition-colors",
                       isPOSRoute ? "flex-col items-center gap-2 px-3 py-3 text-center" : "items-center gap-3 px-4 py-3",
-                      active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                      active ? "bg-primary/10 text-primary shadow-[0_10px_22px_rgba(63,121,92,0.08)]" : "text-slate-600 hover:bg-secondary/80 hover:text-slate-900",
                     )}
                   >
                     <Icon className="h-4 w-4" />
@@ -69,7 +79,7 @@ export function StaffLayout({ children }: { children: ReactNode }) {
           </nav>
 
           {isPOSRoute && secondaryNav.length > 0 && (
-            <details className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <details className="mt-3 rounded-[1.2rem] border border-border/70 bg-secondary/80 px-3 py-2">
               <summary className="cursor-pointer list-none text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                 More
               </summary>
@@ -82,7 +92,7 @@ export function StaffLayout({ children }: { children: ReactNode }) {
                       <div
                         className={cn(
                           "flex cursor-pointer flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px] transition-colors",
-                          active ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-white hover:text-slate-900",
+                          active ? "bg-primary/10 text-primary" : "text-slate-500 hover:bg-white hover:text-slate-900",
                         )}
                       >
                         <Icon className="h-4 w-4" />
@@ -99,7 +109,7 @@ export function StaffLayout({ children }: { children: ReactNode }) {
         <main className="min-w-0">{children}</main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-2 py-2 backdrop-blur lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-white/95 px-2 py-2 backdrop-blur lg:hidden">
         <div className="grid grid-cols-4 gap-2">
           {staffNav.slice(0, 4).map((item) => {
             const active = location === item.href;
@@ -109,7 +119,7 @@ export function StaffLayout({ children }: { children: ReactNode }) {
                 <div
                   className={cn(
                     "flex cursor-pointer flex-col items-center rounded-2xl px-2 py-2 text-[11px] font-medium transition-colors",
-                    active ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                    active ? "bg-primary/10 text-primary" : "text-slate-500 hover:bg-secondary/80 hover:text-slate-900",
                   )}
                 >
                   <Icon className="mb-1 h-4 w-4" />

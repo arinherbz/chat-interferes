@@ -1,11 +1,15 @@
 import type { ReactNode } from "react";
 import { Link } from "wouter";
-import { ShoppingBag } from "lucide-react";
+import { MessageCircle, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreCart } from "@/lib/store-cart";
+import { createWhatsAppUrl } from "@/lib/store-support";
+import { useStoreCustomerAuth } from "@/lib/store-customer-auth";
 
 export function StoreShell({ children }: { children: ReactNode }) {
   const { itemCount } = useStoreCart();
+  const { customer } = useStoreCustomerAuth();
+  const accountHref = customer ? "/store/account" : "/store/login?redirect=%2Fstore%2Faccount";
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -21,8 +25,14 @@ export function StoreShell({ children }: { children: ReactNode }) {
             </div>
           </Link>
           <div className="flex items-center gap-2">
-            <Link href="/store/account">
-              <Button variant="outline">Account</Button>
+            <a href={createWhatsAppUrl("Hello Ario Store, I need help with my order.")} target="_blank" rel="noreferrer">
+              <Button variant="outline" className="gap-2">
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+              </Button>
+            </a>
+            <Link href={accountHref}>
+              <Button variant="outline">{customer ? "My Account" : "Sign In"}</Button>
             </Link>
             <Link href="/store/track">
               <Button variant="outline">Track Order</Button>
@@ -37,6 +47,15 @@ export function StoreShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main>{children}</main>
+      <footer className="border-t border-border/70 bg-white/92">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+          <p>Need help with an order, repair, or trade-in? We reply fastest on WhatsApp.</p>
+          <a className="inline-flex items-center gap-2 font-medium text-primary" href={createWhatsAppUrl("Hello Ario Store, I need help with my order.")} target="_blank" rel="noreferrer">
+            <MessageCircle className="h-4 w-4" />
+            Chat with Ariostore
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

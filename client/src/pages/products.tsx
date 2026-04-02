@@ -145,7 +145,7 @@ export default function ProductsPage() {
               <DialogTitle>{editingId ? "Edit Product" : "Add New Product"}</DialogTitle>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 pt-4">
                 <FormField
                   control={form.control}
                   name="name"
@@ -278,7 +278,7 @@ export default function ProductsPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 rounded-[1.25rem] border border-border/70 bg-secondary/52 p-4">
                   <Label>Photo (optional)</Label>
                   <FileUploader
                     value={attachments}
