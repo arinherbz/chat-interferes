@@ -100,6 +100,7 @@ export default function BaseValuesPage() {
   const [editing, setEditing] = useState<BaseValue | null>(null);
   const [questionLoading, setQuestionLoading] = useState(true);
   const [conditionQuestions, setConditionQuestions] = useState<ConditionQuestion[]>([]);
+  const [conditionProfileMeta, setConditionProfileMeta] = useState<ConditionProfileResponse["profile"] | null>(null);
   const [selectedDeviceType, setSelectedDeviceType] = useState<TradeInDeviceType>("phone");
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
   const [questionSaving, setQuestionSaving] = useState(false);
@@ -135,8 +136,10 @@ export default function BaseValuesPage() {
       }
       const data = (await response.json()) as ConditionQuestion[] | ConditionProfileResponse;
       setConditionQuestions(Array.isArray(data) ? data : data.questions);
+      setConditionProfileMeta(Array.isArray(data) ? null : data.profile ?? null);
     } catch (err: any) {
       setConditionQuestions([]);
+      setConditionProfileMeta(null);
       toast({ title: "Failed to load condition profile", description: err?.message || "Please retry.", variant: "destructive" });
     } finally {
       setQuestionLoading(false);
@@ -209,6 +212,14 @@ export default function BaseValuesPage() {
   );
   const activeDeviceType = DEVICE_TYPE_OPTIONS.find((option) => option.value === selectedDeviceType) ?? DEVICE_TYPE_OPTIONS[0];
   const ActiveDeviceIcon = activeDeviceType.icon;
+  const profileSourceLabel =
+    conditionProfileMeta?.source === "shop"
+      ? "Shop profile"
+      : conditionProfileMeta?.source === "default"
+        ? "Default profile"
+        : conditionProfileMeta?.source === "builtin"
+          ? "Built-in fallback"
+          : null;
 
   const openNew = () => {
     setEditing(null);
@@ -479,6 +490,14 @@ export default function BaseValuesPage() {
                   <ActiveDeviceIcon className="h-4 w-4" />
                   {activeDeviceType.label} profile
                 </div>
+                {profileSourceLabel ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{profileSourceLabel}</Badge>
+                    {typeof conditionProfileMeta?.questionCount === "number" ? (
+                      <Badge variant="outline">{conditionProfileMeta.questionCount} live checks</Badge>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                   <div>{conditionQuestions.length} total checks</div>
                   <div>{requiredCount} required responses</div>
