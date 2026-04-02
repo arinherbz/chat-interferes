@@ -31,7 +31,8 @@ export function FileUploader({
   className,
   uploadFolder,
 }: FileUploaderProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const libraryInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +77,8 @@ export function FileUploader({
         setError(err?.message || "Upload failed");
       } finally {
         setIsUploading(false);
+        if (libraryInputRef.current) libraryInputRef.current.value = "";
+        if (cameraInputRef.current) cameraInputRef.current.value = "";
       }
     },
     [maxFiles, onChange, value]
@@ -87,8 +90,12 @@ export function FileUploader({
     handleFiles(e.dataTransfer.files);
   };
 
-  const triggerSelect = () => {
-    inputRef.current?.click();
+  const triggerLibrarySelect = () => {
+    libraryInputRef.current?.click();
+  };
+
+  const triggerCameraSelect = () => {
+    cameraInputRef.current?.click();
   };
 
   const removeFile = (id: string) => {
@@ -117,7 +124,7 @@ export function FileUploader({
           <Button
             size="sm"
             variant="outline"
-            onClick={triggerSelect}
+            onClick={triggerLibrarySelect}
             disabled={isUploading || (value.length >= maxFiles && maxFiles !== 1)}
           >
             <Upload className="w-4 h-4 mr-2" />
@@ -126,7 +133,7 @@ export function FileUploader({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => triggerSelect()}
+            onClick={triggerCameraSelect}
             disabled={isUploading || (value.length >= maxFiles && maxFiles !== 1)}
           >
             <Camera className="w-4 h-4 mr-2" />
@@ -141,11 +148,19 @@ export function FileUploader({
         )}
         {error && <div className="text-sm text-rose-600">{error}</div>}
         <input
-          ref={inputRef}
+          ref={libraryInputRef}
           type="file"
           className="hidden"
           accept={accept}
           multiple={multiple}
+          onChange={(e) => handleFiles(e.target.files)}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          className="hidden"
+          accept={accept}
+          multiple={false}
           capture="environment"
           onChange={(e) => handleFiles(e.target.files)}
         />

@@ -1154,6 +1154,47 @@ describe("authentication", () => {
     await expect(assetRes.text()).resolves.toBe("fake-png-binary");
   });
 
+  it("stores non-product images in the durable media route too", async () => {
+    const username = uniqueUsername("auth-upload-generic-media");
+    const password = "GenericUpload!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Generic Upload Manager",
+      email: `${username}@example.com`,
+      role: "Manager",
+      status: "active",
+      shopId: null,
+    });
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+
+    const formData = new FormData();
+    formData.append("files", new Blob(["fake-logo-binary"], { type: "image/png" }), "logo.png");
+
+    const uploadRes = await fetch(`${baseUrl}/api/uploads?folder=shop-assets`, {
+      method: "POST",
+      headers: { Cookie: setCookie! },
+      body: formData,
+    });
+
+    expect(uploadRes.status).toBe(200);
+    const [uploaded] = await uploadRes.json();
+    expect(uploaded.url).toMatch(/^\/uploads\/media\/[^/]+\/logo\.png$/);
+
+    const assetRes = await fetch(`${baseUrl}${uploaded.url}`);
+    expect(assetRes.status).toBe(200);
+    expect(assetRes.headers.get("content-type")).toContain("image/png");
+    await expect(assetRes.text()).resolves.toBe("fake-logo-binary");
+  });
+
   it("normalizes storefront display names and brand filters away from barcode placeholders", async () => {
     const placeholderNameA = `Barcode Product A ${Date.now()}`;
     const placeholderNameB = `Barcode Product B ${Date.now()}`;

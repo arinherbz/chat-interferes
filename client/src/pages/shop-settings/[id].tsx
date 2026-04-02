@@ -146,6 +146,7 @@ export default function ShopSettingsPage() {
                   </div>
                   <FileUpload
                     accept="image/*"
+                    uploadFolder="shop-assets"
                     onUpload={(url: string) => {
                       onChange("logo", { url });
                       onChange("logoUrl" as any, url);
@@ -159,6 +160,7 @@ export default function ShopSettingsPage() {
                   )}
                   <FileUpload
                     accept="image/*"
+                    uploadFolder="shop-assets"
                     onUpload={(url: string) => {
                       onChange("coverImage", { url });
                       onChange("coverUrl" as any, url);

@@ -690,7 +690,7 @@ export async function registerRoutes(
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "same-origin");
-    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+    res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)");
     if (process.env.NODE_ENV === "production") {
       res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
     }

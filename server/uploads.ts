@@ -77,6 +77,10 @@ function buildProductImageUrl(assetId: string, filename: string) {
   return `/uploads/media/${assetId}/${encodeURIComponent(filename)}`;
 }
 
+function shouldPersistInDatabase(file: Express.Multer.File) {
+  return file.mimetype.startsWith("image/");
+}
+
 function saveFileToDisk(folder: string, file: Express.Multer.File) {
   const now = new Date();
   const dateFolder = now.toISOString().slice(0, 10);
@@ -99,7 +103,7 @@ function saveFileToDisk(folder: string, file: Express.Multer.File) {
   } satisfies UploadedFileMeta;
 }
 
-async function saveProductImageToDatabase(folder: string, file: Express.Multer.File) {
+async function saveImageToDatabase(folder: string, file: Express.Multer.File) {
   if (!pool) {
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
@@ -153,8 +157,8 @@ export function handleUpload(req: Request, res: Response) {
 
     Promise.all(
       files.map((file) => {
-        if (folder === PRODUCT_IMAGE_FOLDER) {
-          return saveProductImageToDatabase(folder, file);
+        if (shouldPersistInDatabase(file)) {
+          return saveImageToDatabase(folder, file);
         }
         return Promise.resolve(saveFileToDisk(folder, file));
       }),

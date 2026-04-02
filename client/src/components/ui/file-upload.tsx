@@ -6,11 +6,13 @@ interface Props {
   accept?: string;
   multiple?: boolean;
   capture?: "user" | "environment";
+  uploadFolder?: string;
 }
 
-export function FileUpload({ onUpload, accept = "image/*", multiple = false, capture = "environment" }: Props) {
+export function FileUpload({ onUpload, accept = "image/*", multiple = false, capture = "environment", uploadFolder }: Props) {
   const [uploading, setUploading] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const libraryInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -18,7 +20,8 @@ export function FileUpload({ onUpload, accept = "image/*", multiple = false, cap
     try {
       const fd = new FormData();
       for (let i = 0; i < files.length; i++) fd.append("files", files[i]);
-      const res = await fetch("/api/uploads", { method: "POST", body: fd, credentials: "include" });
+      const path = uploadFolder ? `/api/uploads?folder=${encodeURIComponent(uploadFolder)}` : "/api/uploads";
+      const res = await fetch(path, { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) throw new Error("Upload failed");
       const body = await res.json();
       const metas = Array.isArray(body) ? body : Array.isArray(body?.files) ? body.files : [];
@@ -30,17 +33,26 @@ export function FileUpload({ onUpload, accept = "image/*", multiple = false, cap
       alert("Upload failed. Please try again.");
     } finally {
       setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
+      if (libraryInputRef.current) libraryInputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
     }
   };
 
   return (
     <div className="flex items-center gap-2">
       <input
-        ref={inputRef}
+        ref={libraryInputRef}
         type="file"
         accept={accept}
         multiple={multiple}
+        className="hidden"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept={accept}
+        multiple={false}
         capture={capture}
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}
@@ -48,10 +60,18 @@ export function FileUpload({ onUpload, accept = "image/*", multiple = false, cap
       <Button
         type="button"
         variant="outline"
-        onClick={() => inputRef.current?.click()}
+        onClick={() => libraryInputRef.current?.click()}
         disabled={uploading}
       >
-        {uploading ? "Uploading..." : "Upload"}
+        {uploading ? "Uploading..." : "Choose file"}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => cameraInputRef.current?.click()}
+        disabled={uploading}
+      >
+        Use camera
       </Button>
     </div>
   );
