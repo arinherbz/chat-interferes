@@ -145,9 +145,12 @@ if (usePostgres) {
     CREATE TABLE IF NOT EXISTS products (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
       name TEXT NOT NULL,
+      display_title TEXT,
+      description TEXT,
       category TEXT,
       brand TEXT,
       model TEXT,
+      condition TEXT,
       price INTEGER NOT NULL DEFAULT 0,
       cost_price INTEGER NOT NULL DEFAULT 0,
       stock INTEGER NOT NULL DEFAULT 0,
@@ -155,9 +158,25 @@ if (usePostgres) {
       sku TEXT,
       barcode TEXT,
       image_url TEXT,
+      storefront_visibility TEXT NOT NULL DEFAULT 'published',
+      is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+      is_flash_deal BOOLEAN NOT NULL DEFAULT FALSE,
+      flash_deal_price INTEGER,
+      flash_deal_ends_at TIMESTAMP,
       shop_id VARCHAR,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS media_assets (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      folder TEXT NOT NULL DEFAULT 'misc',
+      filename TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+      size INTEGER NOT NULL DEFAULT 0,
+      data_base64 TEXT NOT NULL,
+      shop_id VARCHAR,
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS devices (
@@ -450,8 +469,28 @@ if (usePostgres) {
 
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS barcode TEXT;
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS display_title TEXT;
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS condition TEXT;
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS storefront_visibility TEXT NOT NULL DEFAULT 'published';
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS is_featured BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS is_flash_deal BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS flash_deal_price INTEGER;
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS flash_deal_ends_at TIMESTAMP;
     CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_idx ON products(barcode);
     CREATE INDEX IF NOT EXISTS products_shop_idx ON products(shop_id);
+    CREATE INDEX IF NOT EXISTS products_storefront_visibility_idx ON products(storefront_visibility);
+    CREATE INDEX IF NOT EXISTS products_is_featured_idx ON products(is_featured);
+    CREATE INDEX IF NOT EXISTS products_is_flash_deal_idx ON products(is_flash_deal);
+    CREATE INDEX IF NOT EXISTS media_assets_folder_idx ON media_assets(folder);
     CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_customer_id_unique_idx ON customer_accounts(customer_id);
     CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_email_unique_idx ON customer_accounts(email);
     CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_phone_unique_idx ON customer_accounts(phone);
@@ -533,9 +572,12 @@ if (usePostgres) {
       CREATE TABLE IF NOT EXISTS products (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
+        display_title TEXT,
+        description TEXT,
         category TEXT,
         brand TEXT,
         model TEXT,
+        condition TEXT,
         price INTEGER DEFAULT 0,
         cost_price INTEGER DEFAULT 0,
         stock INTEGER DEFAULT 0,
@@ -543,9 +585,25 @@ if (usePostgres) {
         sku TEXT,
         barcode TEXT,
         image_url TEXT,
+        storefront_visibility TEXT DEFAULT 'published',
+        is_featured INTEGER DEFAULT 0,
+        is_flash_deal INTEGER DEFAULT 0,
+        flash_deal_price INTEGER,
+        flash_deal_ends_at TEXT,
         shop_id TEXT,
         created_at TEXT,
         updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS media_assets (
+        id TEXT PRIMARY KEY,
+        folder TEXT NOT NULL DEFAULT 'misc',
+        filename TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        size INTEGER NOT NULL DEFAULT 0,
+        data_base64 TEXT NOT NULL,
+        shop_id TEXT,
+        created_at TEXT
       );
 
       CREATE TABLE IF NOT EXISTS devices (
@@ -826,8 +884,20 @@ if (usePostgres) {
       );
     `);
     try { sqlite.exec(`ALTER TABLE products ADD COLUMN barcode TEXT`); } catch {}
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN display_title TEXT`); } catch {}
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN description TEXT`); } catch {}
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN condition TEXT`); } catch {}
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN storefront_visibility TEXT DEFAULT 'published'`); } catch {}
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN is_featured INTEGER DEFAULT 0`); } catch {}
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN is_flash_deal INTEGER DEFAULT 0`); } catch {}
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN flash_deal_price INTEGER`); } catch {}
+    try { sqlite.exec(`ALTER TABLE products ADD COLUMN flash_deal_ends_at TEXT`); } catch {}
     try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique_idx ON products(barcode)`); } catch {}
     try { sqlite.exec(`CREATE INDEX IF NOT EXISTS products_shop_idx ON products(shop_id)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS products_storefront_visibility_idx ON products(storefront_visibility)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS products_is_featured_idx ON products(is_featured)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS products_is_flash_deal_idx ON products(is_flash_deal)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS media_assets_folder_idx ON media_assets(folder)`); } catch {}
     try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_customer_id_unique_idx ON customer_accounts(customer_id)`); } catch {}
     try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_email_unique_idx ON customer_accounts(email)`); } catch {}
     try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_phone_unique_idx ON customer_accounts(phone)`); } catch {}

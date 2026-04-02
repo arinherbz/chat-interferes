@@ -21,7 +21,7 @@ import {
 import { getTradeInIdentifierType, inferTradeInDeviceType, type TradeInDeviceType } from "../shared/trade-in-profile";
 import { pbkdf2Sync, randomBytes, timingSafeEqual } from "crypto";
 import { z } from "zod";
-import { handleUpload, removeUploadedFileByUrl } from "./uploads";
+import { handleUpload, removeUploadedFileByUrl, serveUploadedMedia } from "./uploads";
 import { asyncHandler } from "./middleware/async-handler";
 import { commerceService, ORDER_STATUSES } from "./services/commerce-service";
 import { HttpError, sendFailure, sendSuccess } from "./utils/api-response";
@@ -364,9 +364,12 @@ const closurePayloadSchema = z.object({
 
 const productUpsertSchema = z.object({
   name: z.string().min(1, "Product name is required").max(200),
+  displayTitle: z.string().trim().max(200).optional().nullable(),
+  description: z.string().trim().max(4000).optional().nullable(),
   brand: z.string().trim().optional().nullable(),
   model: z.string().trim().optional().nullable(),
   category: z.string().min(1, "Category is required").max(120),
+  condition: z.string().trim().max(120).optional().nullable(),
   price: z.number().nonnegative(),
   stock: z.number().int().nonnegative(),
   costPrice: z.number().nonnegative(),
@@ -374,6 +377,11 @@ const productUpsertSchema = z.object({
   sku: z.string().trim().max(120).optional().nullable(),
   barcode: z.string().trim().max(120).optional().nullable(),
   imageUrl: z.string().trim().max(500).optional().nullable(),
+  storefrontVisibility: z.enum(["published", "draft", "hidden", "archived"]).optional().nullable(),
+  isFeatured: z.boolean().optional(),
+  isFlashDeal: z.boolean().optional(),
+  flashDealPrice: z.number().int().nonnegative().optional().nullable(),
+  flashDealEndsAt: z.string().datetime().optional().nullable(),
   shopId: z.string().optional().nullable(),
 });
 
@@ -390,6 +398,13 @@ function normalizeProductBarcode(value?: string | null) {
 function normalizeProductImageUrl(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
+}
+
+function normalizeProductDate(value?: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 function getProductValidationMessage(error: z.ZodError) {
@@ -689,6 +704,7 @@ export async function registerRoutes(
   });
 
   // ===================== UPLOADS =====================
+  app.get("/uploads/media/:id/:filename?", asyncHandler(serveUploadedMedia));
   app.post("/api/uploads", requireRole(["Owner", "Manager"]), handleUpload);
 
   // ===================== AUTH & STAFF =====================
@@ -2596,18 +2612,32 @@ export async function registerRoutes(
       const payload = {
         ...parsed.data,
         name: parsed.data.name.trim(),
+        displayTitle: normalizeProductText(parsed.data.displayTitle),
+        description: normalizeProductText(parsed.data.description),
         brand: normalizeProductText(parsed.data.brand),
         model: normalizeProductText(parsed.data.model),
         category: parsed.data.category.trim(),
+        condition: normalizeProductText(parsed.data.condition),
         sku: normalizeProductText(parsed.data.sku),
         barcode: normalizeProductBarcode(parsed.data.barcode),
         imageUrl: normalizeProductImageUrl(parsed.data.imageUrl),
+        storefrontVisibility: parsed.data.storefrontVisibility ?? "published",
+        isFeatured: parsed.data.isFeatured ?? false,
+        isFlashDeal: parsed.data.isFlashDeal ?? false,
+        flashDealPrice: parsed.data.flashDealPrice ?? null,
+        flashDealEndsAt: normalizeProductDate(parsed.data.flashDealEndsAt) ?? null,
       };
       if (Number(payload.stock) < 0 || Number(payload.minStock) < 0) {
         return sendError(res, 400, "Stock values cannot be negative");
       }
       if (Number(payload.price) < 0 || Number(payload.costPrice) < 0) {
         return sendError(res, 400, "Price values cannot be negative");
+      }
+      if (payload.isFlashDeal && (!payload.flashDealPrice || payload.flashDealPrice <= 0)) {
+        return sendError(res, 400, "Flash deal products require a valid deal price");
+      }
+      if (payload.flashDealPrice && payload.flashDealPrice >= payload.price) {
+        return sendError(res, 400, "Flash deal price must be lower than the regular price");
       }
       if (payload.barcode) {
         const existing = await storage.getProductByBarcode(payload.barcode);
@@ -2636,12 +2666,20 @@ export async function registerRoutes(
       const updates = {
         ...parsed.data,
         name: parsed.data.name?.trim(),
+        displayTitle: parsed.data.displayTitle === null ? null : normalizeProductText(parsed.data.displayTitle),
+        description: parsed.data.description === null ? null : normalizeProductText(parsed.data.description),
         brand: parsed.data.brand === null ? null : normalizeProductText(parsed.data.brand),
         model: parsed.data.model === null ? null : normalizeProductText(parsed.data.model),
         category: parsed.data.category?.trim(),
+        condition: parsed.data.condition === null ? null : normalizeProductText(parsed.data.condition),
         sku: parsed.data.sku === null ? null : normalizeProductText(parsed.data.sku),
         barcode: parsed.data.barcode === null ? null : normalizeProductBarcode(parsed.data.barcode),
         imageUrl: parsed.data.imageUrl === null ? null : normalizeProductImageUrl(parsed.data.imageUrl),
+        storefrontVisibility: parsed.data.storefrontVisibility ?? undefined,
+        isFeatured: parsed.data.isFeatured ?? undefined,
+        isFlashDeal: parsed.data.isFlashDeal ?? undefined,
+        flashDealPrice: parsed.data.flashDealPrice === null ? null : parsed.data.flashDealPrice,
+        flashDealEndsAt: parsed.data.flashDealEndsAt === null ? null : normalizeProductDate(parsed.data.flashDealEndsAt),
       };
       if (updates.stock !== undefined && Number(updates.stock) < 0) {
         return sendError(res, 400, "Stock cannot be negative");
@@ -2654,6 +2692,15 @@ export async function registerRoutes(
       }
       if (updates.costPrice !== undefined && Number(updates.costPrice) < 0) {
         return sendError(res, 400, "Cost price cannot be negative");
+      }
+      const nextPrice = updates.price ?? existingProduct.price;
+      const nextIsFlashDeal = updates.isFlashDeal ?? existingProduct.isFlashDeal;
+      const nextFlashDealPrice = updates.flashDealPrice !== undefined ? updates.flashDealPrice : existingProduct.flashDealPrice;
+      if (nextIsFlashDeal && (!nextFlashDealPrice || nextFlashDealPrice <= 0)) {
+        return sendError(res, 400, "Flash deal products require a valid deal price");
+      }
+      if (nextFlashDealPrice && nextPrice !== undefined && nextFlashDealPrice >= nextPrice) {
+        return sendError(res, 400, "Flash deal price must be lower than the regular price");
       }
       if (updates.barcode) {
         const barcodeOwner = await storage.getProductByBarcode(updates.barcode);

@@ -30,6 +30,7 @@ import {
 } from "@shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, sql as sqlFn, count } from "drizzle-orm";
+import crypto from "crypto";
 
 export interface IStorage {
   // Users
@@ -197,6 +198,17 @@ export class DatabaseStorage implements IStorage {
 
   private normalizeLookupValue(value: string | null | undefined): string {
     return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
+  private normalizeProductWrite<T extends Partial<import("@shared/schema").InsertProduct>>(product: T): Partial<T> {
+    const values: Record<string, unknown> = this.stripUndefined(product as Record<string, unknown>);
+    if ("isFeatured" in values && typeof values.isFeatured === "boolean") {
+      values.isFeatured = this.booleanWriteValue(values.isFeatured);
+    }
+    if ("isFlashDeal" in values && typeof values.isFlashDeal === "boolean") {
+      values.isFlashDeal = this.booleanWriteValue(values.isFlashDeal);
+    }
+    return values as Partial<T>;
   }
 
   // ==================== USERS ====================
@@ -643,12 +655,48 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProduct(product: import("@shared/schema").InsertProduct): Promise<import("@shared/schema").Product> {
-    const [created] = await db.insert(products).values(product).returning();
+    if (!pool) {
+      const id = crypto.randomUUID();
+      const now = new Date();
+      const flashDealEndsAt =
+        product.flashDealEndsAt instanceof Date
+          ? product.flashDealEndsAt.toISOString()
+          : product.flashDealEndsAt ?? null;
+
+      await db.run(sqlFn`
+        INSERT INTO products (
+          id, name, display_title, description, category, brand, model, condition,
+          price, cost_price, stock, min_stock, sku, barcode, image_url,
+          storefront_visibility, is_featured, is_flash_deal, flash_deal_price, flash_deal_ends_at,
+          shop_id, created_at, updated_at
+        ) VALUES (
+          ${id}, ${product.name}, ${product.displayTitle ?? null}, ${product.description ?? null}, ${product.category ?? null},
+          ${product.brand ?? null}, ${product.model ?? null}, ${product.condition ?? null},
+          ${product.price ?? 0}, ${product.costPrice ?? 0}, ${product.stock ?? 0}, ${product.minStock ?? 0},
+          ${product.sku ?? null}, ${product.barcode ?? null}, ${product.imageUrl ?? null},
+          ${product.storefrontVisibility ?? "published"}, ${product.isFeatured ? 1 : 0}, ${product.isFlashDeal ? 1 : 0},
+          ${product.flashDealPrice ?? null}, ${flashDealEndsAt},
+          ${product.shopId ?? null}, ${now.toISOString()}, ${now.toISOString()}
+        )
+      `);
+
+      const created = await this.getProduct(id);
+      if (!created) {
+        throw new Error("Failed to create product");
+      }
+      return created;
+    }
+
+    const [created] = await db.insert(products).values(this.normalizeProductWrite(product)).returning();
     return created;
   }
 
   async updateProduct(id: string, data: Partial<import("@shared/schema").InsertProduct>): Promise<import("@shared/schema").Product | undefined> {
-    const [updated] = await db.update(products).set({ ...data, updatedAt: new Date() }).where(eq(products.id, id)).returning();
+    const [updated] = await db
+      .update(products)
+      .set({ ...this.normalizeProductWrite(data), updatedAt: new Date() })
+      .where(eq(products.id, id))
+      .returning();
     return updated;
   }
 

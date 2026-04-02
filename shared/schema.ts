@@ -155,9 +155,12 @@ export type DeviceBaseValue = typeof deviceBaseValues.$inferSelect;
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  displayTitle: text("display_title"),
+  description: text("description"),
   category: text("category"),
   brand: text("brand"),
   model: text("model"),
+  condition: text("condition"),
   price: integer("price").notNull().default(0),
   costPrice: integer("cost_price").notNull().default(0),
   stock: integer("stock").notNull().default(0),
@@ -165,17 +168,42 @@ export const products = pgTable("products", {
   sku: text("sku"),
   barcode: text("barcode"),
   imageUrl: text("image_url"),
+  storefrontVisibility: text("storefront_visibility").notNull().default("published"),
+  isFeatured: boolean("is_featured").notNull().default(false),
+  isFlashDeal: boolean("is_flash_deal").notNull().default(false),
+  flashDealPrice: integer("flash_deal_price"),
+  flashDealEndsAt: timestamp("flash_deal_ends_at"),
   shopId: varchar("shop_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   barcodeUniqueIdx: uniqueIndex("products_barcode_unique_idx").on(table.barcode),
   shopIdx: index("products_shop_idx").on(table.shopId),
+  visibilityIdx: index("products_storefront_visibility_idx").on(table.storefrontVisibility),
+  featuredIdx: index("products_is_featured_idx").on(table.isFeatured),
+  flashDealIdx: index("products_is_flash_deal_idx").on(table.isFlashDeal),
 }));
 
 export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
+
+export const mediaAssets = pgTable("media_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  folder: text("folder").notNull().default("misc"),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull().default(0),
+  dataBase64: text("data_base64").notNull(),
+  shopId: varchar("shop_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  folderIdx: index("media_assets_folder_idx").on(table.folder),
+}));
+
+export const insertMediaAssetSchema = createInsertSchema(mediaAssets).omit({ id: true, createdAt: true });
+export type InsertMediaAsset = z.infer<typeof insertMediaAssetSchema>;
+export type MediaAsset = typeof mediaAssets.$inferSelect;
 
 // ===================== DEVICES =====================
 export const devices = pgTable("devices", {

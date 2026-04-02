@@ -3,6 +3,10 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { eq } from "drizzle-orm";
+import { sql as sqlFn } from "drizzle-orm";
+import { db, pool } from "./db";
+import { mediaAssets } from "@shared/schema";
 
 export interface UploadedFileMeta {
   id: string;
@@ -42,24 +46,8 @@ function getQueryFolder(value: unknown) {
   return undefined;
 }
 
-const storage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    const now = new Date();
-    const dateFolder = now.toISOString().slice(0, 10);
-    const folder = normalizeUploadFolder(getQueryFolder(req.query.folder));
-    const target = path.join(uploadRoot, folder, dateFolder);
-    ensureDir(target);
-    cb(null, target);
-  },
-  filename: (_req, file, cb) => {
-    const id = crypto.randomUUID();
-    const ext = path.extname(file.originalname) || "";
-    cb(null, `${id}${ext}`);
-  },
-});
-
 export const uploadMiddleware = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB
   },
@@ -85,32 +73,108 @@ export const uploadMiddleware = multer({
   { name: "file", maxCount: 1 },
 ]);
 
+function buildProductImageUrl(assetId: string, filename: string) {
+  return `/uploads/media/${assetId}/${encodeURIComponent(filename)}`;
+}
+
+function saveFileToDisk(folder: string, file: Express.Multer.File) {
+  const now = new Date();
+  const dateFolder = now.toISOString().slice(0, 10);
+  const targetDir = path.join(uploadRoot, folder, dateFolder);
+  ensureDir(targetDir);
+
+  const id = crypto.randomUUID();
+  const ext = path.extname(file.originalname) || "";
+  const filename = `${id}${ext}`;
+  const target = path.join(targetDir, filename);
+  fs.writeFileSync(target, file.buffer);
+
+  return {
+    id,
+    url: `/uploads/${folder}/${dateFolder}/${filename}`,
+    filename: file.originalname,
+    contentType: file.mimetype,
+    size: file.size,
+    uploadedAt: now.toISOString(),
+  } satisfies UploadedFileMeta;
+}
+
+async function saveProductImageToDatabase(folder: string, file: Express.Multer.File) {
+  if (!pool) {
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    await db.run(sqlFn`
+      INSERT INTO media_assets (
+        id, folder, filename, content_type, size, data_base64, created_at
+      ) VALUES (
+        ${id}, ${folder}, ${file.originalname}, ${file.mimetype}, ${file.size}, ${file.buffer.toString("base64")}, ${createdAt}
+      )
+    `);
+
+    return {
+      id,
+      url: buildProductImageUrl(id, file.originalname),
+      filename: file.originalname,
+      contentType: file.mimetype,
+      size: file.size,
+      uploadedAt: createdAt,
+    } satisfies UploadedFileMeta;
+  }
+
+  const [created] = await db.insert(mediaAssets).values({
+    folder,
+    filename: file.originalname,
+    contentType: file.mimetype,
+    size: file.size,
+    dataBase64: file.buffer.toString("base64"),
+  }).returning();
+
+  return {
+    id: created.id,
+    url: buildProductImageUrl(created.id, created.filename),
+    filename: created.filename,
+    contentType: created.contentType,
+    size: created.size,
+    uploadedAt: created.createdAt instanceof Date
+      ? created.createdAt.toISOString()
+      : new Date(String(created.createdAt ?? Date.now())).toISOString(),
+    shopId: created.shopId ?? undefined,
+  } satisfies UploadedFileMeta;
+}
+
 export function handleUpload(req: Request, res: Response) {
   uploadMiddleware(req, res, (err: any) => {
     if (err) {
       return res.status(400).json({ message: err.message || "Upload failed" });
     }
-    const now = new Date();
     const grouped = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
     const files = Object.values(grouped).flat();
-    const metas: UploadedFileMeta[] = files.map((file) => {
-      const id = path.parse(file.filename).name;
-      const relativeDir = path.relative(uploadRoot, file.destination).split(path.sep).join("/");
-      return {
-        id,
-        url: `/uploads/${relativeDir}/${file.filename}`,
-        filename: file.originalname,
-        contentType: file.mimetype,
-        size: file.size,
-        uploadedAt: now.toISOString(),
-      };
-    });
-    res.json(metas);
+    const folder = normalizeUploadFolder(getQueryFolder(req.query.folder));
+
+    Promise.all(
+      files.map((file) => {
+        if (folder === PRODUCT_IMAGE_FOLDER) {
+          return saveProductImageToDatabase(folder, file);
+        }
+        return Promise.resolve(saveFileToDisk(folder, file));
+      }),
+    )
+      .then((metas) => {
+        res.json(metas);
+      })
+      .catch((uploadError: any) => {
+        res.status(500).json({ message: uploadError?.message || "Upload failed" });
+      });
   });
 }
 
 export function removeUploadedFileByUrl(url?: string | null) {
   if (!url || !url.startsWith("/uploads/")) return;
+  const mediaMatch = url.match(/^\/uploads\/media\/([^/]+)/);
+  if (mediaMatch) {
+    void db.delete(mediaAssets).where(eq(mediaAssets.id, mediaMatch[1]));
+    return;
+  }
   const relativePath = url.replace(/^\/uploads\//, "");
   const target = path.join(uploadRoot, relativePath);
   if (!target.startsWith(uploadRoot)) return;
@@ -119,4 +183,17 @@ export function removeUploadedFileByUrl(url?: string | null) {
       fs.unlinkSync(target);
     }
   } catch {}
+}
+
+export async function serveUploadedMedia(req: Request, res: Response) {
+  const assetId = req.params.id;
+  const [asset] = await db.select().from(mediaAssets).where(eq(mediaAssets.id, assetId));
+  if (!asset) {
+    res.status(404).send("Not found");
+    return;
+  }
+
+  res.setHeader("Content-Type", asset.contentType);
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.send(Buffer.from(asset.dataBase64, "base64"));
 }

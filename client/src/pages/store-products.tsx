@@ -130,12 +130,26 @@ export default function StoreProductsPage() {
                             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                               {product.category || product.brand || "Featured"}
                             </span>
-                            <span className="rounded-full bg-secondary/90 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                              {product.stock > 0 ? "In stock" : "Sold out"}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              {product.isFlashDeal ? (
+                                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                                  Flash Deal
+                                </span>
+                              ) : null}
+                              <span className="rounded-full bg-secondary/90 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                                {product.stock > 0 ? "In stock" : "Sold out"}
+                              </span>
+                            </div>
                           </div>
                           <h3 className="line-clamp-2 text-base font-medium leading-snug text-slate-950">{product.name}</h3>
-                          <p className="text-lg font-semibold tracking-tight text-slate-950">{formatUGX(product.price)}</p>
+                          <div className="flex items-end gap-2">
+                            <p className="text-lg font-semibold tracking-tight text-slate-950">
+                              {formatUGX(product.isFlashDeal && product.flashDealPrice ? product.flashDealPrice : product.price)}
+                            </p>
+                            {product.isFlashDeal && product.flashDealPrice ? (
+                              <p className="text-sm text-muted-foreground line-through">{formatUGX(product.price)}</p>
+                            ) : null}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -161,8 +175,15 @@ export default function StoreProductsPage() {
                             {product.category || product.brand || "Store item"}
                           </p>
                           <h3 className="font-medium text-slate-950">{product.name}</h3>
-                          <p className="text-sm text-muted-foreground">{[product.brand, product.model, product.storage].filter(Boolean).join(" • ")}</p>
-                          <p className="mt-1 text-base font-semibold text-slate-950">{formatUGX(product.price)}</p>
+                          <p className="text-sm text-muted-foreground">{[product.brand, product.model, product.condition].filter(Boolean).join(" • ")}</p>
+                          <div className="mt-1 flex items-end gap-2">
+                            <p className="text-base font-semibold text-slate-950">
+                              {formatUGX(product.isFlashDeal && product.flashDealPrice ? product.flashDealPrice : product.price)}
+                            </p>
+                            {product.isFlashDeal && product.flashDealPrice ? (
+                              <p className="text-sm text-muted-foreground line-through">{formatUGX(product.price)}</p>
+                            ) : null}
+                          </div>
                         </div>
                         <Button variant="outline">View</Button>
                       </CardContent>

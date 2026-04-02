@@ -7,6 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,12 +22,20 @@ const productSchema = z.object({
   brand: z.string().optional(),
   model: z.string().optional(),
   name: z.string().min(1, "Name required"),
+  displayTitle: z.string().optional(),
+  description: z.string().optional(),
   category: z.string().min(1, "Category required"),
+  condition: z.string().optional(),
   barcode: z.string().optional(),
   price: z.coerce.number().min(0, "Price required"),
   stock: z.coerce.number().min(0, "Stock required"),
   costPrice: z.coerce.number().min(0, "Cost required"),
   minStock: z.coerce.number().min(0, "Min stock required"),
+  storefrontVisibility: z.enum(["published", "draft", "hidden", "archived"]).default("published"),
+  isFeatured: z.boolean().default(false),
+  isFlashDeal: z.boolean().default(false),
+  flashDealPrice: z.union([z.coerce.number().min(0), z.nan()]).optional(),
+  flashDealEndsAt: z.string().optional(),
   imageUrl: z.string().optional(),
 });
 
@@ -45,12 +56,20 @@ export default function ProductsPage() {
       brand: product.brand ?? "",
       model: product.model ?? "",
       name: product.name,
+      displayTitle: product.displayTitle ?? "",
+      description: product.description ?? "",
       category: product.category as any,
+      condition: product.condition ?? "",
       barcode: product.barcode ?? "",
       price: product.price,
       stock: product.stock,
       costPrice: product.costPrice ?? 0,
       minStock: product.minStock ?? 1,
+      storefrontVisibility: product.storefrontVisibility ?? "published",
+      isFeatured: product.isFeatured ?? false,
+      isFlashDeal: product.isFlashDeal ?? false,
+      flashDealPrice: product.flashDealPrice ?? undefined,
+      flashDealEndsAt: product.flashDealEndsAt ? new Date(product.flashDealEndsAt).toISOString().slice(0, 16) : "",
       imageUrl: product.imageUrl ?? "",
     });
     setAttachments(
@@ -68,12 +87,20 @@ export default function ProductsPage() {
       brand: "",
       model: "",
       name: "",
+      displayTitle: "",
+      description: "",
       category: "iPhone",
+      condition: "",
       barcode: "",
       price: 0,
       stock: 0,
       costPrice: 0,
       minStock: 1,
+      storefrontVisibility: "published",
+      isFeatured: false,
+      isFlashDeal: false,
+      flashDealPrice: undefined,
+      flashDealEndsAt: "",
       imageUrl: "",
     }
   });
@@ -84,10 +111,15 @@ export default function ProductsPage() {
   };
 
   const onSubmit = async (values: z.infer<typeof productSchema>) => {
-    const imageUrl = attachments[0]?.url || undefined;
+    const imageUrl = attachments[0]?.url ?? null;
     const payload = {
       ...values,
       barcode: values.barcode?.trim() || undefined,
+      displayTitle: values.displayTitle?.trim() || undefined,
+      description: values.description?.trim() || undefined,
+      condition: values.condition?.trim() || undefined,
+      flashDealPrice: values.isFlashDeal ? Number(values.flashDealPrice || 0) : undefined,
+      flashDealEndsAt: values.isFlashDeal && values.flashDealEndsAt ? new Date(values.flashDealEndsAt).toISOString() : undefined,
       imageUrl
     };
 
@@ -160,6 +192,21 @@ export default function ProductsPage() {
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="displayTitle"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Storefront Title</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Leave blank to use the product name publicly" {...field} />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">This is the customer-facing title shown on the storefront.</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -204,6 +251,46 @@ export default function ProductsPage() {
                   )}
                 />
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="condition"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Condition</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. New, Refurbished, Open Box" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="storefrontVisibility"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Storefront Visibility</FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choose visibility" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="published">Published</SelectItem>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="hidden">Hidden</SelectItem>
+                            <SelectItem value="archived">Archived</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <FormField
                   control={form.control}
                   name="barcode"
@@ -212,6 +299,20 @@ export default function ProductsPage() {
                       <FormLabel>Barcode</FormLabel>
                       <FormControl>
                         <Input placeholder="Scan or enter barcode" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Storefront Description</FormLabel>
+                      <FormControl>
+                        <Textarea rows={4} placeholder="What should customers know about this product?" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -293,6 +394,82 @@ export default function ProductsPage() {
                   />
                 </div>
 
+                <div className="grid gap-4 rounded-[1.25rem] border border-border/70 bg-secondary/52 p-4">
+                  <div className="flex items-center justify-between gap-4 rounded-2xl bg-white/85 p-4">
+                    <div>
+                      <p className="font-medium text-slate-950">Featured on storefront</p>
+                      <p className="text-xs text-muted-foreground">Show this product in the storefront featured section.</p>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="isFeatured"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl bg-white/85 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-medium text-slate-950">Flash deal</p>
+                        <p className="text-xs text-muted-foreground">Enable a discounted price in the storefront flash deals section.</p>
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name="isFlashDeal"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {form.watch("isFlashDeal") ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="flashDealPrice"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Flash Deal Price (UGX)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  value={Number.isNaN(field.value) || field.value === undefined ? "" : field.value}
+                                  onChange={(e) => field.onChange(e.target.value)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="flashDealEndsAt"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Deal Ends</FormLabel>
+                              <FormControl>
+                                <Input type="datetime-local" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
                 <Button type="submit" className="w-full" disabled={saving}>
                   {saving ? "Saving..." : "Save Product"}
                 </Button>
@@ -332,6 +509,7 @@ export default function ProductsPage() {
                   <TableHead>Product Name</TableHead>
                   <TableHead>Barcode</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Storefront</TableHead>
                   <TableHead>Cost</TableHead>
                   <TableHead>Stock</TableHead>
                 <TableHead className="text-right">Price</TableHead>
@@ -355,6 +533,23 @@ export default function ProductsPage() {
                     <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-slate-100 text-slate-900 hover:bg-slate-200/80">
                       {product.category}
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                        {product.storefrontVisibility || "published"}
+                      </span>
+                      {product.isFeatured ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                          Featured
+                        </span>
+                      ) : null}
+                      {product.isFlashDeal ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                          Deal
+                        </span>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell>{product.costPrice?.toLocaleString?.() ?? "-"}</TableCell>
                   <TableCell>{product.stock}</TableCell>
@@ -392,7 +587,7 @@ export default function ProductsPage() {
               ))}
               {filteredProducts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
+                  <TableCell colSpan={9} className="h-24 text-center">
                     No products found.
                   </TableCell>
                 </TableRow>

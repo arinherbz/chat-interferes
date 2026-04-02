@@ -17,6 +17,7 @@ export default function StoreHomePage() {
 
   const featured = products.filter((product) => product.featured).slice(0, 8);
   const flashDeals = products.filter((product) => product.isFlashDeal && product.flashDealPrice).slice(0, 4);
+  const spotlightProducts = (featured.length > 0 ? featured : products.slice(0, 4)).slice(0, 4);
 
   return (
     <StoreShell>
@@ -44,7 +45,7 @@ export default function StoreHomePage() {
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            {(featured.length > 0 ? featured : products.slice(0, 4)).map((product) => (
+            {spotlightProducts.map((product) => (
               <Link key={product.id} href={`/store/products/${product.id}`}>
                 <Card className="h-full cursor-pointer overflow-hidden border-white/70 bg-white/90 backdrop-blur transition-transform hover:-translate-y-1">
                   <CardContent className="space-y-3 p-4">
@@ -89,37 +90,39 @@ export default function StoreHomePage() {
           ))}
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Flash Deals</p>
-              <h2 className="text-2xl font-semibold tracking-tight">Time-limited online offers</h2>
+        {flashDeals.length > 0 ? (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Flash Deals</p>
+                <h2 className="text-2xl font-semibold tracking-tight">Time-limited online offers</h2>
+              </div>
+              <Link href="/store/products">
+                <Button variant="outline">See all</Button>
+              </Link>
             </div>
-            <Link href="/store/products">
-              <Button variant="outline">See all</Button>
-            </Link>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {(flashDeals.length > 0 ? flashDeals : products.slice(0, 4)).map((product) => (
-              <Card key={product.id} className="overflow-hidden">
-                <CardContent className="space-y-3 p-5">
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Flash Deal</span>
-                    <span className="text-xs text-muted-foreground">{product.flashDealEndsAt ? `Ends ${new Date(product.flashDealEndsAt).toLocaleDateString()}` : "Limited time"}</span>
-                  </div>
-                  <div>
-                    <h3 className="font-medium">{product.name}</h3>
-                    <p className="text-sm text-muted-foreground">{[product.brand, product.model, product.storage].filter(Boolean).join(" • ")}</p>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <span className="text-xl font-semibold">{formatUGX(product.flashDealPrice || product.price)}</span>
-                    {product.flashDealPrice ? <span className="text-sm text-muted-foreground line-through">{formatUGX(product.price)}</span> : null}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {flashDeals.map((product) => (
+                <Card key={product.id} className="overflow-hidden">
+                  <CardContent className="space-y-3 p-5">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Flash Deal</span>
+                      <span className="text-xs text-muted-foreground">{product.flashDealEndsAt ? `Ends ${new Date(product.flashDealEndsAt).toLocaleDateString()}` : "Limited time"}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-medium">{product.name}</h3>
+                      <p className="text-sm text-muted-foreground">{[product.brand, product.model, product.condition].filter(Boolean).join(" • ")}</p>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <span className="text-xl font-semibold">{formatUGX(product.flashDealPrice || product.price)}</span>
+                      {product.flashDealPrice ? <span className="text-sm text-muted-foreground line-through">{formatUGX(product.price)}</span> : null}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </StoreShell>
   );

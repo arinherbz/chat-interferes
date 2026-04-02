@@ -36,9 +36,12 @@ export interface User {
 export interface Product {
   id: string;
   name: string;
+  displayTitle?: string;
+  description?: string;
   category: string;
   brand?: string;
   model?: string;
+  condition?: string;
   price: number;
   costPrice: number;
   stock: number;
@@ -46,6 +49,11 @@ export interface Product {
   sku?: string;
   barcode?: string;
   imageUrl?: string;
+  storefrontVisibility?: "published" | "draft" | "hidden" | "archived";
+  isFeatured?: boolean;
+  isFlashDeal?: boolean;
+  flashDealPrice?: number | null;
+  flashDealEndsAt?: string | null;
 }
 
 export interface Device {

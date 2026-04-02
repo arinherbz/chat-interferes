@@ -15,17 +15,24 @@ type StorefrontProduct = {
   id: string;
   shopId?: string | null;
   name: string;
+  displayTitle?: string;
   brand?: string;
   category?: string;
   price: number;
+  flashDealPrice?: number;
+  flashDealEndsAt?: string;
   stock: number;
   imageUrl?: string;
   condition?: string;
+  description?: string;
   slug: string;
   createdAt?: string;
   model?: string;
   sku?: string;
   displayBadge?: string;
+  featured?: boolean;
+  isFlashDeal?: boolean;
+  storefrontVisibility?: string;
 };
 
 type CheckoutItemInput = {
@@ -161,10 +168,15 @@ function looksLikeBarcodeValue(value?: string | null) {
 }
 
 function buildStorefrontName(product: Product) {
+  const displayTitle = normalizeWhitespace(product.displayTitle);
   const explicitName = normalizeWhitespace(product.name);
   const brand = normalizeBrand(product.brand);
   const model = toTitleCase(product.model);
   const category = normalizeCategory(product.category);
+
+  if (displayTitle && !looksLikeBarcodeValue(displayTitle)) {
+    return displayTitle;
+  }
 
   if (explicitName && !looksLikeBarcodeValue(explicitName)) {
     return explicitName;
@@ -197,17 +209,24 @@ function toStoreProduct(product: Product): StorefrontProduct {
     id: product.id,
     shopId: product.shopId,
     name,
+    displayTitle: normalizeWhitespace(product.displayTitle) || undefined,
     brand,
     category,
     price: product.price,
+    flashDealPrice: product.flashDealPrice ?? undefined,
+    flashDealEndsAt: toIsoString(product.flashDealEndsAt),
     stock: product.stock,
     imageUrl: product.imageUrl ?? undefined,
-    condition: undefined,
+    condition: normalizeWhitespace(product.condition) || undefined,
+    description: normalizeWhitespace(product.description) || undefined,
     slug: product.id,
     createdAt: toIsoString(product.createdAt),
     model: model || undefined,
     sku: product.sku ?? undefined,
     displayBadge: category || brand,
+    featured: Boolean(product.isFeatured),
+    isFlashDeal: Boolean(product.isFlashDeal && product.flashDealPrice && product.flashDealPrice < product.price),
+    storefrontVisibility: product.storefrontVisibility,
   };
 }
 
@@ -241,7 +260,11 @@ function dedupeStorefrontProducts(products: StorefrontProduct[]) {
 function applyProductFilters(products: Product[], filters: StoreProductFilters) {
   const query = filters.query?.trim().toLowerCase();
 
-  let result = dedupeStorefrontProducts(products.filter((product) => product.stock > 0).map(toStoreProduct));
+  let result = dedupeStorefrontProducts(
+    products
+      .filter((product) => product.storefrontVisibility === "published")
+      .map(toStoreProduct),
+  );
 
   if (query) {
     result = result.filter((product) =>
@@ -327,14 +350,14 @@ export const commerceService = {
 
   async getStoreProduct(id: string) {
     const product = await storage.getProduct(id);
-    if (!product) {
+    if (!product || product.storefrontVisibility !== "published") {
       throw new HttpError(404, "Product not found");
     }
 
     return {
       ...toStoreProduct(product),
       inStock: product.stock > 0,
-      description: `${normalizeBrand(product.brand) ?? "Premium"} ${toTitleCase(product.model) || buildStorefrontName(product)} available in stock.`,
+      description: normalizeWhitespace(product.description) || `${normalizeBrand(product.brand) ?? "Premium"} ${toTitleCase(product.model) || buildStorefrontName(product)} available in stock.`,
       sku: product.sku ?? undefined,
       model: toTitleCase(product.model) || undefined,
     };

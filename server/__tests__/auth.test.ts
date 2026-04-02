@@ -1114,6 +1114,48 @@ describe("authentication", () => {
     );
   });
 
+  it("stores product image uploads in a durable media route", async () => {
+    const username = uniqueUsername("auth-upload-media");
+    const password = "ProductUpload!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Upload Manager",
+      email: `${username}@example.com`,
+      role: "Manager",
+      status: "active",
+      shopId: null,
+    });
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+
+    const formData = new FormData();
+    formData.append("files", new Blob(["fake-png-binary"], { type: "image/png" }), "product-image.png");
+
+    const uploadRes = await fetch(`${baseUrl}/api/uploads?folder=product-images`, {
+      method: "POST",
+      headers: { Cookie: setCookie! },
+      body: formData,
+    });
+
+    expect(uploadRes.status).toBe(200);
+    const [uploaded] = await uploadRes.json();
+    expect(uploaded.url).toMatch(/^\/uploads\/media\/[^/]+\/product-image\.png$/);
+    expect(uploaded.contentType).toBe("image/png");
+
+    const assetRes = await fetch(`${baseUrl}${uploaded.url}`);
+    expect(assetRes.status).toBe(200);
+    expect(assetRes.headers.get("content-type")).toContain("image/png");
+    await expect(assetRes.text()).resolves.toBe("fake-png-binary");
+  });
+
   it("normalizes storefront display names and brand filters away from barcode placeholders", async () => {
     const placeholderNameA = `Barcode Product A ${Date.now()}`;
     const placeholderNameB = `Barcode Product B ${Date.now()}`;
@@ -1156,6 +1198,69 @@ describe("authentication", () => {
       brand: "Apple",
       category: "Phones",
     });
+  });
+
+  it("only exposes published storefront products and carries real featured and deal state", async () => {
+    const visibleName = `Storefront Visible ${Date.now()}`;
+    const hiddenName = `Storefront Hidden ${Date.now()}`;
+
+    await storage.createProduct({
+      name: visibleName,
+      displayTitle: "Apple iPhone 16 Pro 256GB",
+      description: "Featured flagship smartphone",
+      brand: "apple",
+      model: "iphone 16 pro",
+      category: "phones",
+      condition: "New",
+      price: 3200000,
+      costPrice: 2500000,
+      stock: 3,
+      minStock: 1,
+      imageUrl: "/uploads/media/demo/iphone-16-pro.png",
+      storefrontVisibility: "published",
+      isFeatured: true,
+      isFlashDeal: true,
+      flashDealPrice: 2990000,
+      flashDealEndsAt: new Date(Date.now() + 86400000),
+      shopId: null,
+    });
+
+    await storage.createProduct({
+      name: hiddenName,
+      category: "phones",
+      brand: "Apple",
+      model: "iPhone 16",
+      price: 2100000,
+      costPrice: 1800000,
+      stock: 5,
+      minStock: 1,
+      storefrontVisibility: "hidden",
+      shopId: null,
+    });
+
+    const storefrontRes = await fetch(`${baseUrl}/api/store/products`);
+    expect(storefrontRes.status).toBe(200);
+    const storefrontBody = await storefrontRes.json();
+    const data = storefrontBody.data ?? storefrontBody;
+
+    expect(data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Apple iPhone 16 Pro 256GB",
+          featured: true,
+          isFlashDeal: true,
+          flashDealPrice: 2990000,
+          storefrontVisibility: "published",
+        }),
+      ]),
+    );
+    expect(data).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: hiddenName,
+        }),
+      ]),
+    );
   });
 
   it("returns a message-based error when trade-in calculation has no base value", async () => {

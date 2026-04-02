@@ -56,7 +56,12 @@ export default function StoreProductDetailPage() {
                   <p className="mt-3 text-sm leading-6 text-muted-foreground">{product.description || "Premium device available for immediate dispatch."}</p>
                 </div>
                 <div className="rounded-2xl bg-secondary p-4">
-                  <p className="text-2xl font-semibold">{formatUGX(product.price)}</p>
+                  <div className="flex items-end gap-2">
+                    <p className="text-2xl font-semibold">{formatUGX(product.isFlashDeal && product.flashDealPrice ? product.flashDealPrice : product.price)}</p>
+                    {product.isFlashDeal && product.flashDealPrice ? (
+                      <p className="text-sm text-muted-foreground line-through">{formatUGX(product.price)}</p>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {isAvailable ? `${product.stock} unit(s) in stock` : "Currently out of stock"}
                   </p>

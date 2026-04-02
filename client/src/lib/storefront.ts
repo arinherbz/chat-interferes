@@ -1,6 +1,7 @@
 export type StoreProduct = {
   id: string;
   name: string;
+  displayTitle?: string;
   shopId?: string | null;
   brand?: string;
   model?: string;
@@ -13,6 +14,7 @@ export type StoreProduct = {
   description?: string;
   featured?: boolean;
   isFlashDeal?: boolean;
+  storefrontVisibility?: string;
   slug?: string;
   category?: string;
   ram?: string;
