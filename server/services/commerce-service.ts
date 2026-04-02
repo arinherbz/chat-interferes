@@ -99,6 +99,12 @@ function normalizeWhitespace(value?: string | null) {
   return value?.trim().replace(/\s+/g, " ") || "";
 }
 
+function shouldPrettifyDisplayName(value: string) {
+  if (!value) return false;
+  const hasUppercase = /[A-Z]/.test(value);
+  return !hasUppercase;
+}
+
 function toTitleCase(value?: string | null) {
   const normalized = normalizeWhitespace(value);
   if (!normalized) return "";
@@ -112,6 +118,15 @@ function toTitleCase(value?: string | null) {
     usbc: "USB-C",
     "usb-c": "USB-C",
     magsafe: "MagSafe",
+    jbl: "JBL",
+    anker: "Anker",
+    samsung: "Samsung",
+    galaxy: "Galaxy",
+    hp: "HP",
+    asus: "ASUS",
+    dell: "Dell",
+    lenovo: "Lenovo",
+    acer: "Acer",
   };
   return normalized
     .split(" ")
@@ -175,11 +190,11 @@ function buildStorefrontName(product: Product) {
   const category = normalizeCategory(product.category);
 
   if (displayTitle && !looksLikeBarcodeValue(displayTitle)) {
-    return displayTitle;
+    return shouldPrettifyDisplayName(displayTitle) ? toTitleCase(displayTitle) : displayTitle;
   }
 
   if (explicitName && !looksLikeBarcodeValue(explicitName)) {
-    return explicitName;
+    return shouldPrettifyDisplayName(explicitName) ? toTitleCase(explicitName) : explicitName;
   }
 
   if (brand && model) {
