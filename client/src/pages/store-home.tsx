@@ -31,7 +31,7 @@ export default function StoreHomePage() {
                 Premium gadgets and accessories for the modern lifestyle.
               </h2>
               <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
-                Discover the latest in technology with Ariostore gadgets. Shop premium devices, request fast delivery across Uganda, and enjoy secure payments with mobile money options.
+                Discover the latest in technology with Ariostore. Shop premium devices, request fast delivery across Uganda, and enjoy secure payments with mobile money options.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">

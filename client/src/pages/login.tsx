@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
 import { Smartphone, ShieldCheck, User, LockKeyhole, Loader2 } from "lucide-react";
-import logoUrl from "@assets/generated_images/minimalist_phone_shop_logo_icon.png";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/api";
 
@@ -78,11 +77,11 @@ export default function Login() {
     <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in duration-500">
       <div className="text-center space-y-2">
         <img 
-          src={logoUrl} 
-          alt="Logo" 
-          className="w-20 h-20 mx-auto rounded-xl shadow-lg mb-4"
+          src="/ariostore-logo.png"
+          alt="Ariostore"
+          className="mx-auto mb-4 h-24 w-24 object-contain"
         />
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Ariostore Control</h1>
+        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Ariostore Admin</h1>
         <p className="text-slate-500">Sign in with your staff PIN to unlock the shop system.</p>
       </div>
 

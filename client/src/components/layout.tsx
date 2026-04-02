@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import logoUrl from "@assets/generated_images/minimalist_phone_shop_logo_icon.png";
 import { StaffLayout } from "@/components/staff-layout";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -132,10 +131,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className={cn("md:hidden border-b bg-white flex items-center justify-between gap-3 sticky top-0 z-50", isPOSRoute ? "p-3" : "p-4")}>
         <Link href={`/shop-settings/${activeShop?.id || "shop1"}`}> 
-          <div className="flex min-w-0 items-center gap-2 font-bold text-foreground" aria-label="Edit shop settings">
-            <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
+            <div className="flex min-w-0 items-center gap-2 font-bold text-foreground" aria-label="Edit shop settings">
+            <img src="/ariostore-logo.png" className="h-8 w-8 object-contain" alt="Ariostore" />
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate">{isPOSRoute ? "POS" : (activeShop?.name || "TechPOS")}</span>
+              <span className="truncate">{isPOSRoute ? "POS" : (activeShop?.name || "Ariostore")}</span>
               {!isPOSRoute && activeShop?.isMain && (
                 <span className="shrink-0 text-[10px] bg-secondary text-muted-foreground font-medium px-2 py-0.5 rounded-full">Main</span>
               )}
@@ -161,11 +160,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       )}>
         <div className="hidden md:flex items-center justify-between border-b px-4 py-5">
           <Link href={`/shop-settings/${activeShop?.id || "shop1"}`} className="flex items-center gap-3 min-w-0" aria-label="Edit shop settings">
-           <img src={logoUrl} className="w-8 h-8 rounded-md" alt="TechPOS" />
+           <img src="/ariostore-logo.png" className="h-8 w-8 object-contain" alt="Ariostore" />
            {!(sidebarCollapsed || isPOSRoute) && (
              <div className="flex flex-col min-w-0">
              <div className="flex items-center gap-2">
-               <span className="font-bold text-lg text-foreground leading-tight truncate">{activeShop?.name || "TechPOS"}</span>
+               <span className="font-bold text-lg text-foreground leading-tight truncate">{activeShop?.name || "Ariostore"}</span>
                {activeShop?.isMain && (
                  <span className="text-xs bg-secondary text-muted-foreground font-medium px-2 py-0.5 rounded-full">Main</span>
                )}

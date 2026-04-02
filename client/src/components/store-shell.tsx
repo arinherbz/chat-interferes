@@ -12,9 +12,12 @@ export function StoreShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <Link href="/store">
-            <div className="cursor-pointer">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">Ariostore gadgets</p>
-              <h1 className="text-xl font-semibold tracking-tight">New is Next</h1>
+            <div className="flex cursor-pointer items-center gap-3">
+              <img src="/ariostore-logo.png" alt="Ariostore" className="h-11 w-11 object-contain" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">Ariostore</p>
+                <h1 className="text-xl font-semibold tracking-tight">Mobile & gadget store</h1>
+              </div>
             </div>
           </Link>
           <div className="flex items-center gap-2">
