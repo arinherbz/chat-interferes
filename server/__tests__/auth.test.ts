@@ -1070,7 +1070,7 @@ describe("authentication", () => {
     expect(setCookie).toContain("connect.sid=");
 
     const barcode = `IMG-${Date.now()}`;
-    const imageUrl = `/uploads/product-images/2026-04-01/${barcode}.png`;
+    const imageUrl = `/uploads/media/test-${barcode}/product-image.png`;
 
     const createRes = await fetch(`${baseUrl}/api/products`, {
       method: "POST",
@@ -1091,27 +1091,25 @@ describe("authentication", () => {
     });
 
     expect(createRes.status).toBe(201);
-    await expect(createRes.json()).resolves.toMatchObject({
+    const createdBody = await createRes.json();
+    expect(createdBody).toMatchObject({
       barcode,
       imageUrl,
     });
 
-    const listRes = await fetch(`${baseUrl}/api/products`, {
+    const listRes = await fetch(`${baseUrl}/api/products?pageSize=500`, {
       headers: { Cookie: setCookie! },
     });
 
     expect(listRes.status).toBe(200);
     const listBody = await listRes.json();
     expect(Array.isArray(listBody.data)).toBe(true);
-    expect(listBody.data).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: "Product With Media",
-          barcode,
-          imageUrl,
-        }),
-      ])
-    );
+    expect(listBody.data.find((entry: any) => entry.id === createdBody.id)).toMatchObject({
+      id: createdBody.id,
+      name: "Product With Media",
+      barcode,
+      imageUrl,
+    });
   });
 
   it("stores product image uploads in a durable media route", async () => {
