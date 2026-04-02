@@ -8,6 +8,7 @@ import {
   tradeInWizardSchema, 
   tradeInReviewSchema,
   type ConditionOption,
+  type ConditionQuestion as PersistedConditionQuestion,
   type InsertDelivery,
   type User,
 } from "@shared/schema";
@@ -153,6 +154,83 @@ function getTradeInQuestions(deviceType: TradeInDeviceType) {
     isRequired: question.isRequired ?? true,
     isCritical: question.isCritical ?? false,
   }));
+}
+
+type EffectiveTradeInQuestion = ReturnType<typeof getTradeInQuestions>[number];
+
+function normalizePersistedTradeInQuestion(question: PersistedConditionQuestion): EffectiveTradeInQuestion {
+  const options = Array.isArray(question.options)
+    ? (question.options as ConditionOption[])
+    : typeof question.options === "string"
+      ? JSON.parse(question.options) as ConditionOption[]
+      : [];
+
+  return {
+    id: question.id,
+    category: question.category,
+    question: question.question,
+    options,
+    sortOrder: question.sortOrder ?? 0,
+    isRequired: question.isRequired ?? true,
+    isCritical: question.isCritical ?? false,
+  };
+}
+
+async function seedDefaultTradeInQuestions(deviceType: TradeInDeviceType) {
+  const defaults = getConditionQuestionsForDeviceType(deviceType);
+  for (const question of defaults) {
+    await storage.createConditionQuestion({
+      deviceType,
+      category: question.category,
+      question: question.question,
+      options: question.options as any,
+      sortOrder: question.sortOrder ?? 0,
+      isRequired: question.isRequired ?? true,
+      isCritical: question.isCritical ?? false,
+      isActive: true,
+      shopId: null,
+    });
+  }
+}
+
+async function getEffectiveTradeInQuestions(deviceType: TradeInDeviceType, shopId?: string) {
+  const defaultQuestions = getTradeInQuestions(deviceType);
+
+  try {
+    const shopQuestions = shopId
+      ? await storage.getConditionQuestions({ deviceType, shopId })
+      : [];
+
+    if (shopQuestions.length > 0) {
+      return {
+        source: "shop" as const,
+        deviceType,
+        questions: shopQuestions.map(normalizePersistedTradeInQuestion),
+      };
+    }
+
+    let defaultProfile = await storage.getConditionQuestions({ deviceType });
+    if (defaultProfile.length === 0) {
+      await seedDefaultTradeInQuestions(deviceType);
+      defaultProfile = await storage.getConditionQuestions({ deviceType });
+    }
+
+    if (defaultProfile.length > 0) {
+      return {
+        source: "default" as const,
+        deviceType,
+        questions: defaultProfile.map(normalizePersistedTradeInQuestion),
+      };
+    }
+  } catch (error) {
+    console.warn(`[trade-in] Falling back to built-in ${deviceType} condition profile:`, error);
+  }
+
+  return {
+    source: "builtin" as const,
+    deviceType,
+    questions: defaultQuestions,
+  };
 }
 
 function validateSerialNumber(serialNumber?: string | null): { valid: boolean; value: string; error?: string } {
@@ -1812,15 +1890,29 @@ export async function registerRoutes(
         storage: req.query.storage as string | undefined,
       });
       const shopId = req.query.shopId as string | undefined;
-      const customQuestions = await storage.getConditionQuestions({ deviceType, shopId });
-      const questions = customQuestions.length > 0 ? customQuestions.map((question) => ({
-        ...question,
-        options: question.options as ConditionOption[],
-      })) : getTradeInQuestions(deviceType);
-      res.json(questions);
+      const profile = await getEffectiveTradeInQuestions(deviceType, shopId);
+      res.json({
+        profile: {
+          deviceType: profile.deviceType,
+          source: profile.source,
+          questionCount: profile.questions.length,
+        },
+        questions: profile.questions,
+      });
     } catch (error) {
       console.error("Error fetching questions:", error);
-      sendError(res, 500, "Failed to fetch questions");
+      const deviceType = resolveTradeInDeviceType({
+        deviceType: req.query.deviceType as string | undefined,
+      });
+      res.json({
+        profile: {
+          deviceType,
+          source: "builtin",
+          questionCount: getTradeInQuestions(deviceType).length,
+          warning: "Condition profile fallback is being used.",
+        },
+        questions: getTradeInQuestions(deviceType),
+      });
     }
   });
 
@@ -2374,8 +2466,8 @@ export async function registerRoutes(
         serialNumber: req.body?.serialNumber,
       });
 
-      // Get questions for scoring
-      const formattedQuestions = getTradeInQuestions(deviceType);
+      const effectiveProfile = await getEffectiveTradeInQuestions(deviceType, req.currentUser?.shopId ?? undefined);
+      const formattedQuestions = effectiveProfile.questions;
       const scorePreview = calculateConditionScore(conditionAnswers || {}, formattedQuestions);
 
       // Get base value
@@ -2417,6 +2509,7 @@ export async function registerRoutes(
       res.json({
         deviceType,
         identifierType: identifier.identifierType,
+        conditionProfileSource: effectiveProfile.source,
         baseValue: baseValueRecord.baseValue,
         requiresPricingRule: false,
         ...result,
@@ -2479,8 +2572,8 @@ export async function registerRoutes(
         return sendError(res, 400, "No base value found for this device. Please contact manager.");
       }
       
-      // Get questions and calculate score
-      const formattedQuestions = getTradeInQuestions(deviceType);
+      const effectiveProfile = await getEffectiveTradeInQuestions(deviceType, req.currentUser?.shopId ?? undefined);
+      const formattedQuestions = effectiveProfile.questions;
 
       const scoringResult = baseValueRecord
         ? processTradeIn(
@@ -2562,6 +2655,7 @@ export async function registerRoutes(
         assessment,
         scoring: scoringResult,
         requiresPricingRule: !baseValueRecord,
+        conditionProfileSource: effectiveProfile.source,
       });
     } catch (error) {
       console.error("Error submitting trade-in:", error);

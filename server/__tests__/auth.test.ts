@@ -1353,6 +1353,131 @@ describe("authentication", () => {
     });
   });
 
+  it("returns a structured default phone condition profile without crashing", async () => {
+    const username = uniqueUsername("auth-tradein-profile-load");
+    const password = "TradeProfileLoad!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Trade Profile Loader",
+      email: `${username}@example.com`,
+      role: "Manager",
+      status: "active",
+      shopId: null,
+    });
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+
+    const res = await fetch(`${baseUrl}/api/trade-in/questions?deviceType=phone`, {
+      headers: { Cookie: setCookie! },
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      profile: expect.objectContaining({
+        deviceType: "phone",
+        questionCount: expect.any(Number),
+      }),
+      questions: expect.arrayContaining([
+        expect.objectContaining({
+          id: expect.any(String),
+          category: expect.any(String),
+          question: expect.any(String),
+          options: expect.any(Array),
+        }),
+      ]),
+    });
+  });
+
+  it("uses the active condition profile for trade-in scoring", async () => {
+    const shopId = `shop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const username = uniqueUsername("auth-tradein-profile");
+    const password = "TradeProfile!123";
+
+    await storage.createUser({
+      username,
+      password: hashSecret(password),
+      name: "Trade Profile Manager",
+      email: `${username}@example.com`,
+      role: "Manager",
+      status: "active",
+      shopId,
+    });
+
+    await storage.upsertDeviceBaseValue({
+      brand: "Apple",
+      model: "iPhone Score Test",
+      storage: "128GB",
+      baseValue: 1000000,
+      isActive: true,
+      shopId: null,
+    });
+
+    await storage.createConditionQuestion({
+      deviceType: "phone",
+      category: "functionality",
+      question: "Does the custom scoring profile apply?",
+      options: [
+        { value: "yes", label: "Yes", deduction: 0, isRejection: false },
+        { value: "damaged", label: "Damaged", deduction: 50, isRejection: false },
+      ] as any,
+      sortOrder: 1,
+      isRequired: true,
+      isCritical: false,
+      isActive: true,
+      shopId,
+    });
+
+    const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, secret: password }),
+    });
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("connect.sid=");
+
+    const profileRes = await fetch(`${baseUrl}/api/trade-in/questions?deviceType=phone&shopId=${shopId}`, {
+      headers: { Cookie: setCookie! },
+    });
+    expect(profileRes.status).toBe(200);
+    const profileBody = await profileRes.json();
+    const customQuestionId = profileBody.questions[0].id as string;
+
+    const res = await fetch(`${baseUrl}/api/trade-in/calculate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: setCookie!,
+      },
+      body: JSON.stringify({
+        deviceType: "phone",
+        brand: "Apple",
+        model: "iPhone Score Test",
+        storage: "128GB",
+        imei: uniqueValidImei(),
+        conditionAnswers: {
+          [customQuestionId]: "damaged",
+        },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      conditionProfileSource: "shop",
+      baseValue: 1000000,
+      conditionScore: 50,
+      calculatedOffer: 500000,
+    });
+  });
+
   it("allows managers to submit trade-ins without pricing as pending manual review", async () => {
     const username = uniqueUsername("auth-tradein-manual-submit");
     const password = "TradeSubmit!123";

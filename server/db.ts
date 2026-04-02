@@ -494,6 +494,13 @@ if (usePostgres) {
     CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_customer_id_unique_idx ON customer_accounts(customer_id);
     CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_email_unique_idx ON customer_accounts(email);
     CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_phone_unique_idx ON customer_accounts(phone);
+    ALTER TABLE condition_questions
+      ADD COLUMN IF NOT EXISTS device_type TEXT DEFAULT 'phone';
+    ALTER TABLE condition_questions
+      ADD COLUMN IF NOT EXISTS shop_id VARCHAR;
+    UPDATE condition_questions
+      SET device_type = 'phone'
+      WHERE device_type IS NULL OR trim(device_type) = '';
   `).then(() => undefined).catch((err) => {
     console.warn("[db] Unable to bootstrap Postgres schema:", err?.message || err);
   });

@@ -61,6 +61,16 @@ type ConditionQuestion = {
   isCritical: boolean;
 };
 
+type ConditionProfileResponse = {
+  profile?: {
+    deviceType: TradeInDeviceType;
+    source: "shop" | "default" | "builtin";
+    questionCount: number;
+    warning?: string;
+  };
+  questions: ConditionQuestion[];
+};
+
 type ConditionQuestionForm = {
   id?: string;
   deviceType: TradeInDeviceType;
@@ -118,13 +128,15 @@ export default function BaseValuesPage() {
   const loadConditionProfile = async (deviceType: TradeInDeviceType) => {
     setQuestionLoading(true);
     try {
-      const response = await fetch(`/api/trade-in/questions?deviceType=${deviceType}`, { credentials: "include" });
+      const url = `/api/trade-in/questions?deviceType=${deviceType}${user?.shopId ? `&shopId=${encodeURIComponent(user.shopId)}` : ""}`;
+      const response = await fetch(url, { credentials: "include" });
       if (!response.ok) {
         throw new Error(`Failed to load questions: ${response.status}`);
       }
-      const data = (await response.json()) as ConditionQuestion[];
-      setConditionQuestions(data);
+      const data = (await response.json()) as ConditionQuestion[] | ConditionProfileResponse;
+      setConditionQuestions(Array.isArray(data) ? data : data.questions);
     } catch (err: any) {
+      setConditionQuestions([]);
       toast({ title: "Failed to load condition profile", description: err?.message || "Please retry.", variant: "destructive" });
     } finally {
       setQuestionLoading(false);
@@ -178,7 +190,7 @@ export default function BaseValuesPage() {
 
   useEffect(() => {
     loadConditionProfile(selectedDeviceType);
-  }, [selectedDeviceType]);
+  }, [selectedDeviceType, user?.shopId]);
 
   const questionsByCategory = useMemo(() => {
     return conditionQuestions.reduce<Record<string, ConditionQuestion[]>>((groups, question) => {

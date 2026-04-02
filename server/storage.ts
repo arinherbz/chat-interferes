@@ -29,7 +29,7 @@ import {
   type Notification, type InsertNotification, notifications,
 } from "@shared/schema";
 import { db, pool } from "./db";
-import { eq, and, desc, sql as sqlFn, count } from "drizzle-orm";
+import { eq, and, desc, sql as sqlFn, count, isNull } from "drizzle-orm";
 import crypto from "crypto";
 
 export interface IStorage {
@@ -181,6 +181,10 @@ export class DatabaseStorage implements IStorage {
     return pool ? value : value ? 1 : 0;
   }
 
+  private booleanReadValue(value: unknown): boolean {
+    return value === true || value === 1 || value === "1" || value === "true" || value === null || value === undefined;
+  }
+
   private stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
     const cleaned: Partial<T> = {};
     for (const [key, value] of Object.entries(obj)) {
@@ -193,7 +197,7 @@ export class DatabaseStorage implements IStorage {
 
   private normalizeBoolean(value: boolean | null | undefined): boolean | undefined {
     if (value === null || value === undefined) return undefined;
-    return value;
+    return this.booleanWriteValue(value) as any;
   }
 
   private normalizeLookupValue(value: string | null | undefined): string {
@@ -207,6 +211,23 @@ export class DatabaseStorage implements IStorage {
     }
     if ("isFlashDeal" in values && typeof values.isFlashDeal === "boolean") {
       values.isFlashDeal = this.booleanWriteValue(values.isFlashDeal);
+    }
+    return values as Partial<T>;
+  }
+
+  private normalizeConditionQuestionWrite<T extends Partial<InsertConditionQuestion>>(question: T): Partial<T> {
+    const values: Record<string, unknown> = this.stripUndefined(question as Record<string, unknown>);
+    if ("isActive" in values && typeof values.isActive === "boolean") {
+      values.isActive = this.booleanWriteValue(values.isActive);
+    }
+    if ("isRequired" in values && typeof values.isRequired === "boolean" && !pool) {
+      values.isRequired = this.booleanWriteValue(values.isRequired);
+    }
+    if ("isCritical" in values && typeof values.isCritical === "boolean" && !pool) {
+      values.isCritical = this.booleanWriteValue(values.isCritical);
+    }
+    if ("options" in values && values.options !== undefined && !pool) {
+      values.options = JSON.stringify(values.options);
     }
     return values as Partial<T>;
   }
@@ -454,26 +475,35 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== CONDITION QUESTIONS ====================
   async getConditionQuestions(filters?: { deviceType?: string; shopId?: string }): Promise<ConditionQuestion[]> {
-    const predicates = [eq(conditionQuestions.isActive, true)];
+    const predicates = [];
     if (filters?.deviceType) {
       predicates.push(eq(conditionQuestions.deviceType, filters.deviceType));
     }
     if (filters?.shopId) {
       predicates.push(eq(conditionQuestions.shopId, filters.shopId));
+    } else {
+      predicates.push(isNull(conditionQuestions.shopId));
     }
-    return db.select().from(conditionQuestions)
-      .where(and(...predicates))
+    const rows = await db.select().from(conditionQuestions)
+      .where(predicates.length > 0 ? and(...predicates) : undefined)
       .orderBy(conditionQuestions.sortOrder);
+    return (rows as ConditionQuestion[]).filter((row) => this.booleanReadValue(row.isActive));
   }
 
   async createConditionQuestion(question: InsertConditionQuestion): Promise<ConditionQuestion> {
-    const values = { ...question, isActive: this.normalizeBoolean(question.isActive) } as InsertConditionQuestion;
+    const values = this.normalizeConditionQuestionWrite({
+      ...question,
+      isActive: this.normalizeBoolean(question.isActive),
+    }) as InsertConditionQuestion;
     const [created] = await db.insert(conditionQuestions).values(values).returning();
     return created;
   }
 
   async updateConditionQuestion(id: string, question: Partial<InsertConditionQuestion>): Promise<ConditionQuestion | undefined> {
-    const values = { ...question, isActive: this.normalizeBoolean(question.isActive) } as Partial<InsertConditionQuestion>;
+    const values = this.normalizeConditionQuestionWrite({
+      ...question,
+      isActive: this.normalizeBoolean(question.isActive),
+    }) as Partial<InsertConditionQuestion>;
     const [updated] = await db.update(conditionQuestions)
       .set(values)
       .where(eq(conditionQuestions.id, id))

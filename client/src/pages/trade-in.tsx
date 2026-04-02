@@ -47,6 +47,16 @@ interface ConditionQuestion {
   isCritical: boolean;
 }
 
+interface ConditionProfileResponse {
+  profile?: {
+    deviceType: TradeInDeviceType;
+    source: "shop" | "default" | "builtin";
+    questionCount: number;
+    warning?: string;
+  };
+  questions: ConditionQuestion[];
+}
+
 interface DeviceBaseValue {
   id: string;
   brand: string;
@@ -362,14 +372,16 @@ export default function TradeInPage() {
   }, [location, setLocation, toast]);
 
   // Fetch condition questions
-  const { data: questions = [] } = useQuery<ConditionQuestion[]>({
-    queryKey: ["/api/trade-in/questions", resolvedDeviceType],
+  const { data: questions = [], error: questionsError } = useQuery<ConditionQuestion[]>({
+    queryKey: ["/api/trade-in/questions", resolvedDeviceType, activeShop?.id ?? "global"],
     queryFn: async () => {
-      const response = await fetch(`/api/trade-in/questions?deviceType=${resolvedDeviceType}`, { credentials: "include" });
+      const url = `/api/trade-in/questions?deviceType=${resolvedDeviceType}${activeShop?.id ? `&shopId=${encodeURIComponent(activeShop.id)}` : ""}`;
+      const response = await fetch(url, { credentials: "include" });
       if (!response.ok) {
         throw new Error("Failed to load trade-in questions");
       }
-      return response.json();
+      const data = (await response.json()) as ConditionQuestion[] | ConditionProfileResponse;
+      return Array.isArray(data) ? data : data.questions;
     },
   });
 
@@ -746,6 +758,10 @@ export default function TradeInPage() {
       toast({ title: "Invalid serial number", description: "Enter a usable serial number.", variant: "destructive" });
       return false;
     }
+    if (questions.length === 0) {
+      toast({ title: "Condition profile unavailable", description: "The device assessment questions could not be loaded.", variant: "destructive" });
+      return false;
+    }
     const missingRequired = questions
       .filter(q => q.isRequired)
       .some(q => !conditionAnswers[q.id]);
@@ -867,8 +883,8 @@ export default function TradeInPage() {
   const canManageBaseValues = currentUser?.role === "Owner" || currentUser?.role === "Manager";
   const canContinueWithoutPricing = canManageBaseValues && deviceBasicsReady && hasValidIdentifier;
   const canProceedStep1 = deviceBasicsReady && hasValidIdentifier && (pricingReady || canContinueWithoutPricing);
-  const canProceedStep2 = requiredSecurityQuestions.every((question) => !!conditionAnswers[question.id]);
-  const canProceedStep3 = requiredAssessmentQuestions.every((question) => !!conditionAnswers[question.id]);
+  const canProceedStep2 = securityQuestions.length > 0 && requiredSecurityQuestions.every((question) => !!conditionAnswers[question.id]);
+  const canProceedStep3 = assessmentCategories.length > 0 && requiredAssessmentQuestions.every((question) => !!conditionAnswers[question.id]);
   const canProceedStep4 = scoringResult !== null;
   const canProceedStep5 = customerName && customerPhone;
   const showCatalogHelper = !hasBrandOptions && !brand;
@@ -890,6 +906,12 @@ export default function TradeInPage() {
     }
     return "Device intake is ready for assessment.";
   })();
+
+  const conditionProfileMessage = questionsError
+    ? "Condition checks are temporarily unavailable. Refresh the page or ask an admin to verify the profile setup."
+    : questions.length === 0
+      ? "No condition profile is configured for this device yet. The intake can continue only after a profile is available."
+      : null;
 
   const ruleStatuses = [
     {
@@ -1380,6 +1402,13 @@ export default function TradeInPage() {
                       </div>
                     </div>
 
+                    {conditionProfileMessage ? (
+                      <div className="surface-muted flex items-start gap-3 p-4">
+                        <AlertCircle className="mt-0.5 h-5 w-5 text-orange-600" />
+                        <p className="text-sm text-slate-700">{conditionProfileMessage}</p>
+                      </div>
+                    ) : null}
+
                     <div className="space-y-6">
                       {securityQuestions.map((question) => (
                         <div key={question.id} className="surface-muted p-4">
@@ -1418,6 +1447,13 @@ export default function TradeInPage() {
                 {/* Step 3: Condition Assessment */}
                 {step === 3 && (
                   <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                    {conditionProfileMessage ? (
+                      <div className="surface-muted flex items-start gap-3 p-4">
+                        <AlertCircle className="mt-0.5 h-5 w-5 text-orange-600" />
+                        <p className="text-sm text-slate-700">{conditionProfileMessage}</p>
+                      </div>
+                    ) : null}
+
                     <ScrollArea className="h-[400px] pr-4">
                       {assessmentCategories.map(([category, categoryQuestions]) => {
                         const Icon = CATEGORY_ICONS[category] || Cpu;
