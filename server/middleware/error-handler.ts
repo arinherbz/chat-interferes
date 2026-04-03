@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { HttpError, sendFailure } from "../utils/api-response";
+import { Sentry } from "../instrument";
 
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (res.headersSent) {
@@ -17,6 +18,6 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
 
   const message = err instanceof Error ? err.message : "Internal Server Error";
   console.error("[express:error]", err);
+  Sentry.captureException(err);
   return sendFailure(res, 500, message);
 }
-

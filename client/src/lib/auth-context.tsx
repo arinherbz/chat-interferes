@@ -43,7 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const pathname = typeof window !== "undefined" ? window.location.pathname : location;
+  const needsStaffSession = !pathname.startsWith("/store") || pathname === "/track-order";
 
   const applyUiPreferences = (prefs: UserPreferences | null) => {
     const root = document.documentElement;
@@ -78,8 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    refresh();
-  }, []);
+    if (!needsStaffSession) {
+      setLoading(false);
+      return;
+    }
+    void refresh();
+  }, [needsStaffSession]);
 
   const login = async (username: string, secret: string) => {
     setLoading(true);

@@ -140,6 +140,31 @@ function toTitleCase(value?: string | null) {
     .join(" ");
 }
 
+function isPlaceholderProduct(product: Product) {
+  const fields = [
+    product.name,
+    product.displayTitle,
+    product.brand,
+    product.model,
+    product.sku,
+    product.barcode,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (!fields) return false;
+  return /\b(test|demo|mock|sample|qa)\b/.test(fields);
+}
+
+function sanitizeStorefrontImageUrl(value?: string | null) {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return undefined;
+  if (normalized.includes("/uploads/media/demo/")) return undefined;
+  if (/\/uploads\/media\/test-[^/]+\//i.test(normalized)) return undefined;
+  return normalized;
+}
+
 function normalizeBrand(value?: string | null) {
   const normalized = normalizeWhitespace(value).toLowerCase();
   if (!normalized) return undefined;
@@ -231,7 +256,7 @@ function toStoreProduct(product: Product): StorefrontProduct {
     flashDealPrice: product.flashDealPrice ?? undefined,
     flashDealEndsAt: toIsoString(product.flashDealEndsAt),
     stock: product.stock,
-    imageUrl: product.imageUrl ?? undefined,
+    imageUrl: sanitizeStorefrontImageUrl(product.imageUrl),
     condition: normalizeWhitespace(product.condition) || undefined,
     description: normalizeWhitespace(product.description) || undefined,
     slug: product.id,
@@ -278,6 +303,7 @@ function applyProductFilters(products: Product[], filters: StoreProductFilters) 
   let result = dedupeStorefrontProducts(
     products
       .filter((product) => product.storefrontVisibility === "published")
+      .filter((product) => !isPlaceholderProduct(product))
       .map(toStoreProduct),
   );
 

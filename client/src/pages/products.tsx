@@ -32,8 +32,8 @@ const productSchema = z.object({
   costPrice: z.coerce.number().min(0, "Cost required"),
   minStock: z.coerce.number().min(0, "Min stock required"),
   storefrontVisibility: z.enum(["published", "draft", "hidden", "archived"]).default("published"),
-  isFeatured: z.boolean().default(false),
-  isFlashDeal: z.boolean().default(false),
+  isFeatured: z.coerce.boolean().default(false),
+  isFlashDeal: z.coerce.boolean().default(false),
   flashDealPrice: z.union([z.coerce.number().min(0), z.nan()]).optional(),
   flashDealEndsAt: z.string().optional(),
   imageUrl: z.string().optional(),
@@ -66,8 +66,8 @@ export default function ProductsPage() {
       costPrice: product.costPrice ?? 0,
       minStock: product.minStock ?? 1,
       storefrontVisibility: product.storefrontVisibility ?? "published",
-      isFeatured: product.isFeatured ?? false,
-      isFlashDeal: product.isFlashDeal ?? false,
+      isFeatured: Boolean(product.isFeatured),
+      isFlashDeal: Boolean(product.isFlashDeal),
       flashDealPrice: product.flashDealPrice ?? undefined,
       flashDealEndsAt: product.flashDealEndsAt ? new Date(product.flashDealEndsAt).toISOString().slice(0, 16) : "",
       imageUrl: product.imageUrl ?? "",
@@ -110,6 +110,22 @@ export default function ProductsPage() {
     setIsScannerOpen(false);
   };
 
+  const handleSaveClick = async () => {
+    const valid = await form.trigger(undefined, { shouldFocus: true });
+    if (!valid) {
+      const firstError = Object.values(form.formState.errors)[0];
+      const message = firstError?.message ? String(firstError.message) : "Please review the product details and try again.";
+      console.warn("Product form validation failed", form.formState.errors);
+      toast({
+        title: "Could not save product",
+        description: message,
+        variant: "destructive",
+      });
+      return;
+    }
+    await form.handleSubmit(onSubmit)();
+  };
+
   const onSubmit = async (values: z.infer<typeof productSchema>) => {
     const imageUrl = attachments[0]?.url ?? null;
     const payload = {
@@ -122,7 +138,6 @@ export default function ProductsPage() {
       flashDealEndsAt: values.isFlashDeal && values.flashDealEndsAt ? new Date(values.flashDealEndsAt).toISOString() : undefined,
       imageUrl
     };
-
     setSaving(true);
     try {
       if (editingId) {
@@ -470,7 +485,12 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full" disabled={saving}>
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={saving}
+                  onClick={() => void handleSaveClick()}
+                >
                   {saving ? "Saving..." : "Save Product"}
                 </Button>
               </form>

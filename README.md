@@ -81,6 +81,28 @@ npm test
 npm run build
 ```
 
+## Monitoring
+
+Sentry is env-gated for both client and server. Set these before deploy:
+
+```env
+SENTRY_DSN=...
+SENTRY_ENVIRONMENT=production
+SENTRY_TRACES_SAMPLE_RATE=0.1
+SENTRY_PROFILES_SAMPLE_RATE=0.1
+VITE_SENTRY_DSN=...
+VITE_SENTRY_ENVIRONMENT=production
+VITE_SENTRY_TRACES_SAMPLE_RATE=0.1
+```
+
+Checkly synthetic monitoring is configured in `checkly.config.ts` with public checks under `checkly/`.
+Use `CHECKLY_PUBLIC_BASE_URL` to target the deployed site, then run:
+
+```bash
+npx checkly test
+npx checkly deploy
+```
+
 ## Scripts
 
 ```bash
@@ -120,6 +142,8 @@ uploads/
 - Use a persistent filesystem or object storage for `uploads/` in production.
 - Ensure `DATABASE_URL` points to a durable database in production.
 - Run `npm run check`, `npm test`, and `npm run build` before deployment.
+- Render deployments can use [render.yaml](/Users/ario/ariostore-ug/Chat-Interface-Builder/render.yaml) with `/health` as the public health check endpoint.
+- GitHub Actions production deploy automation is Render-based and expects `RENDER_DEPLOY_HOOK_URL` plus `DEPLOY_HEALTHCHECK_URL` secrets.
 
 ## Docker
 

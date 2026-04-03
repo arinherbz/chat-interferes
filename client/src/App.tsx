@@ -18,6 +18,7 @@ import StoreCheckoutPage from "@/pages/store-checkout";
 import StoreHomePage from "@/pages/store-home";
 import StoreOrderTrackingPage from "@/pages/store-order-tracking";
 import StoreProductDetailPage from "@/pages/store-product-detail";
+import { Sentry } from "@/lib/sentry";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const DailyClose = lazy(() => import("@/pages/daily-close"));
@@ -59,6 +60,7 @@ class ErrorBoundary extends React.Component<{ children: ReactNode }, { hasError:
   }
   componentDidCatch(error: unknown) {
     console.error("UI boundary captured:", error);
+    Sentry.captureException(error);
   }
   render() {
     if (this.state.hasError) {

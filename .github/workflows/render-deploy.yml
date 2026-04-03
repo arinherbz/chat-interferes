@@ -1,4 +1,4 @@
-name: Deploy Railway
+name: Deploy Render
 
 on:
   push:
@@ -44,19 +44,25 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Deploy to Railway
-        uses: railwayapp/railway-deploy@v3
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: ${{ secrets.RAILWAY_SERVICE_ID }}
-          environment: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL secret is required."
+            exit 1
+          fi
+
+          echo "Triggering Render deploy hook"
+          response=$(curl -sS -X POST "$RENDER_DEPLOY_HOOK_URL")
+          echo "$response"
 
       - name: Verify health endpoint
         env:
           HEALTHCHECK_URL: ${{ secrets.DEPLOY_HEALTHCHECK_URL }}
         run: |
           if [ -z "$HEALTHCHECK_URL" ]; then
-            echo "DEPLOY_HEALTHCHECK_URL secret is required (example: https://your-app.up.railway.app/health)"
+            echo "DEPLOY_HEALTHCHECK_URL secret is required (example: https://ariostore-gadgets.onrender.com/health)"
             exit 1
           fi
 

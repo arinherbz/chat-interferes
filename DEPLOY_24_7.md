@@ -24,17 +24,18 @@ Send the URL to anyone → They access from anywhere anytime
 
 ---
 
-## Option 2: Railway ($5/month minimum) 
+## Option 2: Render (Low-cost managed hosting)
 
-Similar to DigitalOcean but slightly different UI:
+For Ariostore, Render is the platform already matched by the repo automation:
 
-1. Go [railway.app](https://railway.app)
-2. "Start New Project" → GitHub
-3. Select repo
-4. Add environment vars (same as before)
-5. Deploy
+1. Go to [render.com](https://render.com)
+2. Create a new Web Service from GitHub
+3. Select this repo
+4. Use `render.yaml`
+5. Set `DEPLOY_HEALTHCHECK_URL` to `/health`
+6. Let GitHub Actions trigger deploys using the Render deploy hook
 
-Cost: $5-10/month depending on usage
+Cost: free tier available, paid tiers recommended for lower cold-start latency
 
 ---
 
@@ -111,7 +112,7 @@ DigitalOcean → App Settings → Domains → Add your domain
 | Platform | Cost | Uptime | Setup | Domain |
 |----------|------|--------|-------|--------|
 | **DigitalOcean** ⭐ | $6/mo | 99.9% | 3 min | Included |
-| Railway | $5/mo | 99.9% | 5 min | Included |
+| Render | Free/$7+ | 99.9% | 5 min | Included |
 | Heroku | $7/mo | 99.9% | 3 min | Included |
 | Self-host | $0 | ? | Hard | DIY |
 

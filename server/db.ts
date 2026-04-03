@@ -7,6 +7,24 @@ import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
 import fs from "fs";
 import path from "path";
 
+function loadEnvFile() {
+  const envPath = path.resolve(process.cwd(), ".env");
+  if (!fs.existsSync(envPath)) return;
+
+  const lines = fs.readFileSync(envPath, "utf-8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
+
+loadEnvFile();
+
 let _db: any;
 export let pool: pkg.Pool | undefined;
 export let databaseReady: Promise<void> = Promise.resolve();
@@ -889,6 +907,71 @@ if (usePostgres) {
         sort_order INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1
       );
+
+      CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY,
+        order_number TEXT NOT NULL UNIQUE,
+        shop_id TEXT NOT NULL,
+        customer_id TEXT,
+        customer_name TEXT NOT NULL,
+        customer_phone TEXT NOT NULL,
+        customer_email TEXT,
+        subtotal INTEGER NOT NULL DEFAULT 0,
+        delivery_fee INTEGER NOT NULL DEFAULT 0,
+        total INTEGER NOT NULL DEFAULT 0,
+        payment_method TEXT NOT NULL,
+        payment_status TEXT NOT NULL DEFAULT 'PENDING',
+        channel TEXT NOT NULL DEFAULT 'ONLINE',
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        delivery_type TEXT NOT NULL,
+        delivery_address TEXT,
+        assigned_staff_id TEXT,
+        notes TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS order_items (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        imei TEXT,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        unit_price INTEGER NOT NULL DEFAULT 0,
+        total INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS deliveries (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL UNIQUE,
+        assigned_rider_id TEXT,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        address TEXT NOT NULL,
+        scheduled_at TEXT,
+        picked_up_at TEXT,
+        delivered_at TEXT,
+        failure_reason TEXT,
+        notes TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS receipts (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        pdf_url TEXT,
+        sent_via TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        shop_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        message TEXT NOT NULL,
+        read INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT
+      );
     `);
     try { sqlite.exec(`ALTER TABLE products ADD COLUMN barcode TEXT`); } catch {}
     try { sqlite.exec(`ALTER TABLE products ADD COLUMN display_title TEXT`); } catch {}
@@ -908,6 +991,13 @@ if (usePostgres) {
     try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_customer_id_unique_idx ON customer_accounts(customer_id)`); } catch {}
     try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_email_unique_idx ON customer_accounts(email)`); } catch {}
     try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS customer_accounts_phone_unique_idx ON customer_accounts(phone)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS orders_shop_idx ON orders(shop_id)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(status)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS orders_assigned_staff_idx ON orders(assigned_staff_id)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS order_items_order_idx ON order_items(order_id)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS receipts_order_idx ON receipts(order_id)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS notifications_shop_idx ON notifications(shop_id)`); } catch {}
+    try { sqlite.exec(`CREATE INDEX IF NOT EXISTS notifications_read_idx ON notifications(read)`); } catch {}
     try { sqlite.exec(`ALTER TABLE condition_questions ADD COLUMN device_type TEXT DEFAULT 'phone'`); } catch {}
     try { sqlite.exec(`ALTER TABLE condition_questions ADD COLUMN shop_id TEXT`); } catch {}
   } catch (err) {

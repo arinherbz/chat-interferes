@@ -1,16 +1,9 @@
 services:
   - type: web
     name: ariostore-gadgets
-    runtime: node
-    plan: free
-    branch: main
-    buildCommand: npm ci && npm run build
-    startCommand: sh -c 'if [ -n "$DATABASE_URL" ]; then npm run db:push; fi && npm run start'
+    runtime: docker
     autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: HOST
-        value: 0.0.0.0
-      - key: SESSION_SECRET
-        generateValue: true

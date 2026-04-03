@@ -1,3 +1,4 @@
+import "./instrument";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -6,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import { errorHandler } from "./middleware/error-handler";
 import { databaseReady } from "./db";
+import { Sentry } from "./instrument";
 
 function loadEnvFile() {
   const envPath = path.resolve(process.cwd(), ".env");
@@ -44,6 +46,15 @@ app.use(
 app.use(express.urlencoded({ extended: false }));
 // Serve uploaded assets
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: "ariostore",
+    environment: process.env.NODE_ENV || "development",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 app.locals.apiMetrics = {
   totalRequests: 0,
@@ -113,6 +124,7 @@ app.use((req, res, next) => {
   await databaseReady;
   await registerRoutes(httpServer, app);
 
+  Sentry.setupExpressErrorHandler(app);
   app.use(errorHandler);
 
   // importantly only setup vite in development and after

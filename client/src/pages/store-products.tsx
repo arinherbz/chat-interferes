@@ -52,8 +52,22 @@ export default function StoreProductsPage() {
               <p className="text-sm text-muted-foreground">Shop verified devices and accessories with cleaner pricing, trusted stock, and fast delivery across Uganda.</p>
             </div>
             <div className="flex flex-wrap gap-2 rounded-[1rem] border border-border/70 bg-white/92 p-1 shadow-[0_10px_22px_rgba(24,38,31,0.04)]">
-              <Button variant={view === "grid" ? "default" : "outline"} size="icon" onClick={() => setView("grid")}><Grid2X2 className="h-4 w-4" /></Button>
-              <Button variant={view === "list" ? "default" : "outline"} size="icon" onClick={() => setView("list")}><List className="h-4 w-4" /></Button>
+              <Button
+                variant={view === "grid" ? "default" : "outline"}
+                size="icon"
+                aria-label="Show products in grid view"
+                onClick={() => setView("grid")}
+              >
+                <Grid2X2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={view === "list" ? "default" : "outline"}
+                size="icon"
+                aria-label="Show products in list view"
+                onClick={() => setView("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </section>
@@ -63,11 +77,19 @@ export default function StoreProductsPage() {
             <CardContent className="space-y-4 p-4">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-                <Input value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9" placeholder="Search devices, accessories..." />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="pl-9"
+                  aria-label="Search products"
+                  placeholder="Search devices, accessories..."
+                />
               </div>
               <div className="grid gap-3">
                 <Select value={sort} onValueChange={setSort}>
-                  <SelectTrigger><SelectValue placeholder="Sort" /></SelectTrigger>
+                  <SelectTrigger aria-label="Sort products">
+                    <SelectValue placeholder="Sort" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="popular">Most Popular</SelectItem>
                     <SelectItem value="price-asc">Price Low-High</SelectItem>
@@ -76,7 +98,9 @@ export default function StoreProductsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={condition} onValueChange={setCondition}>
-                  <SelectTrigger><SelectValue placeholder="Condition" /></SelectTrigger>
+                  <SelectTrigger aria-label="Filter products by condition">
+                    <SelectValue placeholder="Condition" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Conditions</SelectItem>
                     <SelectItem value="New">New</SelectItem>

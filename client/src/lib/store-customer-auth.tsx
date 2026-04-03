@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useLocation } from "wouter";
 import { clearApiCache, apiRequest } from "./api";
 
 export type StoreCustomer = {
@@ -24,6 +25,12 @@ const StoreCustomerAuthContext = createContext<StoreCustomerAuthContextType | un
 export function StoreCustomerAuthProvider({ children }: { children: ReactNode }) {
   const [customer, setCustomer] = useState<StoreCustomer | null>(null);
   const [loading, setLoading] = useState(true);
+  const [location] = useLocation();
+  const pathname = typeof window !== "undefined" ? window.location.pathname : location;
+  const needsStoreSession =
+    pathname === "/store/account" ||
+    pathname === "/store/login" ||
+    pathname === "/store/signup";
 
   const refresh = async () => {
     setLoading(true);
@@ -39,8 +46,12 @@ export function StoreCustomerAuthProvider({ children }: { children: ReactNode })
   };
 
   useEffect(() => {
+    if (!needsStoreSession) {
+      setLoading(false);
+      return;
+    }
     void refresh();
-  }, []);
+  }, [needsStoreSession]);
 
   const login = async (input: { identifier: string; password: string }) => {
     setLoading(true);

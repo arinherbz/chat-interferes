@@ -10,6 +10,17 @@ export function serveStatic(app: Express) {
     );
   }
 
+  for (const asset of ["robots.txt", "sitemap.xml"]) {
+    app.get(`/${asset}`, (_req, res, next) => {
+      const assetPath = path.resolve(distPath, asset);
+      if (!fs.existsSync(assetPath)) {
+        next();
+        return;
+      }
+      res.sendFile(assetPath);
+    });
+  }
+
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist

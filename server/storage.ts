@@ -215,6 +215,14 @@ export class DatabaseStorage implements IStorage {
     return values as Partial<T>;
   }
 
+  private normalizeShopWrite<T extends Partial<InsertShop>>(shop: T): Partial<T> {
+    const values: Record<string, unknown> = this.stripUndefined(shop as Record<string, unknown>);
+    if ("isMain" in values && typeof values.isMain === "boolean") {
+      values.isMain = this.booleanWriteValue(values.isMain);
+    }
+    return values as Partial<T>;
+  }
+
   private normalizeConditionQuestionWrite<T extends Partial<InsertConditionQuestion>>(question: T): Partial<T> {
     const values: Record<string, unknown> = this.stripUndefined(question as Record<string, unknown>);
     if ("isActive" in values && typeof values.isActive === "boolean") {
@@ -228,6 +236,17 @@ export class DatabaseStorage implements IStorage {
     }
     if ("options" in values && values.options !== undefined && !pool) {
       values.options = JSON.stringify(values.options);
+    }
+    return values as Partial<T>;
+  }
+
+  private normalizeUserPreferenceWrite<T extends Partial<InsertUserPreference>>(preferences: T): Partial<T> {
+    const values: Record<string, unknown> = this.stripUndefined(preferences as Record<string, unknown>);
+    if ("sidebarCollapsed" in values && typeof values.sidebarCollapsed === "boolean") {
+      values.sidebarCollapsed = this.booleanWriteValue(values.sidebarCollapsed);
+    }
+    if ("dashboardLayout" in values && values.dashboardLayout !== undefined && values.dashboardLayout !== null && !pool) {
+      values.dashboardLayout = JSON.stringify(values.dashboardLayout);
     }
     return values as Partial<T>;
   }
@@ -289,12 +308,13 @@ export class DatabaseStorage implements IStorage {
 
   async upsertUserPreferences(userId: string, data: Partial<InsertUserPreference>): Promise<UserPreference> {
     try {
-      const sanitized = this.stripUndefined(data as Record<string, unknown>);
+      const sanitized = this.normalizeUserPreferenceWrite(data);
+      const nowValue = new Date();
       const existing = await this.getUserPreferences(userId);
       if (existing) {
         const [updated] = await db
           .update(userPreferences)
-          .set({ ...sanitized, updatedAt: new Date() })
+          .set({ ...sanitized, updatedAt: nowValue as any })
           .where(eq(userPreferences.userId, userId))
           .returning();
         return updated;
@@ -303,7 +323,19 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db
         .insert(userPreferences)
         .values({
+          id: crypto.randomUUID(),
           userId,
+          theme: "system",
+          currency: "UGX",
+          dateFormat: "PPP",
+          timezone: "UTC",
+          defaultBranchId: null,
+          sidebarCollapsed: this.booleanWriteValue(false) as any,
+          density: "comfortable",
+          dashboardLayout: null,
+          accentColor: null,
+          createdAt: nowValue as any,
+          updatedAt: nowValue as any,
           ...sanitized,
         })
         .returning();
@@ -338,13 +370,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createBrand(brand: InsertBrand): Promise<Brand> {
-    const values = { ...brand, isActive: this.normalizeBoolean(brand.isActive) } as InsertBrand;
+    const values = {
+      id: crypto.randomUUID(),
+      name: brand.name,
+      sortOrder: brand.sortOrder ?? 0,
+      isActive: this.booleanWriteValue(brand.isActive ?? true),
+    } as InsertBrand;
     const [created] = await db.insert(brands).values(values).returning();
     return created;
   }
 
   async updateBrand(id: string, data: Partial<InsertBrand>): Promise<Brand | undefined> {
-    const values = { ...data, isActive: this.normalizeBoolean(data.isActive) } as Partial<InsertBrand>;
+    const values = {
+      ...data,
+      ...(data.isActive === undefined ? {} : { isActive: this.normalizeBoolean(data.isActive) }),
+    } as Partial<InsertBrand>;
     const [updated] = await db.update(brands).set(values).where(eq(brands.id, id)).returning();
     return updated;
   }
@@ -368,13 +408,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createModel(model: InsertModel): Promise<Model> {
-    const values = { ...model, isActive: this.normalizeBoolean(model.isActive) } as InsertModel;
+    const values = {
+      id: crypto.randomUUID(),
+      brandId: model.brandId,
+      name: model.name,
+      sortOrder: model.sortOrder ?? 0,
+      isActive: this.booleanWriteValue(model.isActive ?? true),
+    } as InsertModel;
     const [created] = await db.insert(models).values(values).returning();
     return created;
   }
   
   async updateModel(id: string, data: Partial<InsertModel>): Promise<Model | undefined> {
-    const values = { ...data, isActive: this.normalizeBoolean(data.isActive) } as Partial<InsertModel>;
+    const values = {
+      ...data,
+      ...(data.isActive === undefined ? {} : { isActive: this.normalizeBoolean(data.isActive) }),
+    } as Partial<InsertModel>;
     const [updated] = await db.update(models).set(values).where(eq(models.id, id)).returning();
     return updated;
   }
@@ -398,13 +447,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createStorageOption(option: InsertStorageOption): Promise<StorageOption> {
-    const values = { ...option, isActive: this.normalizeBoolean(option.isActive) } as InsertStorageOption;
+    const values = {
+      id: crypto.randomUUID(),
+      modelId: option.modelId,
+      size: option.size,
+      sortOrder: option.sortOrder ?? 0,
+      isActive: this.booleanWriteValue(option.isActive ?? true),
+    } as InsertStorageOption;
     const [created] = await db.insert(storageOptions).values(values).returning();
     return created;
   }
 
   async updateStorageOption(id: string, data: Partial<InsertStorageOption>): Promise<StorageOption | undefined> {
-    const values = { ...data, isActive: this.normalizeBoolean(data.isActive) } as Partial<InsertStorageOption>;
+    const values = {
+      ...data,
+      ...(data.isActive === undefined ? {} : { isActive: this.normalizeBoolean(data.isActive) }),
+    } as Partial<InsertStorageOption>;
     const [updated] = await db.update(storageOptions).set(values).where(eq(storageOptions.id, id)).returning();
     return updated;
   }
@@ -1055,12 +1113,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createShop(shop: import("@shared/schema").InsertShop): Promise<import("@shared/schema").Shop> {
-    const [created] = await db.insert(shops).values(shop).returning();
+    const [created] = await db.insert(shops).values(this.normalizeShopWrite(shop)).returning();
     return created;
   }
 
   async updateShop(id: string, data: Partial<import("@shared/schema").InsertShop>): Promise<import("@shared/schema").Shop | undefined> {
-    const [updated] = await db.update(shops).set({ ...data, updatedAt: new Date() }).where(eq(shops.id, id)).returning();
+    const [updated] = await db.update(shops).set({ ...this.normalizeShopWrite(data), updatedAt: new Date() }).where(eq(shops.id, id)).returning();
     return updated;
   }
 

@@ -116,7 +116,9 @@ export default function StoreCheckoutPage() {
               <div className="grid gap-2">
                 <Label>Payment Method</Label>
                 <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Payment method">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Mobile Money">Mobile Money</SelectItem>
                     <SelectItem value="Cash">Cash on Delivery</SelectItem>
@@ -127,7 +129,9 @@ export default function StoreCheckoutPage() {
               <div className="grid gap-2">
                 <Label>Delivery Option</Label>
                 <Select value={deliveryType} onValueChange={setDeliveryType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Delivery option">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="PICKUP">Pickup</SelectItem>
                     <SelectItem value="KAMPALA">Kampala Delivery</SelectItem>

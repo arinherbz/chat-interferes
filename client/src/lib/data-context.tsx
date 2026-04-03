@@ -288,14 +288,7 @@ const STORAGE_KEYS = {
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user: authUser } = useAuth();
   const [activeShopId, setActiveShopId] = useState("shop1");
-  const [shops, setShops] = useState<Shop[]>(() => {
-    try {
-      const raw = localStorage.getItem("ariostore_shops");
-      return raw ? JSON.parse(raw) : MOCK_SHOPS;
-    } catch {
-      return MOCK_SHOPS;
-    }
-  });
+  const [shops, setShops] = useState<Shop[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -315,21 +308,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [authUser?.shopId]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("ariostore_shops", JSON.stringify(shops));
-    } catch {
-      // ignore
-    }
-  }, [shops]);
-
-  useEffect(() => {
     const loadShops = async () => {
       if (!authUser) return;
 
       try {
         const serverShops = await apiRequest<Shop[]>("GET", "/api/shops", undefined, { skipCache: true });
-        if (serverShops.length === 0) return;
-
         setShops(serverShops);
         setActiveShopId((currentId) => {
           if (authUser.shopId && serverShops.some((shop) => shop.id === authUser.shopId)) {
@@ -338,10 +321,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
           if (serverShops.some((shop) => shop.id === currentId)) {
             return currentId;
           }
-          return serverShops[0].id;
+          return serverShops[0]?.id || currentId;
         });
       } catch {
-        // Keep the last known shop list if the API is unavailable.
+        setShops([]);
       }
     };
 

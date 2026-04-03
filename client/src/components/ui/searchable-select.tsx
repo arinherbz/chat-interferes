@@ -26,6 +26,7 @@ interface SearchableSelectProps {
   options: SearchableSelectOption[];
   value: string;
   onValueChange: (value: string) => void;
+  ariaLabel?: string;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyMessage?: string;
@@ -38,6 +39,7 @@ export function SearchableSelect({
   options,
   value,
   onValueChange,
+  ariaLabel,
   placeholder = "Select...",
   searchPlaceholder = "Search...",
   emptyMessage = "No results found.",
@@ -66,6 +68,7 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-label={ariaLabel}
           disabled={disabled}
           className={cn(
             "w-full justify-between font-normal h-10",

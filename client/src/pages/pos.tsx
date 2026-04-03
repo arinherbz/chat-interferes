@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChevronDown,
   ClipboardList,
@@ -406,7 +405,7 @@ export default function POSPage() {
                 <div
                   className={cn(
                     "flex cursor-pointer items-center gap-3 rounded-[1.1rem] px-3.5 py-3 text-sm transition-colors",
-                    active ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                    active ? "bg-primary/15 text-slate-950" : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -427,7 +426,7 @@ export default function POSPage() {
               const Icon = item.icon;
               return (
                 <Link key={item.href} href={item.href}>
-                  <div className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600 hover:bg-white hover:text-slate-950">
+                  <div className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-700 hover:bg-white hover:text-slate-950">
                     <Icon className="h-4 w-4" />
                     <span>{item.label}</span>
                   </div>
@@ -447,6 +446,7 @@ export default function POSPage() {
                 ref={searchRef}
                 placeholder="Search or scan product..."
                 className="h-14 rounded-[1.3rem] border-border/70 bg-white pl-11 text-base shadow-[0_10px_22px_rgba(24,38,31,0.04)] focus-visible:ring-primary/20"
+                aria-label="Search or scan products"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={handleSearchKeyDown}
@@ -457,6 +457,7 @@ export default function POSPage() {
               type="button"
               variant="outline"
               className="h-14 rounded-[1.3rem] border-border/70 px-5 text-sm font-medium lg:min-w-[160px]"
+              aria-label="Scan barcode"
               onClick={() => setIsScannerOpen(true)}
             >
               <Scan className="mr-2 h-4 w-4" />
@@ -464,22 +465,32 @@ export default function POSPage() {
             </Button>
           </div>
 
-          <Tabs value={catalogTab} onValueChange={(value) => setCatalogTab(value as CatalogTab)} className="mt-5">
-            <TabsList className="h-auto gap-6 rounded-none border-0 bg-transparent p-0 shadow-none">
-              <TabsTrigger
-                value="products"
-                className="rounded-none border-b-2 border-transparent px-0 pb-2 pt-0 text-sm text-slate-400 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
-              >
-                Products
-              </TabsTrigger>
-              <TabsTrigger
-                value="devices"
-                className="rounded-none border-b-2 border-transparent px-0 pb-2 pt-0 text-sm text-slate-400 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
-              >
-                Devices
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="mt-5 flex gap-6" role="tablist" aria-label="Catalog type">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={catalogTab === "products"}
+              className={cn(
+                "rounded-none border-b-2 px-0 pb-2 pt-0 text-sm font-medium transition-colors",
+                catalogTab === "products" ? "border-primary text-slate-950" : "border-transparent text-slate-700 hover:text-slate-950",
+              )}
+              onClick={() => setCatalogTab("products")}
+            >
+              Products
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={catalogTab === "devices"}
+              className={cn(
+                "rounded-none border-b-2 px-0 pb-2 pt-0 text-sm font-medium transition-colors",
+                catalogTab === "devices" ? "border-primary text-slate-950" : "border-transparent text-slate-700 hover:text-slate-950",
+              )}
+              onClick={() => setCatalogTab("devices")}
+            >
+              Devices
+            </button>
+          </div>
         </div>
 
         <Scanner
@@ -596,6 +607,7 @@ export default function POSPage() {
               variant="ghost"
               size="icon"
               className="rounded-full text-slate-400 hover:bg-secondary/80 hover:text-rose-600"
+              aria-label="Clear current sale"
               onClick={clearCart}
               disabled={cart.length === 0}
             >
@@ -615,7 +627,7 @@ export default function POSPage() {
                 setSelectedCustomer(customer ?? null);
               }}
             >
-              <SelectTrigger className="h-12 rounded-[1.25rem] border-border/80">
+              <SelectTrigger aria-label="Selected customer" className="h-12 rounded-[1.25rem] border-border/80">
                 <div className="flex items-center gap-2">
                   <UserRound className="h-4 w-4 text-slate-400" />
                   <SelectValue placeholder="Select customer" />
@@ -655,6 +667,7 @@ export default function POSPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 rounded-full text-slate-400 hover:bg-white hover:text-rose-600"
+                      aria-label={`Remove ${item.name} from cart`}
                       onClick={() => removeFromCart(item.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -668,6 +681,7 @@ export default function POSPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 rounded-full"
+                        aria-label={`Decrease quantity for ${item.name}`}
                         onClick={() => updateCartQuantity(item, "decrement")}
                       >
                         <Minus className="h-4 w-4" />
@@ -678,6 +692,7 @@ export default function POSPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 rounded-full"
+                        aria-label={`Increase quantity for ${item.name}`}
                         onClick={() => updateCartQuantity(item, "increment")}
                         disabled={!!item.deviceId}
                       >
@@ -728,7 +743,7 @@ export default function POSPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Payment method</label>
                   <Select onValueChange={setPaymentMethod} defaultValue={paymentMethod}>
-                    <SelectTrigger className="h-12 rounded-[1.25rem] border-border/80">
+                    <SelectTrigger aria-label="Payment method" className="h-12 rounded-[1.25rem] border-border/80">
                       <div className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4 text-slate-400" />
                         <SelectValue placeholder="Select payment method" />

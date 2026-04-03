@@ -448,17 +448,17 @@ const productUpsertSchema = z.object({
   model: z.string().trim().optional().nullable(),
   category: z.string().min(1, "Category is required").max(120),
   condition: z.string().trim().max(120).optional().nullable(),
-  price: z.number().nonnegative(),
-  stock: z.number().int().nonnegative(),
-  costPrice: z.number().nonnegative(),
-  minStock: z.number().int().nonnegative(),
+  price: z.coerce.number().nonnegative(),
+  stock: z.coerce.number().int().nonnegative(),
+  costPrice: z.coerce.number().nonnegative(),
+  minStock: z.coerce.number().int().nonnegative(),
   sku: z.string().trim().max(120).optional().nullable(),
   barcode: z.string().trim().max(120).optional().nullable(),
   imageUrl: z.string().trim().max(500).optional().nullable(),
   storefrontVisibility: z.enum(["published", "draft", "hidden", "archived"]).optional().nullable(),
   isFeatured: z.boolean().optional(),
   isFlashDeal: z.boolean().optional(),
-  flashDealPrice: z.number().int().nonnegative().optional().nullable(),
+  flashDealPrice: z.coerce.number().int().nonnegative().optional().nullable(),
   flashDealEndsAt: z.string().datetime().optional().nullable(),
   shopId: z.string().optional().nullable(),
 });
@@ -483,6 +483,14 @@ function normalizeProductDate(value?: string | null) {
   if (!normalized) return undefined;
   const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function slugifyShopName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "main-shop";
 }
 
 function getProductValidationMessage(error: z.ZodError) {
@@ -818,6 +826,24 @@ export async function registerRoutes(
       shopId: null,
     });
 
+    const existingShops = await storage.getShops();
+    if (existingShops.length === 0) {
+      const defaultShop = await storage.createShop({
+        name: "Main Shop",
+        slug: slugifyShopName("Main Shop"),
+        address: "",
+        description: "Primary Ariostore branch",
+        currency: "UGX",
+        timezone: "UTC",
+        subscriptionPlan: "trial",
+        isMain: true,
+      });
+      const updatedOwner = await storage.updateUser(created.id, { shopId: defaultShop.id });
+      if (updatedOwner) {
+        created.shopId = updatedOwner.shopId;
+      }
+    }
+
     await storage.upsertUserPreferences(created.id, {
       timezone: "UTC",
       theme: "system",
@@ -881,6 +907,29 @@ export async function registerRoutes(
       });
       if (migratedUser) {
         authenticatedUser = migratedUser;
+      }
+    }
+
+    if (!authenticatedUser.shopId) {
+      const existingShops = await storage.getShops();
+      let assignedShop = existingShops.find((shop) => shop.isMain) ?? existingShops[0];
+      if (!assignedShop && authenticatedUser.role === "Owner") {
+        assignedShop = await storage.createShop({
+          name: "Main Shop",
+          slug: slugifyShopName("Main Shop"),
+          address: "",
+          description: "Primary Ariostore branch",
+          currency: "UGX",
+          timezone: "UTC",
+          subscriptionPlan: "trial",
+          isMain: true,
+        });
+      }
+      if (assignedShop) {
+        const updatedUser = await storage.updateUser(authenticatedUser.id, { shopId: assignedShop.id });
+        if (updatedUser) {
+          authenticatedUser = updatedUser;
+        }
       }
     }
 
@@ -2755,6 +2804,10 @@ export async function registerRoutes(
       if (!existingProduct) return sendError(res, 404, "Product not found");
       const parsed = productUpsertSchema.partial().safeParse(req.body);
       if (!parsed.success) {
+        console.error("Invalid product update payload", {
+          body: req.body,
+          issues: parsed.error.issues,
+        });
         return sendError(res, 400, getProductValidationMessage(parsed.error));
       }
       const updates = {

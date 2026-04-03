@@ -166,11 +166,12 @@ docker run -d \
    }
    ```
 
-### Option C: Deploy to Railway / Render (No-Code)
+### Option C: Deploy to Render (GitHub + Docker)
 
-1. Connect GitHub repo to Railway.app or Render.com
-2. Set environment variables
-3. Deploy with one click
+1. Connect the GitHub repo to Render
+2. Use `render.yaml` in the repo root
+3. Set production environment variables in Render
+4. Deploy from GitHub and verify `/health`
 
 ---
 

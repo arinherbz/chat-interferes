@@ -1,199 +1,64 @@
-# Deploy TechPOS to the Internet (5 minutes)
+# Deploy Ariostore to the Internet
 
-## Option 1: Railway.app ⭐ (Recommended - Easiest)
+## Recommended: Render + GitHub Actions
 
-### Step 1: Sign Up
-1. Go to [railway.app](https://railway.app)
-2. Click "Start a New Project"
-3. Sign in with GitHub
+This repo is set up to deploy Ariostore to Render.
 
-### Step 2: Connect Your GitHub Repo
-1. Select "Deploy from GitHub repo"
-2. Authorize Railway to access your GitHub
-3. Select `arinherbz/chat-interferes`
+### Platform config
 
-### Step 3: Configure Environment
-Railway will auto-detect Node.js. Just add:
-```
-NODE_ENV=production
-PORT=5000
-HOST=0.0.0.0
-```
+Use [render.yaml](/Users/ario/ariostore-ug/Chat-Interface-Builder/render.yaml):
+- runtime: Docker
+- service name: `ariostore-gadgets`
+- health check: `/health`
 
-### Step 4: Deploy
-- Click "Deploy"
-- Wait ~2-3 minutes
-- Get your public URL (e.g., `https://chat-interferes-prod.railway.app`)
+### GitHub Actions config
 
-**Cost**: ~$5-10/month with free $5 credit  
-**Team Access**: Share the URL with anyone
+Production deploy automation lives in [render-deploy.yml](/Users/ario/ariostore-ug/Chat-Interface-Builder/.github/workflows/render-deploy.yml).
 
----
+On push to `main`, it will:
+- install dependencies
+- type-check
+- run tests
+- run `npm run db:push` if `DATABASE_URL` is configured
+- build the app
+- trigger Render using `RENDER_DEPLOY_HOOK_URL`
+- verify `DEPLOY_HEALTHCHECK_URL`
 
-## Option 2: Render.com (Free Tier Available)
+### Required GitHub secrets
 
-### Step 1: Go to [render.com](https://render.com)
-1. Sign up with GitHub
-2. Click "New +"
-3. Select "Web Service"
+- `DATABASE_URL`
+- `RENDER_DEPLOY_HOOK_URL`
+- `DEPLOY_HEALTHCHECK_URL`
 
-### Step 2: Select Repository
-- Choose `arinherbz/chat-interferes`
-
-### Step 3: Configure
-- **Name**: `techpos`
-- **Build Command**: `npm install && npm run build`
-- **Start Command**: `npm run start`
-- **Environment**: Add vars (same as Railway above)
-
-### Step 4: Deploy
-- Click "Create Web Service"
-- Wait ~5 minutes
-- Get your public URL (e.g., `https://techpos.onrender.com`)
-
-**Cost**: Free tier (sleeps after 15 min inactivity), paid tiers start at $7/month  
-**Team Access**: Share the URL
-
----
-
-## Option 3: DigitalOcean (Most Control)
-
-### Quick Setup (~10 min, $6/month)
+You can set them with:
 
 ```bash
-# 1. Create droplet at digitalocean.com
-# 2. SSH into your server
-ssh root@YOUR_SERVER_IP
-
-# 3. Setup
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs npm git
-
-# 4. Clone & setup
-git clone https://github.com/arinherbz/chat-interferes.git
-cd chat-interferes
-npm install
-cp .env.example .env
-
-# 5. Use PM2 to run forever
-npm install -g pm2
-pm2 start npm --name "techpos" -- run build && npm run start
-pm2 save
-pm2 startup
-
-# 6. Setup Nginx reverse proxy
-sudo apt install -y nginx
+./scripts/setup-github-deploy-secrets.sh
 ```
 
-Then create `/etc/nginx/sites-available/techpos`:
-```nginx
-server {
-    listen 80;
-    server_name YOUR_DOMAIN.com;
-    
-    location / {
-        proxy_pass http://localhost:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
+### Render setup steps
 
-Enable & restart:
+1. Create a new Render Web Service from this repository.
+2. Select Docker runtime.
+3. Point Render at `render.yaml`.
+4. Add production environment variables, including `DATABASE_URL`, `SESSION_SECRET`, Sentry DSNs, and any upload/storage settings.
+5. Copy the Render deploy hook URL into the GitHub secret `RENDER_DEPLOY_HOOK_URL`.
+6. Set `DEPLOY_HEALTHCHECK_URL` to `https://your-service.onrender.com/health`.
+
+### Post-deploy checks
+
+Run these after the first live deploy:
+
 ```bash
-sudo ln -s /etc/nginx/sites-available/techpos /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
+curl -I https://your-service.onrender.com/store
+curl -I https://your-service.onrender.com/store/products
+curl https://your-service.onrender.com/robots.txt
+curl https://your-service.onrender.com/sitemap.xml
+CHECKLY_PUBLIC_BASE_URL=https://your-service.onrender.com npx checkly test
 ```
 
-**Cost**: $6/month  
-**Team Access**: `http://YOUR_DOMAIN.com`
+### Notes
 
----
-
-## Option 4: Vercel (Frontend Only)
-
-⚠️ **Note**: This deploys frontend to Vercel, but backend needs separate hosting.
-
-1. Go to [vercel.com](https://vercel.com)
-2. Import your GitHub repo
-3. Set `VITE_API_URL` to your deployed backend URL
-4. Deploy
-
----
-
-## Which Option to Choose?
-
-| Option | Ease | Cost | Speed | Best For |
-|--------|------|------|-------|----------|
-| **Railway** ⭐ | ⭐⭐⭐⭐⭐ | $5-10/mo | 2 min | Teams, quick deployment |
-| **Render** | ⭐⭐⭐⭐ | Free/$7+ | 5 min | Low budget, testing |
-| **DigitalOcean** | ⭐⭐⭐ | $6/mo | 10 min | Full control, custom domain |
-| **Vercel** | ⭐⭐⭐⭐ | Free | 2 min | Frontend only (need backend elsewhere) |
-
-### 🎯 Recommended: **Railway.app**
-- Easiest setup
-- One-click from GitHub
-- Cheapest ($5/month)
-- Professional deployment
-
----
-
-## After Deployment
-
-### Get Your Public URL
-Once deployed, you'll get a URL like:
-```
-https://chat-interferes-prod.railway.app
-```
-
-### Share with Team
-Send the URL to your team. Anyone can access it from anywhere! 🌍
-
-### Monitor
-- Railway: Check logs in dashboard
-- Render: Check "Logs" tab
-- DO: `pm2 logs`
-
-### Make Changes
-Just commit & push to GitHub:
-```bash
-git add .
-git commit -m "fix: something"
-git push origin main
-```
-
-Railway/Render auto-redeploys on push. ✨
-
----
-
-## Setup a Custom Domain (Optional)
-
-Once deployed, link your domain:
-
-**Railway**: Settings → Domains → Add domain  
-**Render**: Environment → Custom Domains  
-**DO**: Point DNS to server IP  
-
----
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Deploy fails | Check build logs in dashboard; ensure `npm run build` works locally |
-| Database error | Use Railway PostgreSQL add-on or managed database |
-| Slow first load | Railway/Render free tiers sleep; upgrade plan |
-| 404 errors | Ensure `VITE_API_URL` matches backend URL |
-
----
-
-## Next Steps
-
-1. **Pick a platform** (Railway recommended)
-2. **Sign up with GitHub**
-3. **Deploy** (1 click)
-4. **Share URL** with team
-5. **Monitor logs** after going live
-
-**That's it! Your team can now access TechPOS from anywhere 🚀**
+- Render free tiers can sleep and cause cold-start latency.
+- `uploads/` should use persistent storage or external object storage in production.
+- The local codebase is currently validated, but production should be re-audited after each deploy.

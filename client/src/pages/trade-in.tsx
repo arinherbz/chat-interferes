@@ -1082,7 +1082,7 @@ export default function TradeInPage() {
                   <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                     <section className="space-y-4 rounded-[1.5rem] border border-border/70 bg-white/98 p-5 shadow-[0_16px_32px_rgba(24,38,31,0.04)]">
                       <div>
-                        <h3 className="text-base font-semibold text-slate-900">Step 1. Device basics</h3>
+                        <h2 className="text-base font-semibold text-slate-900">Step 1. Device basics</h2>
                         <p className="mt-1 text-sm text-slate-500">Choose the device profile, then enter the exact brand, model, and storage for intake.</p>
                       </div>
 
@@ -1090,7 +1090,7 @@ export default function TradeInPage() {
                         <div className="space-y-2">
                           <Label>Device Type</Label>
                           <Select value={deviceType} onValueChange={(value) => setDeviceType(value as TradeInDeviceType | "auto")}>
-                            <SelectTrigger data-testid="select-device-type">
+                            <SelectTrigger aria-label="Device type" data-testid="select-device-type">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1120,6 +1120,7 @@ export default function TradeInPage() {
                               options={brandsList.map((b) => ({ value: b.name, label: b.name }))}
                               value={brand}
                               onValueChange={(v) => { setBrand(v); setModel(""); setStorage(""); }}
+                              ariaLabel="Brand"
                               placeholder="Select brand"
                               searchPlaceholder="Search brands..."
                               emptyMessage="Brand not listed? Enter it manually."
@@ -1146,6 +1147,7 @@ export default function TradeInPage() {
                               options={modelsList.map((m) => ({ value: m.name, label: m.name }))}
                               value={model}
                               onValueChange={(v) => { setModel(v); setStorage(""); }}
+                              ariaLabel="Model"
                               placeholder="Select model"
                               searchPlaceholder="Search models..."
                               emptyMessage="Model not listed? Enter it manually."
@@ -1184,6 +1186,7 @@ export default function TradeInPage() {
                               options={storages.map((s) => ({ value: s, label: s }))}
                               value={storage}
                               onValueChange={setStorage}
+                              ariaLabel="Storage"
                               placeholder="Select storage"
                               searchPlaceholder="Search storage..."
                               emptyMessage="Storage not listed? Enter it manually."
@@ -1219,7 +1222,7 @@ export default function TradeInPage() {
 
                     <section className="space-y-4 rounded-[1.5rem] border border-border/70 bg-white/98 p-5 shadow-[0_16px_32px_rgba(24,38,31,0.04)]">
                       <div>
-                        <h3 className="text-base font-semibold text-slate-900">Step 2. Identification</h3>
+                        <h2 className="text-base font-semibold text-slate-900">Step 2. Identification</h2>
                         <p className="mt-1 text-sm text-slate-500">Scan or enter the main identifier. Validation runs after scan, Enter, blur, or when the entry is complete.</p>
                       </div>
 
@@ -1282,7 +1285,14 @@ export default function TradeInPage() {
                               </div>
                             ) : null}
                           </div>
-                          <Button type="button" variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} data-testid="btn-scan-imei">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            aria-label={`Scan ${identifierLabel}`}
+                            onClick={() => setIsScannerOpen(true)}
+                            data-testid="btn-scan-imei"
+                          >
                             <Scan className="h-4 w-4" />
                           </Button>
                         </div>
@@ -1299,7 +1309,7 @@ export default function TradeInPage() {
 
                     <section className="space-y-4 rounded-[1.5rem] border border-border/70 bg-white/98 p-5 shadow-[0_16px_32px_rgba(24,38,31,0.04)]">
                       <div>
-                        <h3 className="text-base font-semibold text-slate-900">Step 3. Pricing readiness</h3>
+                        <h2 className="text-base font-semibold text-slate-900">Step 3. Pricing readiness</h2>
                         <p className="mt-1 text-sm text-slate-500">The system checks for a pricing rule only after the device basics are complete.</p>
                       </div>
 
@@ -1665,7 +1675,7 @@ export default function TradeInPage() {
                     <div className="space-y-2">
                       <Label>Payout Method</Label>
                       <Select value={payoutMethod} onValueChange={(v: any) => setPayoutMethod(v)}>
-                        <SelectTrigger data-testid="select-payout-method">
+                        <SelectTrigger aria-label="Payout method" data-testid="select-payout-method">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1798,7 +1808,7 @@ export default function TradeInPage() {
                 </CardHeader>
                 <CardContent className="p-0">
                   {assessments.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-sm">
+                    <div className="p-8 text-center text-slate-600 text-sm">
                       No trade-ins yet.
                     </div>
                   ) : (
