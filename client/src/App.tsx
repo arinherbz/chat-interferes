@@ -10,19 +10,12 @@ import { StoreCustomerAuthProvider, useStoreCustomerAuth } from "@/lib/store-cus
 import Layout from "@/components/layout";
 import { Loader2 } from "lucide-react";
 import Login from "@/pages/login";
-import POSPage from "@/pages/pos";
-import StoreAccountPage from "@/pages/store-account";
-import StoreAuthPage from "@/pages/store-auth";
-import StoreCartPage from "@/pages/store-cart";
-import StoreCheckoutPage from "@/pages/store-checkout";
-import StoreHomePage from "@/pages/store-home";
-import StoreOrderTrackingPage from "@/pages/store-order-tracking";
-import StoreProductDetailPage from "@/pages/store-product-detail";
 import { Sentry } from "@/lib/sentry";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const DailyClose = lazy(() => import("@/pages/daily-close"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
+const POSPage = lazy(() => import("@/pages/pos"));
 const ProductsPage = lazy(() => import("@/pages/products"));
 const CustomersPage = lazy(() => import("@/pages/customers"));
 const RepairsPage = lazy(() => import("@/pages/repairs"));
@@ -37,8 +30,15 @@ const BaseValuesPage = lazy(() => import("@/pages/base-values"));
 const BrandsPage = lazy(() => import("@/pages/brands"));
 const LeadsPage = lazy(() => import("@/pages/leads"));
 const ShopSettingsPage = lazy(() => import("@/pages/shop-settings/[id]"));
+const StoreHomePage = lazy(() => import("@/pages/store-home"));
+const StoreAuthPage = lazy(() => import("@/pages/store-auth"));
 const StoreProductsPage = lazy(() => import("@/pages/store-products"));
+const StoreProductDetailPage = lazy(() => import("@/pages/store-product-detail"));
+const StoreCartPage = lazy(() => import("@/pages/store-cart"));
+const StoreCheckoutPage = lazy(() => import("@/pages/store-checkout"));
 const StoreConfirmationPage = lazy(() => import("@/pages/store-confirmation"));
+const StoreAccountPage = lazy(() => import("@/pages/store-account"));
+const StoreOrderTrackingPage = lazy(() => import("@/pages/store-order-tracking"));
 const OrdersPage = lazy(() => import("@/pages/orders"));
 const DeliveriesPage = lazy(() => import("@/pages/deliveries"));
 
