@@ -35,8 +35,8 @@ export function StoreCustomerAuthProvider({ children }: { children: ReactNode })
   const refresh = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest<{ customer: StoreCustomer }>("GET", "/api/store/auth/me", undefined, { skipCache: true });
-      setCustomer(res.customer);
+      const res = await apiRequest<{ customer: StoreCustomer | null }>("GET", "/api/store/auth/me", undefined, { skipCache: true });
+      setCustomer(res.customer ?? null);
     } catch {
       clearApiCache("/api/store/auth");
       setCustomer(null);

@@ -981,11 +981,15 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
-  app.get("/api/auth/me", requireAuth, async (req: Request, res: Response) => {
-    const user = req.currentUser!;
+  app.get("/api/auth/me", asyncHandler(async (req: Request, res: Response) => {
+    const user = req.currentUser;
+    if (!user) {
+      res.json({ user: null, preferences: null });
+      return;
+    }
     const preferences = await storage.upsertUserPreferences(user.id, {});
     res.json({ user: sanitizeUser(user), preferences });
-  });
+  }));
 
   app.post("/api/store/auth/signup", asyncHandler(async (req: Request, res: Response) => {
     const payload = storeSignupSchema.parse(req.body);
@@ -1095,10 +1099,7 @@ export async function registerRoutes(
   }));
 
   app.get("/api/store/auth/me", asyncHandler(async (req: Request, res: Response) => {
-    if (!req.currentStoreCustomer) {
-      throw new HttpError(401, "Store customer authentication required");
-    }
-    return sendSuccess(res, { customer: req.currentStoreCustomer });
+    return sendSuccess(res, { customer: req.currentStoreCustomer ?? null });
   }));
 
   app.get("/api/store/account", requireStoreCustomer, asyncHandler(async (req: Request, res: Response) => {

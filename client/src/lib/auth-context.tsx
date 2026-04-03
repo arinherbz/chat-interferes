@@ -66,7 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest<{ user: User; preferences?: UserPreferences }>("GET", "/api/auth/me", undefined, { skipCache: true });
+      const res = await apiRequest<{ user: User | null; preferences?: UserPreferences | null }>("GET", "/api/auth/me", undefined, { skipCache: true });
+      if (!res.user) {
+        setUser(null);
+        setPreferences(null);
+        return;
+      }
       setUser(res.user);
       setPreferences(res.preferences || null);
       applyUiPreferences(res.preferences || null);
