@@ -47,11 +47,22 @@ app.use(express.urlencoded({ extended: false }));
 // Serve uploaded assets
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+app.use((req, res, next) => {
+  const appCommit = process.env.RENDER_GIT_COMMIT || process.env.SOURCE_COMMIT || process.env.GIT_SHA;
+  const appBranch = process.env.RENDER_GIT_BRANCH || process.env.SOURCE_BRANCH || process.env.GIT_BRANCH;
+  if (appCommit) res.setHeader("X-App-Commit", appCommit);
+  if (appBranch) res.setHeader("X-App-Branch", appBranch);
+  next();
+});
+
 app.get("/health", (_req, res) => {
   res.status(200).json({
     ok: true,
     service: "ariostore",
     environment: process.env.NODE_ENV || "development",
+    gitCommit: process.env.RENDER_GIT_COMMIT || process.env.SOURCE_COMMIT || process.env.GIT_SHA || null,
+    gitBranch: process.env.RENDER_GIT_BRANCH || process.env.SOURCE_BRANCH || process.env.GIT_BRANCH || null,
+    externalUrl: process.env.RENDER_EXTERNAL_URL || null,
     timestamp: new Date().toISOString(),
   });
 });
