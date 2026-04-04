@@ -8,6 +8,8 @@ import fs from "fs";
 import { errorHandler } from "./middleware/error-handler";
 import { databaseReady } from "./db";
 import { Sentry } from "./instrument";
+import helmet from "helmet";
+import cors from "cors";
 
 function loadEnvFile() {
   const envPath = path.resolve(process.cwd(), ".env");
@@ -28,6 +30,30 @@ loadEnvFile();
 
 const app = express();
 const httpServer = createServer(app);
+
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.NODE_ENV === "production" 
+    ? [process.env.ORIGIN || "https://your-domain.com"]
+    : ["http://localhost:5000", "http://127.0.0.1:5000"],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Idempotency-Key"],
+}));
 
 declare module "http" {
   interface IncomingMessage {

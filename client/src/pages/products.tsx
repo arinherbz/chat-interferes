@@ -17,6 +17,8 @@ import { Search, Plus, Scan } from "lucide-react";
 import { FileUploader, type UploadedFileMeta } from "@/components/file-uploader";
 import { useToast } from "@/hooks/use-toast";
 import { ProductImage } from "@/components/product-image";
+import { EmptyState } from "@/components/empty-state";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const productSchema = z.object({
   brand: z.string().optional(),
@@ -50,6 +52,11 @@ export default function ProductsPage() {
   const [attachments, setAttachments] = useState<UploadedFileMeta[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  
+  // Confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<typeof products[number] | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const startEdit = (product: typeof products[number]) => {
     form.reset({
@@ -586,17 +593,9 @@ export default function ProductsPage() {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={async () => {
-                        try {
-                          await deleteProduct(product.id);
-                          toast({ title: "Product removed", description: `${product.name} was removed from inventory.` });
-                        } catch (err: any) {
-                          toast({
-                            title: "Could not remove product",
-                            description: err?.message || "Please try again.",
-                            variant: "destructive",
-                          });
-                        }
+                      onClick={() => {
+                        setProductToDelete(product);
+                        setDeleteDialogOpen(true);
                       }}
                     >
                       Remove
@@ -605,10 +604,25 @@ export default function ProductsPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filteredProducts.length === 0 && (
+              {filteredProducts.length === 0 && products.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center">
-                    No products found.
+                  <TableCell colSpan={9} className="h-24">
+                    <EmptyState
+                      title="No products yet"
+                      description="Add your first product to start selling"
+                      icon="package"
+                      action={{
+                        label: "Add Product",
+                        onClick: () => setOpen(true),
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+              {filteredProducts.length === 0 && products.length > 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="h-24 text-center text-slate-500">
+                    No products match your search.
                   </TableCell>
                 </TableRow>
               )}
@@ -616,6 +630,41 @@ export default function ProductsPage() {
           </Table>
         </CardContent>
       </Card>
+      
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Product"
+        description={productToDelete 
+          ? `Are you sure you want to delete "${productToDelete.name}"? This action cannot be undone.`
+          : "Are you sure you want to delete this product?"
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        loading={deleting}
+        onConfirm={async () => {
+          if (!productToDelete) return;
+          setDeleting(true);
+          try {
+            await deleteProduct(productToDelete.id);
+            toast({ 
+              title: "Product removed", 
+              description: `${productToDelete.name} was removed from inventory.` 
+            });
+            setDeleteDialogOpen(false);
+            setProductToDelete(null);
+          } catch (err: any) {
+            toast({
+              title: "Could not remove product",
+              description: err?.message || "Please try again.",
+              variant: "destructive",
+            });
+          } finally {
+            setDeleting(false);
+          }
+        }}
+      />
     </div>
   );
 }
