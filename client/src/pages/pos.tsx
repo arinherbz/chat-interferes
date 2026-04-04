@@ -694,7 +694,11 @@ export default function POSPage() {
                         className="h-8 w-8 rounded-full"
                         aria-label={`Increase quantity for ${item.name}`}
                         onClick={() => updateCartQuantity(item, "increment")}
-                        disabled={!!item.deviceId}
+                        disabled={!!item.deviceId || (() => {
+                          if (!item.productId) return false;
+                          const product = products.find((p) => p.id === item.productId);
+                          return product ? item.quantity >= product.stock : false;
+                        })()}
                       >
                         <Plus className="h-4 w-4" />
                       </Button>

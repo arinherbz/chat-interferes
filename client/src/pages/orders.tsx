@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { unwrapApiData } from "@/lib/api-response";
-import { Loader2, Eye, Package, Truck, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Loader2, Eye, Package, Truck, CheckCircle, XCircle, Clock, ClipboardList } from "lucide-react";
 import type { Order } from "@shared/schema";
 
 const ORDER_STATUS_OPTIONS = [
@@ -220,6 +220,19 @@ export default function OrdersPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+                {filteredOrders.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-32">
+                      <div className="flex flex-col items-center justify-center text-center">
+                        <ClipboardList className="h-10 w-10 text-slate-300 mb-2" />
+                        <p className="text-sm font-medium text-slate-900">No orders found</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {statusFilter === "all" ? "Orders will appear here when customers place them." : `No orders with status "${statusFilter}".`}
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           )}
