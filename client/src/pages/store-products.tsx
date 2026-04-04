@@ -152,38 +152,47 @@ export default function StoreProductsPage() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {products.map((product) => (
                   <Link key={product.id} href={`/store/products/${product.id}`}>
-                    <Card className="h-full cursor-pointer overflow-hidden border-border/70 bg-white/98 shadow-[0_16px_34px_rgba(24,38,31,0.05)] transition-all duration-200 hover:-translate-y-1 hover:border-primary/15 hover:shadow-[0_22px_46px_rgba(24,38,31,0.08)]">
+                    <Card className={`h-full cursor-pointer overflow-hidden border-border/70 bg-white/98 shadow-[0_16px_34px_rgba(24,38,31,0.05)] transition-all duration-200 hover:-translate-y-1 hover:border-primary/15 hover:shadow-[0_22px_46px_rgba(24,38,31,0.08)] ${product.stock === 0 ? 'opacity-60 grayscale' : ''}`}>
                       <CardContent className="space-y-4 p-4">
-                        <div className="aspect-[4/4.25] overflow-hidden rounded-[1.35rem] bg-slate-100">
+                        <div className="aspect-[4/4.25] overflow-hidden rounded-[1.35rem] bg-slate-100 relative">
                           <ProductImage
                             src={product.imageUrl}
                             alt={product.name}
                             fallbackLabel={product.brand || "Device"}
                             className="h-full w-full rounded-[1.25rem]"
                           />
+                          {product.stock === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-[1.35rem]">
+                              <span className="bg-slate-900 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                                Sold Out
+                              </span>
+                            </div>
+                          )}
+                          {product.isFlashDeal && product.stock > 0 && (
+                            <div className="absolute top-3 left-3">
+                              <span className="rounded-full bg-amber-500 px-3 py-1 text-[11px] font-bold text-white shadow-lg">
+                                Flash Deal
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                               {product.category || product.brand || "Featured"}
                             </span>
-                            <div className="flex items-center gap-2">
-                              {product.isFlashDeal ? (
-                                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                                  Flash Deal
-                                </span>
-                              ) : null}
-                              <span className="rounded-full bg-secondary/90 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                                {product.stock > 0 ? "In stock" : "Sold out"}
+                            {product.stock > 0 ? (
+                              <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${product.stock < 5 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                {product.stock < 5 ? `Only ${product.stock} left` : 'In stock'}
                               </span>
-                            </div>
+                            ) : null}
                           </div>
-                          <h3 className="line-clamp-2 text-base font-medium leading-snug text-slate-950">{product.name}</h3>
+                          <h3 className={`line-clamp-2 text-base font-medium leading-snug ${product.stock === 0 ? 'text-slate-500' : 'text-slate-950'}`}>{product.name}</h3>
                           <div className="flex items-end gap-2">
-                            <p className="text-lg font-semibold tracking-tight text-slate-950">
+                            <p className={`text-lg font-semibold tracking-tight ${product.stock === 0 ? 'text-slate-400' : 'text-slate-950'}`}>
                               {formatUGX(product.isFlashDeal && product.flashDealPrice ? product.flashDealPrice : product.price)}
                             </p>
-                            {product.isFlashDeal && product.flashDealPrice ? (
+                            {product.isFlashDeal && product.flashDealPrice && product.stock > 0 ? (
                               <p className="text-sm text-muted-foreground line-through">{formatUGX(product.price)}</p>
                             ) : null}
                           </div>
@@ -197,32 +206,58 @@ export default function StoreProductsPage() {
               <div className="space-y-2">
                 {products.map((product) => (
                   <Link key={product.id} href={`/store/products/${product.id}`}>
-                    <Card className="cursor-pointer border-border/70 bg-white/98 shadow-[0_14px_28px_rgba(24,38,31,0.045)] transition-colors hover:bg-secondary/30">
+                    <Card className={`cursor-pointer border-border/70 bg-white/98 shadow-[0_14px_28px_rgba(24,38,31,0.045)] transition-colors hover:bg-secondary/30 ${product.stock === 0 ? 'opacity-60 grayscale' : ''}`}>
                       <CardContent className="flex items-center gap-4 p-4">
-                        <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                        <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100 relative">
                           <ProductImage
                             src={product.imageUrl}
                             alt={product.name}
                             fallbackLabel={product.brand || "Device"}
                             className="h-full w-full rounded-xl"
                           />
+                          {product.stock === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
+                              <span className="bg-slate-900 text-white px-2 py-1 rounded text-xs font-semibold">
+                                Sold Out
+                              </span>
+                            </div>
+                          )}
+                          {product.isFlashDeal && product.stock > 0 && (
+                            <div className="absolute top-1 left-1">
+                              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                Deal
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="flex-1 space-y-1">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                            {product.category || product.brand || "Store item"}
-                          </p>
-                          <h3 className="font-medium text-slate-950">{product.name}</h3>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              {product.category || product.brand || "Store item"}
+                            </p>
+                            {product.stock === 0 && (
+                              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                Sold Out
+                              </span>
+                            )}
+                            {product.stock > 0 && product.stock < 5 && (
+                              <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600">
+                                Only {product.stock} left
+                              </span>
+                            )}
+                          </div>
+                          <h3 className={`font-medium ${product.stock === 0 ? 'text-slate-500' : 'text-slate-950'}`}>{product.name}</h3>
                           <p className="text-sm text-muted-foreground">{[product.brand, product.model, product.condition].filter(Boolean).join(" • ")}</p>
                           <div className="mt-1 flex items-end gap-2">
-                            <p className="text-base font-semibold text-slate-950">
+                            <p className={`text-base font-semibold ${product.stock === 0 ? 'text-slate-400' : 'text-slate-950'}`}>
                               {formatUGX(product.isFlashDeal && product.flashDealPrice ? product.flashDealPrice : product.price)}
                             </p>
-                            {product.isFlashDeal && product.flashDealPrice ? (
+                            {product.isFlashDeal && product.flashDealPrice && product.stock > 0 ? (
                               <p className="text-sm text-muted-foreground line-through">{formatUGX(product.price)}</p>
                             ) : null}
                           </div>
                         </div>
-                        <Button variant="outline">View</Button>
+                        <Button variant="outline" disabled={product.stock === 0}>{product.stock === 0 ? 'Sold Out' : 'View'}</Button>
                       </CardContent>
                     </Card>
                   </Link>
