@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Fingerprint, FaceIcon, Smartphone, ShieldCheck, Loader2 } from "lucide-react";
+import { Fingerprint, ScanFace, Smartphone, ShieldCheck, Loader2 } from "lucide-react";
 import { isWebAuthnSupported, isBiometricAvailable, getBiometricType, loginWithBiometric } from "@/lib/webauthn";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +52,7 @@ export function BiometricLoginButton({ username, onSuccess, className }: Biometr
 
   // Get appropriate icon
   const BiometricIcon = () => {
-    if (biometricType === "Face ID") return <FaceIcon className="w-5 h-5" />;
+    if (biometricType === "Face ID") return <ScanFace className="w-5 h-5" />;
     if (biometricType === "Fingerprint") return <Fingerprint className="w-5 h-5" />;
     return <Smartphone className="w-5 h-5" />;
   };

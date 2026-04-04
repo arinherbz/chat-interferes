@@ -5,7 +5,7 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
-import type { AuthenticatorTransportFuture } from "@simplewebauthn/types";
+import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { db, pool } from "./db";
 import { sql } from "drizzle-orm";
 import crypto from "crypto";
@@ -22,7 +22,7 @@ const origin = process.env.ORIGIN || "http://localhost:5000";
 interface WebAuthnCredential {
   id: string;
   userId: string;
-  credentialID: Uint8Array;
+  credentialID: string;
   credentialPublicKey: Uint8Array;
   counter: number;
   deviceType: string;
@@ -66,7 +66,7 @@ async function saveCredential(cred: Omit<WebAuthnCredential, "id">): Promise<str
       VALUES (
         ${id},
         ${cred.userId},
-        ${Buffer.from(cred.credentialID).toString("base64")},
+        ${cred.credentialID},
         ${Buffer.from(cred.credentialPublicKey).toString("base64")},
         ${cred.counter},
         ${cred.deviceType},
@@ -81,7 +81,7 @@ async function saveCredential(cred: Omit<WebAuthnCredential, "id">): Promise<str
       VALUES (
         ${id},
         ${cred.userId},
-        ${Buffer.from(cred.credentialID).toString("base64")},
+        ${cred.credentialID},
         ${Buffer.from(cred.credentialPublicKey).toString("base64")},
         ${cred.counter},
         ${cred.deviceType},
@@ -111,7 +111,7 @@ async function getCredentialsByUser(userId: string): Promise<WebAuthnCredential[
   return rows.map(row => ({
     id: row.id,
     userId: row.user_id,
-    credentialID: new Uint8Array(Buffer.from(row.credential_id, "base64")),
+    credentialID: row.credential_id,
     credentialPublicKey: new Uint8Array(Buffer.from(row.credential_public_key, "base64")),
     counter: row.counter,
     deviceType: row.device_type,
@@ -172,7 +172,6 @@ export function registerWebAuthnRoutes(app: Express, requireAuth: any, storage: 
         // Exclude existing credentials
         excludeCredentials: existingCreds.map(cred => ({
           id: cred.credentialID,
-          type: "public-key",
           transports: cred.transports,
         })),
       });
@@ -206,7 +205,7 @@ export function registerWebAuthnRoutes(app: Express, requireAuth: any, storage: 
       });
 
       if (verification.verified && verification.registrationInfo) {
-        const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
+        const { credential } = verification.registrationInfo;
         
         // Determine device type from user agent
         const userAgent = req.headers["user-agent"] || "";
@@ -222,9 +221,9 @@ export function registerWebAuthnRoutes(app: Express, requireAuth: any, storage: 
         // Save credential
         await saveCredential({
           userId: user.id,
-          credentialID,
-          credentialPublicKey,
-          counter,
+          credentialID: credential.id,
+          credentialPublicKey: credential.publicKey,
+          counter: credential.counter,
           deviceType,
           transports: response.response?.transports || [],
           createdAt: new Date(),
@@ -274,7 +273,6 @@ export function registerWebAuthnRoutes(app: Express, requireAuth: any, storage: 
         rpID,
         allowCredentials: credentials.map(cred => ({
           id: cred.credentialID,
-          type: "public-key",
           transports: cred.transports,
         })),
         userVerification: "preferred",
@@ -303,9 +301,9 @@ export function registerWebAuthnRoutes(app: Express, requireAuth: any, storage: 
       const credentials = await getCredentialsByUser(user.id);
       
       // Find the credential that matches the response
-      const rawId = Buffer.from(response.rawId, "base64url");
+      const responseCredentialId = response.id as string;
       const credential = credentials.find(c => 
-        Buffer.from(c.credentialID).equals(rawId)
+        c.credentialID === responseCredentialId
       );
 
       if (!credential) {
@@ -322,9 +320,9 @@ export function registerWebAuthnRoutes(app: Express, requireAuth: any, storage: 
         expectedChallenge,
         expectedOrigin: origin,
         expectedRPID: rpID,
-        authenticator: {
-          credentialID: credential.credentialID,
-          credentialPublicKey: credential.credentialPublicKey,
+        credential: {
+          id: credential.credentialID,
+          publicKey: credential.credentialPublicKey,
           counter: credential.counter,
           transports: credential.transports,
         },

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,7 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
   CheckCircle2, Smartphone, DollarSign, User, AlertCircle, RefreshCw, Scan, 
   ChevronRight, ChevronLeft, AlertTriangle, XCircle, Clock, Shield, 
-  Cpu, Battery, Camera, Volume2, Fingerprint, Package, Lock, CheckCircle, Laptop, Monitor,
+  Cpu, Battery, Camera, Volume2, Fingerprint, Package, Lock, CheckCircle, Laptop, Monitor, Loader2,
   Eye, Edit, FileText
 } from "lucide-react";
 import { Scanner } from "@/components/scanner";

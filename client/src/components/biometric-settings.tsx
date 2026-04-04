@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Fingerprint, FaceIcon, Smartphone, Trash2, Plus, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
+import { Fingerprint, ScanFace, Smartphone, Trash2, Plus, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { 
   isWebAuthnSupported, 
   isBiometricAvailable, 
@@ -97,7 +97,7 @@ export function BiometricSettings() {
 
   // Get appropriate icon
   const BiometricIcon = ({ className }: { className?: string }) => {
-    if (biometricType === "Face ID") return <FaceIcon className={className} />;
+    if (biometricType === "Face ID") return <ScanFace className={className} />;
     if (biometricType === "Fingerprint") return <Fingerprint className={className} />;
     return <Smartphone className={className} />;
   };
