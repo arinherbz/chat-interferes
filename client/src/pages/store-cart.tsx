@@ -1,4 +1,4 @@
-import { MessageCircle, Minus, Plus, Trash2 } from "lucide-react";
+import { MessageCircle, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { StoreShell } from "@/components/store-shell";
 import { ProductImage } from "@/components/product-image";
@@ -21,12 +21,18 @@ export default function StoreCartPage() {
         <Card>
           <CardContent className="space-y-4 p-6">
             {items.length === 0 ? (
-              <>
-                <p className="text-muted-foreground">Your cart is empty.</p>
+              <div className="flex flex-col items-center text-center py-8">
+                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                  <ShoppingBag className="w-8 h-8 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-1">Your cart is empty</h3>
+                <p className="text-sm text-slate-500 max-w-sm mb-4">
+                  Browse our products and add items to your cart.
+                </p>
                 <Link href="/store/products">
                   <Button>Continue Shopping</Button>
                 </Link>
-              </>
+              </div>
             ) : (
               <div className="space-y-5">
                 <div className="space-y-3">
@@ -44,15 +50,32 @@ export default function StoreCartPage() {
                         <div>
                           <p className="font-medium">{item.name}</p>
                           <p className="text-sm text-muted-foreground">{formatUGX(item.price)} each</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {item.stock <= 5 ? (
+                              <span className="text-amber-600">Only {item.stock} left in stock</span>
+                            ) : (
+                              <span className="text-emerald-600">{item.stock} in stock</span>
+                            )}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center justify-between gap-4 sm:justify-end">
                         <div className="flex items-center gap-2">
-                          <Button variant="outline" size="icon" onClick={() => updateQuantity(item.productId, item.quantity - 1)}>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            disabled={item.quantity <= 1}
+                            onClick={() => updateQuantity(item.productId, item.quantity - 1)}
+                          >
                             <Minus className="h-4 w-4" />
                           </Button>
                           <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                          <Button variant="outline" size="icon" onClick={() => updateQuantity(item.productId, item.quantity + 1)}>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            disabled={item.quantity >= item.stock}
+                            onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                          >
                             <Plus className="h-4 w-4" />
                           </Button>
                         </div>

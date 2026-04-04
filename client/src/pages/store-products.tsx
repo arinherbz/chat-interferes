@@ -130,9 +130,22 @@ export default function StoreProductsPage() {
                 ))}
               </div>
             ) : products.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">No products found.</p>
+              <Card className="border-dashed">
+                <CardContent className="py-16">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                      <Search className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900 mb-1">No products found</h3>
+                    <p className="text-sm text-slate-500 max-w-sm mb-4">
+                      {debouncedQuery ? `No results for "${debouncedQuery}". Try different search terms.` : "Check back soon for new arrivals."}
+                    </p>
+                    {debouncedQuery && (
+                      <Button variant="outline" onClick={() => { setQuery(""); setDebouncedQuery(""); }}>
+                        Clear Search
+                      </Button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ) : view === "grid" ? (
