@@ -981,12 +981,8 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
-  app.get("/api/auth/me", asyncHandler(async (req: Request, res: Response) => {
-    const user = req.currentUser;
-    if (!user) {
-      res.json({ user: null, preferences: null });
-      return;
-    }
+  app.get("/api/auth/me", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const user = req.currentUser!;
     const preferences = await storage.upsertUserPreferences(user.id, {});
     res.json({ user: sanitizeUser(user), preferences });
   }));
@@ -1098,8 +1094,8 @@ export async function registerRoutes(
     return sendSuccess(res, { success: true });
   }));
 
-  app.get("/api/store/auth/me", asyncHandler(async (req: Request, res: Response) => {
-    return sendSuccess(res, { customer: req.currentStoreCustomer ?? null });
+  app.get("/api/store/auth/me", requireStoreCustomer, asyncHandler(async (req: Request, res: Response) => {
+    return sendSuccess(res, { customer: req.currentStoreCustomer! });
   }));
 
   app.get("/api/store/account", requireStoreCustomer, asyncHandler(async (req: Request, res: Response) => {
