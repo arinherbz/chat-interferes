@@ -751,3 +751,23 @@ export type OrderItem = typeof orderItems.$inferSelect;
 export type Delivery = typeof deliveries.$inferSelect;
 export type Receipt = typeof receipts.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+
+// ===================== WEBAUTHN CREDENTIALS (FACE ID / TOUCH ID) =====================
+export const webauthnCredentials = pgTable("webauthn_credentials", {
+  id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  credentialID: text("credential_id").notNull(), // base64 encoded
+  credentialPublicKey: text("credential_public_key").notNull(), // base64 encoded
+  counter: integer("counter").notNull().default(0),
+  deviceType: varchar("device_type", { length: 50 }),
+  transports: text("transports"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWebAuthnCredentialSchema = createInsertSchema(webauthnCredentials).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertWebAuthnCredential = z.infer<typeof insertWebAuthnCredentialSchema>;
+export type WebAuthnCredential = typeof webauthnCredentials.$inferSelect;

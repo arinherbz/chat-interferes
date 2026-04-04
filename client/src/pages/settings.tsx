@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { BiometricSettings } from "@/components/biometric-settings";
 
 type SubscriptionPlan = "trial" | "basic" | "pro" | "enterprise";
 
@@ -233,12 +234,15 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid h-auto w-full grid-cols-1 gap-1 rounded-xl p-1 sm:max-w-md sm:grid-cols-3">
+        <TabsList className="grid h-auto w-full grid-cols-1 gap-1 rounded-xl p-1 sm:max-w-lg sm:grid-cols-4">
           <TabsTrigger value="general" className="w-full px-3 py-2 text-center whitespace-normal">
             General
           </TabsTrigger>
           <TabsTrigger value="team" className="w-full px-3 py-2 text-center whitespace-normal">
             Team & Access
+          </TabsTrigger>
+          <TabsTrigger value="security" className="w-full px-3 py-2 text-center whitespace-normal">
+            Security
           </TabsTrigger>
           <TabsTrigger value="billing" className="w-full px-3 py-2 text-center whitespace-normal">
             Billing
@@ -486,6 +490,10 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-6 space-y-6">
+          <BiometricSettings />
         </TabsContent>
       </Tabs>
 

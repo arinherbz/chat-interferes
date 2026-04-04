@@ -27,6 +27,7 @@ import { asyncHandler } from "./middleware/async-handler";
 import { commerceService, ORDER_STATUSES } from "./services/commerce-service";
 import { HttpError, sendFailure, sendSuccess } from "./utils/api-response";
 import { normalizeUgPhoneNumber } from "./utils/phone";
+import { registerWebAuthnRoutes } from "./webauthn-routes";
 
 declare module "express-session" {
   interface SessionData {
@@ -792,6 +793,9 @@ export async function registerRoutes(
   // ===================== UPLOADS =====================
   app.get("/uploads/media/:id/:filename?", asyncHandler(serveUploadedMedia));
   app.post("/api/uploads", requireRole(["Owner", "Manager"]), handleUpload);
+
+  // ===================== WEBAUTHN (FACE ID / TOUCH ID) =====================
+  registerWebAuthnRoutes(app, requireAuth, storage);
 
   // ===================== AUTH & STAFF =====================
   app.get("/api/auth/bootstrap-status", async (_req: Request, res: Response) => {

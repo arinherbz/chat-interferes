@@ -7,10 +7,13 @@ import { useAuth } from "@/lib/auth-context";
 import { Smartphone, ShieldCheck, User, LockKeyhole, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/api";
+import { BiometricLoginButton } from "@/components/biometric-login-button";
+import { useLocation } from "wouter";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, setUser } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [username, setUsername] = useState("owner");
   const [pin, setPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -155,6 +158,30 @@ export default function Login() {
               {submitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <ShieldCheck className="w-5 h-5 mr-2" />}
               Enter Store
             </Button>
+
+            {/* Biometric Login */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+
+            <BiometricLoginButton
+              username={username}
+              onSuccess={(user, preferences) => {
+                setUser(user);
+                toast({ title: "Welcome back!", description: "Signed in with biometrics." });
+                // Redirect based on role
+                if (user.role === "Owner" || user.role === "Manager") {
+                  setLocation("/dashboard");
+                } else {
+                  setLocation("/pos");
+                }
+              }}
+            />
             </form>
           )}
 

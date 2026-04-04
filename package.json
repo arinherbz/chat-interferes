@@ -49,6 +49,8 @@
     "@sentry/node": "^10.47.0",
     "@sentry/profiling-node": "^10.47.0",
     "@sentry/react": "^10.47.0",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.0",
     "@tanstack/react-query": "^5.60.5",
     "@zxing/browser": "^0.1.4",
     "better-sqlite3": "^12.5.0",
