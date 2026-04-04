@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useData, type Role, type User } from "@/lib/data-context";
 import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Shield } from "lucide-react";
+import { Shield, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BiometricSettings } from "@/components/biometric-settings";
 
@@ -70,8 +70,45 @@ export default function SettingsPage() {
   const [editingMember, setEditingMember] = useState<User | null>(null);
   const [memberForm, setMemberForm] = useState(EMPTY_MEMBER_FORM);
 
+  // Unsaved changes tracking
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [pendingTabChange, setPendingTabChange] = useState<string | null>(null);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+
   const canManageTeam = user?.role === "Owner";
   const canManageBilling = user?.role === "Owner" || user?.role === "Manager";
+
+  // Check for unsaved changes
+  useEffect(() => {
+    const shopChanged = shopName !== (activeShop?.name || "") || shopLocation !== (activeShop?.location || "");
+    const prefsChanged = theme !== (preferences?.theme || "system") ||
+                        currency !== (preferences?.currency || "UGX") ||
+                        timezone !== (preferences?.timezone || "UTC") ||
+                        density !== (preferences?.density || "comfortable");
+    setHasUnsavedChanges(shopChanged || prefsChanged);
+  }, [shopName, shopLocation, theme, currency, timezone, density, activeShop, preferences]);
+
+  // Warn before closing/refreshing with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const handleTabChange = useCallback((newTab: string) => {
+    if (hasUnsavedChanges) {
+      setPendingTabChange(newTab);
+      setShowUnsavedDialog(true);
+      return false;
+    }
+    return true;
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     if (!preferences) return;
@@ -232,6 +269,40 @@ export default function SettingsPage() {
           <p className="text-sm text-slate-500 sm:text-base">Manage shop profile, team access, and subscription.</p>
         </div>
       </div>
+
+      {hasUnsavedChanges && (
+        <div className="sticky top-0 z-50 -mx-4 px-4 py-3 bg-amber-50 border-b border-amber-200 sm:mx-0 sm:rounded-lg sm:border">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="w-4 h-4" />
+              <span className="text-sm font-medium">You have unsaved changes</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShopName(activeShop?.name || "");
+                  setShopLocation(activeShop?.location || "");
+                  setTheme(preferences?.theme || "system");
+                  setCurrency(preferences?.currency || "UGX");
+                  setTimezone(preferences?.timezone || "UTC");
+                  setDensity(preferences?.density || "comfortable");
+                }}
+              >
+                Discard
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveShop}
+                disabled={shopSaving}
+              >
+                {shopSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="general" className="w-full">
         <TabsList className="grid h-auto w-full grid-cols-1 gap-1 rounded-xl p-1 sm:max-w-lg sm:grid-cols-4">
