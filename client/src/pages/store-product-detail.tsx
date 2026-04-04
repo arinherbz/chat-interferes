@@ -87,7 +87,7 @@ export default function StoreProductDetailPage() {
                     disabled={!isAvailable}
                     onClick={() => {
                       if (!isAvailable) return;
-                      addToStoreCart(product);
+                      addToStoreCart(product, { incrementExisting: false });
                       navigate("/store/cart");
                     }}
                   >

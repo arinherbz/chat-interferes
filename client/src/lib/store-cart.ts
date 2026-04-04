@@ -25,6 +25,10 @@ export type StoreCheckoutResult = {
   whatsappUrl?: string;
 };
 
+type AddToStoreCartOptions = {
+  incrementExisting?: boolean;
+};
+
 function isBrowser() {
   return typeof window !== "undefined";
 }
@@ -52,11 +56,16 @@ function writeCart(items: StoreCartItem[]) {
   emitCartChange();
 }
 
-export function addToStoreCart(product: StoreProduct) {
+export function addToStoreCart(product: StoreProduct, options: AddToStoreCartOptions = {}) {
+  const { incrementExisting = true } = options;
   const items = readCart();
   const existing = items.find((item) => item.productId === product.id);
 
   if (existing) {
+    if (!incrementExisting) {
+      writeCart(items);
+      return;
+    }
     writeCart(
       items.map((item) =>
         item.productId === product.id
