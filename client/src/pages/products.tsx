@@ -39,6 +39,15 @@ const productSchema = z.object({
   flashDealPrice: z.union([z.coerce.number().min(0), z.nan()]).optional(),
   flashDealEndsAt: z.string().optional(),
   imageUrl: z.string().optional(),
+}).refine((data) => {
+  // Flash deal price must be less than regular price
+  if (data.isFlashDeal && data.flashDealPrice && data.flashDealPrice > 0) {
+    return data.flashDealPrice < data.price;
+  }
+  return true;
+}, {
+  message: "Flash deal price must be less than regular price",
+  path: ["flashDealPrice"],
 });
 
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -134,10 +143,26 @@ export default function ProductsPage() {
   };
 
   const onSubmit = async (values: z.infer<typeof productSchema>) => {
+    // Check barcode uniqueness
+    const barcode = values.barcode?.trim();
+    if (barcode) {
+      const existingProduct = products.find(p => 
+        p.barcode === barcode && p.id !== editingId
+      );
+      if (existingProduct) {
+        toast({
+          title: "Barcode already exists",
+          description: `This barcode is already used by "${existingProduct.name}". Please use a unique barcode.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     const imageUrl = attachments[0]?.url ?? null;
     const payload = {
       ...values,
-      barcode: values.barcode?.trim() || undefined,
+      barcode: barcode || undefined,
       displayTitle: values.displayTitle?.trim() || undefined,
       description: values.description?.trim() || undefined,
       condition: values.condition?.trim() || undefined,
