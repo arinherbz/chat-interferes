@@ -293,6 +293,12 @@ export default function TradeInPage() {
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<TradeInAssessment | null>(null);
   
+  // Review form state
+  const [reviewDecision, setReviewDecision] = useState<"accepted" | "rejected">("accepted");
+  const [reviewFinalOffer, setReviewFinalOffer] = useState<string>("");
+  const [reviewNotes, setReviewNotes] = useState<string>("");
+  const [reviewRejectionReason, setReviewRejectionReason] = useState<string>("");
+  
   // Fake device detection state
   const [fakeDeviceWarning, setFakeDeviceWarning] = useState<FakeDeviceCheck | null>(null);
   const [showFakeDeviceDialog, setShowFakeDeviceDialog] = useState(false);
@@ -696,6 +702,72 @@ export default function TradeInPage() {
     },
   });
 
+  // Review/approve/reject trade-in mutation
+  const reviewTradeInMutation = useMutation({
+    mutationFn: async ({ id, decision, finalOffer, reviewNotes, rejectionReasons }: {
+      id: string;
+      decision: "accepted" | "rejected";
+      finalOffer?: number;
+      reviewNotes?: string;
+      rejectionReasons?: string[];
+    }) => {
+      const res = await apiRequest("PATCH", `/api/trade-in/assessments/${id}/review`, {
+        decision,
+        finalOffer,
+        reviewNotes,
+        rejectionReasons,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/trade-in/assessments"] });
+      toast({
+        title: data.decision === "accepted" ? "Trade-In Approved" : "Trade-In Rejected",
+        description: data.decision === "accepted"
+          ? `Approved with offer: UGX ${(data.finalOffer || data.calculatedOffer).toLocaleString()}`
+          : "Trade-in has been rejected.",
+        className: data.decision === "accepted" ? "bg-green-600 text-white border-none" : "bg-red-600 text-white border-none",
+      });
+      setShowReviewDialog(false);
+      setSelectedAssessment(null);
+      setReviewNotes("");
+      setReviewRejectionReason("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Review Failed",
+        description: error.message || "Failed to review trade-in",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Reset review form when opening assessment
+  useEffect(() => {
+    if (selectedAssessment) {
+      setReviewDecision("accepted");
+      setReviewFinalOffer(selectedAssessment.calculatedOffer.toString());
+      setReviewNotes("");
+      setReviewRejectionReason("");
+    }
+  }, [selectedAssessment]);
+
+  const handleReviewSubmit = () => {
+    if (!selectedAssessment) return;
+    
+    const finalOfferNum = reviewDecision === "accepted" ? parseInt(reviewFinalOffer.replace(/\D/g, ""), 10) : undefined;
+    
+    reviewTradeInMutation.mutate({
+      id: selectedAssessment.id,
+      decision: reviewDecision,
+      finalOffer: finalOfferNum,
+      reviewNotes: reviewNotes || undefined,
+      rejectionReasons: reviewDecision === "rejected" && reviewRejectionReason
+        ? [reviewRejectionReason]
+        : undefined,
+    });
+  };
+
   useEffect(() => {
     if (!identifierTouched) {
       return;
@@ -1024,8 +1096,11 @@ export default function TradeInPage() {
       </div>
 
       <Tabs defaultValue="new" className="space-y-6">
-        <TabsList className="surface-muted p-1">
+        <TabsList className="surface-muted p-1 flex-wrap">
           <TabsTrigger value="new" data-testid="tab-new-tradein">New Trade-In</TabsTrigger>
+          <TabsTrigger value="pending" data-testid="tab-pending">
+            Pending Review ({assessments.filter(a => a.decision === "manual_review" || a.status === "pending").length})
+          </TabsTrigger>
           <TabsTrigger value="history" data-testid="tab-history">History ({assessments.length})</TabsTrigger>
           <TabsTrigger value="values" data-testid="tab-values">Base Values</TabsTrigger>
         </TabsList>
@@ -1871,6 +1946,79 @@ export default function TradeInPage() {
           </div>
         </TabsContent>
 
+        <TabsContent value="pending">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pending Review</CardTitle>
+              <CardDescription>Trade-ins awaiting manager approval</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {assessments.filter(a => a.decision === "manual_review" || a.status === "pending").length === 0 ? (
+                <div className="text-center py-12">
+                  <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900 mb-1">All Caught Up!</h3>
+                  <p className="text-sm text-slate-500">No trade-ins are pending review.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Trade-In #</TableHead>
+                      <TableHead>Device</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead>Calculated Offer</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {assessments
+                      .filter(a => a.decision === "manual_review" || a.status === "pending")
+                      .map(a => (
+                        <TableRow key={a.id} data-testid={`pending-row-${a.id}`}>
+                          <TableCell className="font-mono text-sm">{a.tradeInNumber}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{a.brand} {a.model}</p>
+                              <p className="text-xs text-slate-500">{a.storage}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p>{a.customerName}</p>
+                              <p className="text-xs text-slate-500">{a.customerPhone}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{a.conditionScore}%</Badge>
+                          </TableCell>
+                          <TableCell className="font-bold">
+                            UGX {a.calculatedOffer.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-sm text-slate-500">
+                            {format(new Date(a.createdAt), "MMM dd, yyyy HH:mm")}
+                          </TableCell>
+                          <TableCell>
+                            <Button 
+                              variant="default" 
+                              size="sm"
+                              onClick={() => { setSelectedAssessment(a); setShowReviewDialog(true); }}
+                              data-testid={`btn-review-${a.id}`}
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              Review
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="history">
           <Card>
             <CardHeader>
@@ -1933,6 +2081,17 @@ export default function TradeInPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {assessments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={9} className="h-32">
+                        <div className="flex flex-col items-center justify-center text-center">
+                          <RefreshCw className="h-10 w-10 text-slate-300 mb-2" />
+                          <p className="text-sm font-medium text-slate-900">No trade-ins yet</p>
+                          <p className="text-xs text-slate-500 mt-1">Process a trade-in to see it here.</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -1968,6 +2127,17 @@ export default function TradeInPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {baseValues.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-32">
+                        <div className="flex flex-col items-center justify-center text-center">
+                          <DollarSign className="h-10 w-10 text-slate-300 mb-2" />
+                          <p className="text-sm font-medium text-slate-900">No base values configured</p>
+                          <p className="text-xs text-slate-500 mt-1">Contact your administrator to add device pricing.</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -1977,7 +2147,7 @@ export default function TradeInPage() {
 
       {/* Assessment Detail Dialog */}
       <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Trade-In Details</DialogTitle>
             <DialogDescription>
@@ -2025,6 +2195,103 @@ export default function TradeInPage() {
                       <li key={i}>{r}</li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* Review Actions for Pending Trade-Ins */}
+              {(selectedAssessment.decision === "manual_review" || selectedAssessment.status === "pending") && (
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-semibold mb-4 flex items-center gap-2">
+                    <Shield className="w-4 h-4" />
+                    Manager Review
+                  </h4>
+                  
+                  <div className="space-y-4">
+                    <div className="flex gap-4">
+                      <Button
+                        type="button"
+                        variant={reviewDecision === "accepted" ? "default" : "outline"}
+                        onClick={() => setReviewDecision("accepted")}
+                        className="flex-1"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Approve
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={reviewDecision === "rejected" ? "destructive" : "outline"}
+                        onClick={() => setReviewDecision("rejected")}
+                        className="flex-1"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Reject
+                      </Button>
+                    </div>
+
+                    {reviewDecision === "accepted" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="final-offer">Final Offer (UGX)</Label>
+                        <Input
+                          id="final-offer"
+                          type="text"
+                          value={reviewFinalOffer}
+                          onChange={(e) => setReviewFinalOffer(e.target.value)}
+                          placeholder="Enter final offer amount"
+                        />
+                        <p className="text-xs text-slate-500">
+                          Calculated offer: UGX {selectedAssessment.calculatedOffer.toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+
+                    {reviewDecision === "rejected" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="rejection-reason">Rejection Reason</Label>
+                        <Textarea
+                          id="rejection-reason"
+                          value={reviewRejectionReason}
+                          onChange={(e) => setReviewRejectionReason(e.target.value)}
+                          placeholder="Enter reason for rejection"
+                          rows={2}
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="review-notes">Review Notes (Optional)</Label>
+                      <Textarea
+                        id="review-notes"
+                        value={reviewNotes}
+                        onChange={(e) => setReviewNotes(e.target.value)}
+                        placeholder="Add any additional notes"
+                        rows={2}
+                      />
+                    </div>
+
+                    <Button
+                      onClick={handleReviewSubmit}
+                      disabled={reviewTradeInMutation.isPending || (reviewDecision === "rejected" && !reviewRejectionReason)}
+                      className="w-full"
+                      variant={reviewDecision === "accepted" ? "default" : "destructive"}
+                    >
+                      {reviewTradeInMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : reviewDecision === "accepted" ? (
+                        <>
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          Confirm Approval
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Confirm Rejection
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
