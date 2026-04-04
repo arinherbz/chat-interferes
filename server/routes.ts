@@ -3196,5 +3196,10 @@ export async function registerRoutes(
     return sendSuccess(res, { count });
   }));
 
+  // ==================== HEALTH CHECK (FOR RENDER) ====================
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   return httpServer;
 }

@@ -1,9 +1,43 @@
+# Render Deployment Configuration for Ariostore
+# This file tells Render how to build and run your app
+
 services:
   - type: web
-    name: ariostore-gadgets
-    runtime: docker
-    autoDeploy: true
-    healthCheckPath: /health
+    name: ariostore
+    runtime: node
+    region: oregon  # Change to your preferred region
+    plan: starter   # Use 'starter' ($7/mo) or 'standard' ($25/mo)
+    
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    
     envVars:
       - key: NODE_ENV
         value: production
+        
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ariostore-db
+          property: connectionString
+          
+      - key: SESSION_SECRET
+        generateValue: true
+        
+      - key: SESSION_COOKIE_SECURE
+        value: true
+        
+      - key: RP_ID
+        value: your-domain.onrender.com  # Change after setting custom domain
+        
+      - key: ORIGIN
+        value: https://your-domain.onrender.com  # Change after setting custom domain
+        
+      - key: PORT
+        value: 10000  # Render uses this port
+
+databases:
+  - name: ariostore-db
+    databaseName: ariostore
+    user: ariostore
+    plan: free  # Use 'starter' for production
+    region: oregon  # Match service region
